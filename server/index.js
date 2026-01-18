@@ -26,7 +26,7 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false
   }
-});
+}); 
 
 // --- פונקציה: שליחת מייל עדכון פרטים ---
 const sendUpdateEmail = async (email, fullName, changes) => {
