@@ -17,8 +17,9 @@ const SECRET_KEY = 'my_super_secret_key';
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'maintenance.app.tkp@gmail.com', 
-    pass: 'xwyrwclaazvoiopm'     
+    // עכשיו זה ייקח את הפרטים מההגדרות של Render ולא מהקוד
+    user: process.env.EMAIL_USER, 
+    pass: process.env.EMAIL_PASS     
   },
   tls: { rejectUnauthorized: false }
 });
@@ -26,7 +27,7 @@ const transporter = nodemailer.createTransport({
 // --- פונקציה: שליחת מייל עדכון פרטים ---
 const sendUpdateEmail = async (email, fullName, changes) => {
     console.log(`Sending update email to: ${email}...`);
-    const appLink = "http://192.168.0.106:3000"; 
+    const appLink = "https://maintenance-management-app.netlify.app";
 
     let changesHtml = '<ul style="padding-right: 20px; color: #333;">';
     changes.forEach(change => {
@@ -62,7 +63,7 @@ const sendUpdateEmail = async (email, fullName, changes) => {
 // --- פונקציה: שליחת מייל ברוכים הבאים ---
 const sendWelcomeEmail = async (email, fullName, password, role, managerName) => {
     console.log(`Sending welcome email to: ${email}...`);
-    const appLink = "http://192.168.0.106:3000"; 
+    const appLink = "https://maintenance-management-app.netlify.app";
 
     let titleText = '', descriptionText = '', featuresList = '', managerInfo = '';
 
