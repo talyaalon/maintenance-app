@@ -32,7 +32,7 @@ function App() {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await fetch('http://192.168.0.106:3001/tasks', {
+      const res = await fetch('http://https://maintenance-app-h84v.onrender.com/tasks', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.status === 401) { setUser(null); return; }

@@ -14,7 +14,7 @@ const LocationsTab = ({ token, t }) => {
     const fetchLocations = async () => {
         try {
             // שימי לב: משתמשים ב-IP שלך ולא ב-localhost
-            const res = await fetch('http://192.168.0.106:3001/locations', {
+            const res = await fetch('http://https://maintenance-app-h84v.onrender.com/locations', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -33,7 +33,7 @@ const LocationsTab = ({ token, t }) => {
     const handleAddLocation = async () => {
         if (!newLocName.trim()) return;
         try {
-            const res = await fetch('http://192.168.0.106:3001/locations', {
+            const res = await fetch('http://https://maintenance-app-h84v.onrender.com/locations', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -58,7 +58,7 @@ const LocationsTab = ({ token, t }) => {
     const handleDelete = async (id) => {
         if(!window.confirm("למחוק מיקום זה? זה ימחק גם את המשימות שקשורות אליו!")) return;
         try {
-            await fetch(`http://192.168.0.106:3001/locations/${id}`, {
+            await fetch(`http://https://maintenance-app-h84v.onrender.com/locations/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -77,7 +77,7 @@ const LocationsTab = ({ token, t }) => {
     // שמירת עריכה
     const saveEdit = async () => {
         try {
-            const res = await fetch(`http://192.168.0.106:3001/locations/${editingId}`, {
+            const res = await fetch(`http://https://maintenance-app-h84v.onrender.com/locations/${editingId}`, {
                 method: 'PUT',
                 headers: { 
                     'Content-Type': 'application/json',

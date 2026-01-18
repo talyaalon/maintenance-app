@@ -168,7 +168,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         const userId = req.user.id;
         const { full_name, email, password } = req.body;
         let profilePictureUrl = req.body.existing_picture; 
-        if (req.file) profilePictureUrl = `http://192.168.0.106:3001/uploads/${req.file.filename}`;
+        if (req.file) profilePictureUrl = `http://https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}`;
         
         const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         const oldUser = oldUserRes.rows[0];
@@ -377,7 +377,7 @@ app.get('/tasks', authenticateToken, async (req, res) => {
 // 2. יצירת משימה (תמיכה בתמונות ומחזוריות)
 app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, res) => {
   try {
-    const creationImageUrl = req.file ? `http://192.168.0.106:3001/uploads/${req.file.filename}` : null;
+    const creationImageUrl = req.file ? `http://https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}` : null;
     const { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date } = req.body;
     
     const worker_id = assigned_worker_id || req.user.id;
@@ -434,7 +434,7 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
             return res.status(400).json({ error: "חובה להעלות תמונה או לכתוב הערה לסיום משימה" });
         }
 
-        const completionImageUrl = req.file ? `http://192.168.0.106:3001/uploads/${req.file.filename}` : null;
+        const completionImageUrl = req.file ? `http://https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}` : null;
 
         await pool.query(
             `UPDATE tasks SET status = 'WAITING_APPROVAL', completion_note = $1, completion_image_url = $2 WHERE id = $3`,
