@@ -182,7 +182,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         if (req.file) changes.push('תמונת הפרופיל הוחלפה');
 
         if (password && password.trim() !== '') {
-            query = `UPDATE users SET full_name = $1, email = $2, password_hash = $3, profile_picture_url = $4 WHERE id = $5 RETURNING *`;
+            query = `UPDATE users SET full_name = $1, email = $2, password = $3, profile_picture_url = $4 WHERE id = $5 RETURNING *`;
             params = [full_name, email, password, profilePictureUrl, userId];
         } else {
             query = `UPDATE users SET full_name = $1, email = $2, profile_picture_url = $3 WHERE id = $4 RETURNING *`;
@@ -229,7 +229,7 @@ app.post('/users', authenticateToken, async (req, res) => {
 
   try {
     const newUser = await pool.query(
-      `INSERT INTO users (full_name, email, password_hash, role, parent_manager_id)
+      `INSERT INTO users (full_name, email, password, role, parent_manager_id)
        VALUES ($1, $2, $3, $4, $5) RETURNING id, full_name, email, role`,
       [full_name, email, password, role, parent_manager_id]
     );
@@ -279,7 +279,7 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         }
 
         if (password && password.trim() !== "") {
-            query = 'UPDATE users SET full_name = $1, email = $2, password_hash = $3, parent_manager_id = $4 WHERE id = $5 RETURNING *';
+            query = 'UPDATE users SET full_name = $1, email = $2, password = $3, parent_manager_id = $4 WHERE id = $5 RETURNING *';
             params = [full_name, email, password, parent_manager_id || null, id];
         } else {
             query = 'UPDATE users SET full_name = $1, email = $2, parent_manager_id = $3 WHERE id = $4 RETURNING *';
