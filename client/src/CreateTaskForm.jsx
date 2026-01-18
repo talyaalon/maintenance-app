@@ -28,13 +28,13 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
 
   // טעינת נתונים (מיקומים ועובדים)
   useEffect(() => {
-    fetch('http://https://maintenance-app-h84v.onrender.com/locations', { headers: { 'Authorization': `Bearer ${token}` } })
+    fetch('https://maintenance-app-h84v.onrender.com/locations', { headers: { 'Authorization': `Bearer ${token}` } })
         .then(res => res.json())
         .then(setLocations)
         .catch(err => console.error("Error fetching locations", err));
 
     if (currentUser?.role !== 'EMPLOYEE') {
-        fetch('http://https://maintenance-app-h84v.onrender.com/users', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch('https://maintenance-app-h84v.onrender.com/users', { headers: { 'Authorization': `Bearer ${token}` } })
         .then(res => res.json())
         .then(setTeamMembers)
         .catch(err => console.error("Error fetching users", err));
@@ -69,7 +69,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
     }
 
     try {
-      const res = await fetch('http://https://maintenance-app-h84v.onrender.com/tasks', {
+      const res = await fetch('https://maintenance-app-h84v.onrender.com/tasks', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: data

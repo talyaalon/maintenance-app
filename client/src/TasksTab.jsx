@@ -237,16 +237,16 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
         const formData = new FormData();
         formData.append('completion_note', note);
         if (file) formData.append('completion_image', file);
-        await fetch(`http://https://maintenance-app-h84v.onrender.com/tasks/${task.id}/complete`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+        await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/complete`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
         alert("Sent!"); onRefresh(); onClose();
     };
     const handleApprove = async () => {
-        await fetch(`http://https://maintenance-app-h84v.onrender.com/tasks/${task.id}/approve`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+        await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/approve`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
         alert("Approved!"); onRefresh(); onClose();
     };
     const handleFollowUp = async () => {
         if (!followUpDate) return alert("Date required");
-        await fetch(`http://https://maintenance-app-h84v.onrender.com/tasks/${task.id}/follow-up`, {
+        await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/follow-up`, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ due_date: followUpDate, description: note || 'Follow up' })
         });

@@ -8,7 +8,7 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
 
   const fetchTeam = async () => {
     try {
-        const res = await fetch('http://https://maintenance-app-h84v.onrender.com/users', { 
+        const res = await fetch('https://maintenance-app-h84v.onrender.com/users', { 
              headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -25,7 +25,7 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
   const handleDelete = async (userToDelete) => {
     if (!window.confirm("האם למחוק משתמש זה?")) return;
 
-    const res = await fetch(`http://https://maintenance-app-h84v.onrender.com/users/${userToDelete.id}`, {
+    const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${userToDelete.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -149,7 +149,7 @@ const EditUserModal = ({ userToEdit, token, onClose, onSuccess, managersList, cu
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch(`http://https://maintenance-app-h84v.onrender.com/users/${userToEdit.id}`, {
+            const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${userToEdit.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(formData)
