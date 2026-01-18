@@ -3,6 +3,7 @@ import { LayoutDashboard, Users, MapPin, UserCircle, Plus } from 'lucide-react';
 import Login from './Login';
 import CreateTaskForm from './CreateTaskForm';
 import AddUserForm from './AddUserForm';
+// שימי לב: אנחנו מייבאים את התרגומים מהקובץ החיצוני שיצרת בשלב 1
 import { translations } from './translations'; 
 
 // ייבוא הטאבים
@@ -15,8 +16,9 @@ function App() {
   const [user, setUser] = useState(null);
   const [tasks, setTasks] = useState([]);
   
-  const [lang, setLang] = useState('he'); 
-  const t = translations[lang]; 
+  // הגדרת שפה: ברירת מחדל אנגלית
+  const [lang, setLang] = useState('en'); 
+  const t = translations[lang]; // המילון הנוכחי
 
   const [activeTab, setActiveTab] = useState(1);
 
@@ -40,7 +42,7 @@ function App() {
   };
 
   const handleCompleteTask = async (taskId) => {
-      alert("משימה הושלמה!"); 
+      alert("Task Updated!"); 
       fetchTasks();
   };
 
@@ -54,6 +56,10 @@ function App() {
   useEffect(() => {
     if (user) fetchTasks();
   }, [user]);
+
+  // לוגיקה לכיוון הטקסט (RTL/LTR)
+  const isRTL = lang === 'he';
+  const dir = isRTL ? 'rtl' : 'ltr';
 
   if (!user) {
     return (
@@ -98,17 +104,22 @@ function App() {
       }
   };
 
-  const isRTL = lang === 'he'; 
-
   return (
-    <div className={`min-h-screen bg-gray-50 font-sans`} dir={isRTL ? 'rtl' : 'ltr'}>
+    <div className={`min-h-screen bg-gray-50 font-sans`} dir={dir}>
       
+      {/* כותרת עליונה */}
       <header className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-30">
         <h1 className="text-xl font-bold text-[#6A0DAD]">MAINTENANCE APP</h1>
         
-        <select value={lang} onChange={(e) => setLang(e.target.value)} className="p-1 border rounded text-xs bg-gray-50">
-            <option value="he">HE</option>
-            <option value="en">EN</option>
+        {/* בחירת שפה */}
+        <select 
+            value={lang} 
+            onChange={(e) => setLang(e.target.value)} 
+            className="p-1 border rounded text-xs bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+        >
+            <option value="en">🇺🇸 EN</option>
+            <option value="he">🇮🇱 HE</option>
+            <option value="th">🇹🇭 TH</option>
         </select>
       </header>
 
@@ -116,9 +127,10 @@ function App() {
           {renderContent()}
       </main>
 
-      {/* כפתור צף לפעולה מהירה (רק בטאב משימות) */}
+      {/* כפתור צף לפעולה מהירה */}
       {activeTab === 1 && (
-        <button onClick={() => setIsTaskFormOpen(true)} className="fixed bottom-24 left-6 md:left-auto md:right-6 w-14 h-14 bg-[#6A0DAD] text-white rounded-full shadow-lg flex items-center justify-center z-40 transition transform hover:scale-110">
+        <button onClick={() => setIsTaskFormOpen(true)} 
+            className={`fixed bottom-24 w-14 h-14 bg-[#6A0DAD] text-white rounded-full shadow-lg flex items-center justify-center z-40 transition transform hover:scale-110 ${isRTL ? 'left-6' : 'right-6'}`}>
             <Plus size={30} />
         </button>
       )}
@@ -154,14 +166,14 @@ function App() {
         </div>
       </nav>
 
-      {/* --- החלונות הקופצים (Popups) --- */}
+      {/* --- החלונות הקופצים --- */}
       
-      {/* התיקון נמצא כאן: הוספנו את currentUser ו-token */}
       {isTaskFormOpen && <CreateTaskForm 
           onTaskCreated={() => { setIsTaskFormOpen(false); fetchTasks(); }} 
           onCancel={() => setIsTaskFormOpen(false)} 
           currentUser={user} 
           token={localStorage.getItem('token')}
+          t={t} 
       />}
       
       {isUserFormOpen && <AddUserForm 
@@ -170,6 +182,7 @@ function App() {
               setIsUserFormOpen(false); 
               setRefreshTrigger(prev => prev + 1); 
           }} 
+          t={t}
       />}
       
     </div>
