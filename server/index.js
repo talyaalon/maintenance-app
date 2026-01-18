@@ -124,12 +124,16 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// שינוי הגדרות הדאטה-בייס לעבודה בענן
+const isProduction = process.env.NODE_ENV === 'production';
+
+const connectionString = process.env.DATABASE_URL 
+  ? process.env.DATABASE_URL 
+  : `postgresql://postgres:1234@127.0.0.1:5432/maintenance_management_app`;
+
 const pool = new Pool({
-  user: 'postgres',
-  host: '127.0.0.1',
-  database: 'maintenance_management_app',
-  password: '1234', 
-  port: 5432,
+  connectionString: connectionString,
+  ssl: isProduction ? { rejectUnauthorized: false } : false
 });
 
 const authenticateToken = (req, res, next) => {
