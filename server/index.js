@@ -13,13 +13,11 @@ const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
-// --- הגדרת המייל (תיקון סופי: כפיית IPv4) ---
-console.log("📧 Configuring Email with IPv4 force...");
+// --- הגדרת המייל (הגרסה המשולבת והחזקה ביותר) ---
+console.log("📧 Configuring Email using 'service: gmail' with IPv4...");
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,              // נחזור לפורט 587 הסטנדרטי
-  secure: false,          // חובה ב-587
+  service: 'gmail',        // נותנים לנוד-מיילר להחליט על הפורטים לבד
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
@@ -27,15 +25,15 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false
   },
-  family: 4 // <--- זה הקסם! מכריח שימוש בכתובת רגילה ולא IPv6
+  family: 4                // מכריח שימוש ב-IPv4 (מונע ניתוקים בענן)
 });
 
 // בדיקת חיבור
 transporter.verify((error, success) => {
   if (error) {
-    console.error('🔴 Connection failed:', error);
+    console.error('🔴 Still failing to connect:', error);
   } else {
-    console.log('🟢 Email server is finally ready!');
+    console.log('🟢 SUCCESS! Email server connected successfully.');
   }
 });
 
