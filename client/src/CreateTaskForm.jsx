@@ -1,134 +1,226 @@
 import React, { useState, useEffect } from 'react';
+import { X, User, RefreshCw, Camera, FileText } from 'lucide-react';
 
-const CreateTaskForm = ({ onTaskCreated, onCancel }) => {
-  const [locations, setLocations] = useState([]);
+const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token }) => {
+  // סטייט לכל הנתונים
   const [formData, setFormData] = useState({
-    title: '',
-    urgency: 'Normal',
-    due_date: '',
-    location_id: '' // שדה חדש לבחירת מיקום
+    title: '', 
+    urgency: 'Normal', 
+    due_date: new Date().toISOString().split('T')[0],
+    location_id: '', 
+    assigned_worker_id: currentUser?.role === 'EMPLOYEE' ? currentUser.id : '',
+    description: '', // שדה חדש להערות
+    is_recurring: false, 
+    recurring_type: 'weekly', 
+    selected_days: [], 
+    recurring_date: 1
   });
 
-  // טעינת רשימת המיקומים בעת פתיחת הטופס
-  useEffect(() => {
-    const fetchLocations = async () => {
-      const token = localStorage.getItem('token');
-      try {
-        const res = await fetch('http://localhost:3001/locations', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        setLocations(data);
-      } catch (err) {
-        console.error("Error loading locations");
-      }
-    };
-    fetchLocations();
-  }, []);
+  const [file, setFile] = useState(null); // לתמונה
+  const [locations, setLocations] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const daysOfWeek = [
+      { id: 0, label: 'א' }, { id: 1, label: 'ב' }, { id: 2, label: 'ג' }, 
+      { id: 3, label: 'ד' }, { id: 4, label: 'ה' }, { id: 5, label: 'ו' }, { id: 6, label: 'ש' }
+  ];
+
+  // טעינת נתונים ראשונית (מיקומים ועובדים)
+  useEffect(() => {
+    fetch('http://192.168.0.106:3001/locations', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(res => res.json())
+        .then(setLocations)
+        .catch(err => console.error("Error fetching locations", err));
+
+    if (currentUser?.role !== 'EMPLOYEE') {
+        fetch('http://192.168.0.106:3001/users', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(res => res.json())
+        .then(setTeamMembers)
+        .catch(err => console.error("Error fetching users", err));
+    }
+  }, [token, currentUser]);
+
+  const toggleDay = (dayId) => {
+    setFormData(prev => ({ 
+        ...prev, 
+        selected_days: prev.selected_days.includes(dayId) 
+            ? prev.selected_days.filter(d => d !== dayId) 
+            : [...prev.selected_days, dayId] 
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
     
-    if (!formData.location_id) {
-        alert("נא לבחור מיקום מהרשימה");
-        return;
+    // שימוש ב-FormData כדי לשלוח גם תמונה וגם טקסט
+    const data = new FormData();
+    
+    // הוספת כל השדות הרגילים
+    Object.keys(formData).forEach(key => {
+        if (key === 'selected_days') {
+            data.append(key, JSON.stringify(formData[key])); // המרת מערך לסטרינג
+        } else {
+            data.append(key, formData[key]);
+        }
+    });
+
+    // הוספת התמונה אם קיימת
+    if (file) {
+        data.append('task_image', file);
     }
 
     try {
-      const response = await fetch('http://localhost:3001/tasks', {
+      const res = await fetch('http://192.168.0.106:3001/tasks', {
         method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify(formData) 
+        headers: { 'Authorization': `Bearer ${token}` }, // אין צורך ב-Content-Type, הדפדפן מגדיר לבד ל-FormData
+        body: data
       });
-      
-      if (response.ok) {
-        onTaskCreated();
-      } else {
-        alert("שגיאה ביצירת משימה");
+
+      if (res.ok) { 
+          alert('משימה נוצרה בהצלחה!'); 
+          onTaskCreated(); 
+      } else { 
+          const errorData = await res.json();
+          alert('שגיאה ביצירה: ' + (errorData.error || 'אנא נסה שנית')); 
       }
-    } catch (error) {
-      alert("שגיאת תקשורת");
+    } catch (err) { 
+        alert('תקלה בתקשורת עם השרת'); 
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl" dir="rtl">
-        <h2 className="text-xl font-bold mb-4 text-purple-700">משימה חדשה</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50 overflow-y-auto">
+      <div className="bg-white rounded-xl p-6 w-full max-w-lg h-auto max-h-[90vh] overflow-y-auto shadow-2xl" dir="rtl">
         
-        <form onSubmit={handleSubmit} className="space-y-4">
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700">מה צריך לבצע?</label>
-            <input
-              type="text"
-              name="title"
-              required
-              className="mt-1 block w-full p-2 border border-gray-300 rounded"
-              value={formData.title}
-              onChange={handleChange}
-              placeholder="לדוגמה: תיקון מזגן"
-            />
-          </div>
+        <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <h2 className="text-2xl font-bold text-[#6A0DAD]">יצירת משימה חדשה</h2>
+            <button onClick={onCancel} className="p-2 hover:bg-gray-100 rounded-full transition"><X /></button>
+        </div>
 
-          {/* שדה בחירת מיקום החדש */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">מיקום:</label>
-            <select
-              name="location_id"
-              required
-              className="mt-1 block w-full p-2 border border-gray-300 rounded"
-              value={formData.location_id}
-              onChange={handleChange}
-            >
-              <option value="">-- בחר מיקום --</option>
-              {locations.length > 0 ? (
-                  locations.map(loc => (
-                    <option key={loc.id} value={loc.id}>{loc.name}</option>
-                  ))
-              ) : (
-                  <option disabled>אין מיקומים מוגדרים</option>
-              )}
-            </select>
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-5">
+            
+            {/* כותרת */}
+            <div>
+                <label className="block text-sm font-bold mb-1 text-gray-700">כותרת המשימה</label>
+                <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none" 
+                    value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} 
+                    placeholder="לדוגמה: תיקון מזגן בחדר ישיבות"
+                />
+            </div>
+            
+            {/* תיאור / הערות (חדש) */}
+            <div>
+                <label className="block text-sm font-bold mb-1 flex gap-2 text-gray-700"><FileText size={16}/> תיאור / הערות נוספות</label>
+                <textarea className="w-full p-3 border rounded-lg bg-gray-50 h-24 resize-none focus:ring-2 focus:ring-purple-200 outline-none" 
+                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} 
+                    placeholder="פרט כאן מידע נוסף לביצוע המשימה..."
+                />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">דחיפות</label>
-            <select
-              name="urgency"
-              className="mt-1 block w-full p-2 border border-gray-300 rounded"
-              value={formData.urgency}
-              onChange={handleChange}
-            >
-              <option value="Low">נמוכה (Low)</option>
-              <option value="Normal">רגילה (Normal)</option>
-              <option value="High">דחופה (High)</option>
-            </select>
-          </div>
+            {/* העלאת תמונה (חדש) */}
+            <div>
+                <label className="block text-sm font-bold mb-1 flex gap-2 text-gray-700"><Camera size={16}/> צרף תמונה (אופציונלי)</label>
+                <input type="file" accept="image/*" onChange={e => setFile(e.target.files[0])} 
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
+                />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">תאריך יעד</label>
-            <input
-              type="date"
-              name="due_date"
-              className="mt-1 block w-full p-2 border border-gray-300 rounded"
-              value={formData.due_date}
-              onChange={handleChange}
-            />
-          </div>
+            {/* בחירת עובד (רק למנהלים) */}
+            {currentUser?.role !== 'EMPLOYEE' && (
+                <div>
+                    <label className="block text-sm font-bold mb-1 flex items-center gap-1 text-gray-700"><User size={14}/> למי להקצות?</label>
+                    <select className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-purple-200 outline-none" 
+                        value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
+                        <option value={currentUser.id}>לעצמי</option>
+                        {teamMembers.map(u => (
+                            <option key={u.id} value={u.id}>
+                                {u.full_name} ({u.role === 'MANAGER' ? 'מנהל' : 'עובד'})
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
 
-          <div className="flex gap-2 pt-4">
-            <button type="button" onClick={onCancel} className="flex-1 py-2 border rounded">ביטול</button>
-            <button type="submit" className="flex-1 py-2 bg-purple-700 text-white rounded">צור משימה</button>
-          </div>
+            {/* שורה של מיקום ודחיפות */}
+            <div className="flex gap-4">
+                <div className="flex-1">
+                    <label className="block text-sm font-bold mb-1 text-gray-700">מיקום</label>
+                    <select required className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-purple-200 outline-none" 
+                        value={formData.location_id} onChange={e => setFormData({...formData, location_id: e.target.value})}>
+                        <option value="">בחר...</option>
+                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
+                </div>
+                <div className="flex-1">
+                    <label className="block text-sm font-bold mb-1 text-gray-700">דחיפות</label>
+                    <select className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-purple-200 outline-none" 
+                        value={formData.urgency} onChange={e => setFormData({...formData, urgency: e.target.value})}>
+                        <option value="Normal">רגילה</option>
+                        <option value="High">דחופה 🔥</option>
+                        <option value="Low">נמוכה</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* תאריך */}
+            <div>
+                <label className="block text-sm font-bold mb-1 text-gray-700">תאריך ביצוע</label>
+                <input type="date" required className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-purple-200 outline-none" 
+                    value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
+                />
+            </div>
+
+            {/* איזור מחזוריות */}
+            <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 transition-all">
+                <div className="flex items-center gap-2 mb-3">
+                    <input type="checkbox" id="recurring" className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+                        checked={formData.is_recurring} onChange={e => setFormData({...formData, is_recurring: e.target.checked})} 
+                    />
+                    <label htmlFor="recurring" className="font-bold text-purple-900 flex items-center gap-2 cursor-pointer select-none">
+                        <RefreshCw size={16}/> זו משימה חוזרת (קבועה)
+                    </label>
+                </div>
+
+                {formData.is_recurring && (
+                    <div className="space-y-4 animate-fade-in pl-7">
+                        <select className="w-full p-2 border rounded-lg bg-white text-sm" 
+                            value={formData.recurring_type} onChange={e => setFormData({...formData, recurring_type: e.target.value})}>
+                            <option value="weekly">שבועית (ימים קבועים)</option>
+                            <option value="monthly">חודשית (תאריך קבוע בחודש)</option>
+                        </select>
+
+                        {formData.recurring_type === 'weekly' ? (
+                            <div className="flex justify-between gap-2">
+                                {daysOfWeek.map(day => (
+                                    <button type="button" key={day.id} 
+                                        onClick={() => toggleDay(day.id)} 
+                                        className={`w-9 h-9 rounded-full text-xs font-bold transition-all shadow-sm ${
+                                            formData.selected_days.includes(day.id) 
+                                            ? 'bg-purple-600 text-white scale-110 ring-2 ring-purple-300' 
+                                            : 'bg-white border text-gray-500 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        {day.label}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 text-sm text-gray-700 bg-white p-2 rounded border w-fit">
+                                <span>כל</span>
+                                <input type="number" min="1" max="31" className="w-12 p-1 border rounded text-center font-bold" 
+                                    value={formData.recurring_date} onChange={e => setFormData({...formData, recurring_date: e.target.value})} 
+                                />
+                                <span>לחודש</span>
+                            </div>
+                        )}
+                        <p className="text-xs text-gray-500 italic">* המערכת תיצור משימות אוטומטית לשנה קדימה.</p>
+                    </div>
+                )}
+            </div>
+
+            <button type="submit" className="w-full py-3.5 bg-[#6A0DAD] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition transform active:scale-95 text-lg">
+                שמור משימה
+            </button>
         </form>
       </div>
     </div>

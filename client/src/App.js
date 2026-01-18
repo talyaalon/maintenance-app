@@ -3,14 +3,13 @@ import { LayoutDashboard, Users, MapPin, UserCircle, Plus } from 'lucide-react';
 import Login from './Login';
 import CreateTaskForm from './CreateTaskForm';
 import AddUserForm from './AddUserForm';
-// שימי לב: מחקנו את AddLocationForm כי הטאב החדש מנהל את ההוספה בעצמו
 import { translations } from './translations'; 
 
 // ייבוא הטאבים
 import TasksTab from './TasksTab';
 import TeamTab from './TeamTab';
 import ProfileTab from './ProfileTab'; 
-import LocationsTab from './LocationsTab'; // <--- הייבוא של הקובץ החדש שיצרנו
+import LocationsTab from './LocationsTab'; 
 
 function App() {
   const [user, setUser] = useState(null);
@@ -24,7 +23,6 @@ function App() {
   // מודאלים
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
-  // מחקנו את isLocFormOpen כי הטאב מנהל את זה לבד
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -32,7 +30,6 @@ function App() {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      // עדכון ל-IP שלך כדי שיעבוד בטלפון
       const res = await fetch('http://192.168.0.106:3001/tasks', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -69,8 +66,6 @@ function App() {
     );
   }
 
-  // --- בדיקת הרשאה לעובד ---
-  // עובד רגיל הוא מי שהתפקיד שלו הוא EMPLOYEE
   const isEmployee = user.role === 'EMPLOYEE';
 
   const renderContent = () => {
@@ -79,7 +74,6 @@ function App() {
           case 1: 
             return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} />;
           case 2: 
-            // הגנה: אם עובד מנסה לגשת לצוות - לא מציגים לו כלום
             if (isEmployee) return null;
             return <TeamTab 
                         user={user} 
@@ -89,9 +83,7 @@ function App() {
                         refreshTrigger={refreshTrigger} 
                    />;
           case 3: 
-            // הגנה: אם עובד מנסה לגשת למיקומים - לא מציגים לו כלום
             if (isEmployee) return null;
-            // משתמשים בקומפוננטה החדשה LocationsTab (בלי להעביר לה פונקציית הוספה, כי היא עושה לבד)
             return <LocationsTab token={token} t={t} user={user} />;
           case 4: 
             return <ProfileTab 
@@ -111,7 +103,6 @@ function App() {
   return (
     <div className={`min-h-screen bg-gray-50 font-sans`} dir={isRTL ? 'rtl' : 'ltr'}>
       
-      {/* כותרת עליונה */}
       <header className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-30">
         <h1 className="text-xl font-bold text-[#6A0DAD]">MAINTENANCE APP</h1>
         
@@ -121,7 +112,6 @@ function App() {
         </select>
       </header>
 
-      {/* התוכן המרכזי שמתחלף */}
       <main className="max-w-3xl mx-auto min-h-[80vh]">
           {renderContent()}
       </main>
@@ -142,7 +132,6 @@ function App() {
                 <span className="text-[10px] mt-1 font-medium">{t.nav_tasks}</span>
             </button>
 
-            {/* רק אם המשתמש הוא *לא* עובד, נציג לו את הטאב של הצוות */}
             {!isEmployee && (
                 <button onClick={() => setActiveTab(2)} className={`flex flex-col items-center w-full ${activeTab === 2 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
                     <Users size={24} strokeWidth={activeTab === 2 ? 2.5 : 2} />
@@ -150,7 +139,6 @@ function App() {
                 </button>
             )}
 
-            {/* רק אם המשתמש הוא *לא* עובד, נציג לו את הטאב של המיקומים */}
             {!isEmployee && (
                 <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
                     <MapPin size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
@@ -166,11 +154,14 @@ function App() {
         </div>
       </nav>
 
-      {/* החלונות הקופצים (Popups) */}
+      {/* --- החלונות הקופצים (Popups) --- */}
       
+      {/* התיקון נמצא כאן: הוספנו את currentUser ו-token */}
       {isTaskFormOpen && <CreateTaskForm 
           onTaskCreated={() => { setIsTaskFormOpen(false); fetchTasks(); }} 
           onCancel={() => setIsTaskFormOpen(false)} 
+          currentUser={user} 
+          token={localStorage.getItem('token')}
       />}
       
       {isUserFormOpen && <AddUserForm 
@@ -180,8 +171,6 @@ function App() {
               setRefreshTrigger(prev => prev + 1); 
           }} 
       />}
-      
-      {/* הערה: מחקנו את AddLocationForm מכאן כי LocationsTab מטפל בזה לבד */}
       
     </div>
   );

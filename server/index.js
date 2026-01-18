@@ -1,4 +1,4 @@
-// server/index.js - גרסה עם מיילים מפורטים וחכמים
+// server/index.js - הקובץ המלא: משתמשים, הרשאות, משימות מתקדמות, תמונות וסטטוסים
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -23,7 +23,7 @@ const transporter = nodemailer.createTransport({
   tls: { rejectUnauthorized: false }
 });
 
-// --- שליחת מייל עדכון ---
+// --- פונקציה: שליחת מייל עדכון פרטים ---
 const sendUpdateEmail = async (email, fullName, changes) => {
     console.log(`Sending update email to: ${email}...`);
     const appLink = "http://192.168.0.106:3000"; 
@@ -44,11 +44,9 @@ const sendUpdateEmail = async (email, fullName, changes) => {
           <div style="background:white;padding:20px;border-radius:8px;">
             <p style="font-size:16px;">שלום <strong>${fullName}</strong>,</p>
             <p>בוצעו השינויים הבאים בפרופיל המשתמש שלך:</p>
-            
             <div style="background-color:#f0f9ff; border-right: 4px solid #0ea5e9; padding: 10px; margin: 15px 0;">
                 ${changesHtml}
             </div>
-
             <p style="font-size:14px; color:#666;">אם לא ביצעת או ביקשת את השינויים האלו, אנא פנה למנהל המערכת.</p>
             <div style="text-align:center;margin-top:30px;">
               <a href="${appLink}" style="background:#6A0DAD;color:white;padding:10px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">כניסה למערכת</a>
@@ -57,14 +55,15 @@ const sendUpdateEmail = async (email, fullName, changes) => {
         </div>
       `
     };
-
     try { await transporter.sendMail(mailOptions); } 
     catch (error) { console.error('Error sending update email:', error); }
 };
 
-// --- שליחת מייל ברוכים הבאים ---
+// --- פונקציה: שליחת מייל ברוכים הבאים ---
 const sendWelcomeEmail = async (email, fullName, password, role, managerName) => {
+    console.log(`Sending welcome email to: ${email}...`);
     const appLink = "http://192.168.0.106:3000"; 
+
     let titleText = '', descriptionText = '', featuresList = '', managerInfo = '';
 
     if (role === 'MANAGER' || role === 'BIG_BOSS') {
@@ -107,13 +106,17 @@ const sendWelcomeEmail = async (email, fullName, password, role, managerName) =>
     try { await transporter.sendMail(mailOptions); } catch (e) {}
 };
 
+// --- הגדרת קבצים ---
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = 'uploads/';
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname))
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
 });
 const upload = multer({ storage: storage });
 
@@ -122,7 +125,11 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const pool = new Pool({
-  user: 'postgres', host: '127.0.0.1', database: 'maintenance_management_app', password: '1234', port: 5432,
+  user: 'postgres',
+  host: '127.0.0.1',
+  database: 'maintenance_management_app',
+  password: '1234', 
+  port: 5432,
 });
 
 const authenticateToken = (req, res, next) => {
@@ -136,8 +143,9 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// --- ROUTES ---
+// --- מסלולים (Routes) ---
 
+// Login
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -150,6 +158,7 @@ app.post('/login', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "שגיאת שרת" }); }
 });
 
+// עדכון פרופיל אישי + מייל עדכון
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
         const userId = req.user.id;
@@ -157,7 +166,6 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         let profilePictureUrl = req.body.existing_picture; 
         if (req.file) profilePictureUrl = `http://192.168.0.106:3001/uploads/${req.file.filename}`;
         
-        // שליפת המשתמש הישן להשוואה
         const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         const oldUser = oldUserRes.rows[0];
 
@@ -187,6 +195,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
     } catch (err) { res.status(500).send("Update failed"); }
 });
 
+// --- ניהול משתמשים (כולל הרשאות צפייה) ---
 app.get('/users', authenticateToken, async (req, res) => {
     try {
         let query = `
@@ -208,6 +217,7 @@ app.get('/users', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Server Error'); }
 });
 
+// יצירת משתמש חדש
 app.post('/users', authenticateToken, async (req, res) => {
   const { full_name, email, password, role, parent_manager_id } = req.body;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "אימייל לא תקין" });
@@ -232,52 +242,38 @@ app.post('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// --- עריכת משתמש (ע"י מנהל) - גרסה מפורטת ---
+// עריכת משתמש ע"י מנהל + מייל מפורט
 app.put('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     const { id } = req.params;
     const { full_name, email, password, parent_manager_id } = req.body; 
     
     try {
-        // 1. שליפת המצב הישן (לפני השינוי)
         const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
         const oldUser = oldUserRes.rows[0];
-
         if (!oldUser) return res.status(404).send("User not found");
 
         let query, params;
         let changes = [];
 
-        // 2. זיהוי שינויים
-        if (full_name !== oldUser.full_name) {
-            changes.push(`השם שלך שונה ל: <strong>${full_name}</strong>`);
-        }
-        if (email !== oldUser.email) {
-            changes.push(`כתובת האימייל שונתה ל: <strong>${email}</strong>`);
-        }
-        if (password && password.trim() !== "") {
-            changes.push('הסיסמה שלך שונתה');
-        }
+        if (full_name !== oldUser.full_name) changes.push(`השם שלך שונה ל: <strong>${full_name}</strong>`);
+        if (email !== oldUser.email) changes.push(`כתובת האימייל שונתה ל: <strong>${email}</strong>`);
+        if (password && password.trim() !== "") changes.push('הסיסמה שלך שונתה');
 
-        // בדיקת שינוי מנהל (החלק המורכב)
         const oldManagerId = oldUser.parent_manager_id;
-        const newManagerId = parent_manager_id || null; // אם נשלח ריק זה null
+        const newManagerId = parent_manager_id || null; 
 
         if (oldManagerId !== newManagerId) {
             if (newManagerId) {
-                // המנהל הוחלף/נוסף - צריך להביא את השם שלו
                 const mRes = await pool.query('SELECT full_name FROM users WHERE id = $1', [newManagerId]);
                 if (mRes.rows.length > 0) {
-                    const newManagerName = mRes.rows[0].full_name;
-                    changes.push(`הועברת למנהל חדש: <strong>${newManagerName}</strong>`);
+                    changes.push(`הועברת למנהל חדש: <strong>${mRes.rows[0].full_name}</strong>`);
                 }
             } else {
-                // המנהל הוסר
                 changes.push('הוסרת משיוך למנהל (כעת אין לך מנהל ישיר)');
             }
         }
 
-        // 3. ביצוע העדכון בדאטה בייס
         if (password && password.trim() !== "") {
             query = 'UPDATE users SET full_name = $1, email = $2, password_hash = $3, parent_manager_id = $4 WHERE id = $5 RETURNING *';
             params = [full_name, email, password, parent_manager_id || null, id];
@@ -289,7 +285,6 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         const result = await pool.query(query, params);
         const updatedUser = result.rows[0];
 
-        // 4. שליחת המייל (רק אם היו שינויים)
         if (changes.length > 0) {
             sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes);
         }
@@ -301,12 +296,11 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// --- מחיקת משתמש: חסימה אם יש עובדים ---
+// מחיקת משתמש (בטוחה)
 app.delete('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     try {
       const { id } = req.params;
-
       const subordinates = await pool.query('SELECT count(*) FROM users WHERE parent_manager_id = $1', [id]);
       const count = parseInt(subordinates.rows[0].count);
 
@@ -331,7 +325,7 @@ app.get('/managers', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).send('Server Error'); }
 });
 
-// Locations & Tasks
+// --- LOCATIONS ---
 app.get('/locations', authenticateToken, async (req, res) => {
   try {
     const r = await pool.query('SELECT locations.*, users.full_name as creator_name FROM locations LEFT JOIN users ON locations.created_by = users.id ORDER BY locations.name ASC');
@@ -349,36 +343,169 @@ app.delete('/locations/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     try { await pool.query('DELETE FROM tasks WHERE location_id = $1', [req.params.id]); await pool.query('DELETE FROM locations WHERE id = $1', [req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).send('Error'); }
 });
+
+// --- TASKS (המדורג!) ---
+
+// 1. שליפת משימות (כולל סטטוסים ותמונות)
 app.get('/tasks', authenticateToken, async (req, res) => {
   try {
     const { role, id } = req.user;
-    let q = `SELECT tasks.*, users.full_name as worker_name, locations.name as location_name FROM tasks LEFT JOIN users ON tasks.worker_id = users.id LEFT JOIN locations ON tasks.location_id = locations.id`;
-    let p = [];
-    if (role === 'EMPLOYEE') { q += ' WHERE worker_id = $1'; p.push(id); }
-    q += ' ORDER BY created_at DESC';
-    const r = await pool.query(q, p); res.json(r.rows);
-  } catch (e) { res.status(500).send('Error'); }
+    let query = `
+        SELECT tasks.*, users.full_name as worker_name, locations.name as location_name, users.parent_manager_id
+        FROM tasks 
+        LEFT JOIN users ON tasks.worker_id = users.id 
+        LEFT JOIN locations ON tasks.location_id = locations.id
+    `;
+    let params = [];
+    if (role === 'EMPLOYEE') {
+        query += ' WHERE worker_id = $1';
+        params.push(id);
+    } else if (role === 'MANAGER') {
+        query += ` WHERE worker_id = $1 OR worker_id IN (SELECT id FROM users WHERE parent_manager_id = $1)`;
+        params.push(id);
+    }
+    query += ' ORDER BY due_date ASC';
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) { res.status(500).send('Server Error'); }
 });
-app.post('/tasks', authenticateToken, async (req, res) => {
+
+// 2. יצירת משימה (תמיכה בתמונות ומחזוריות)
+app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, res) => {
   try {
-    const { title, urgency, due_date, location_id } = req.body; 
-    const wRes = await pool.query('SELECT id FROM users LIMIT 1');
-    const newJob = await pool.query(`INSERT INTO tasks (title, location_id, worker_id, urgency, due_date) VALUES ($1, $2, $3, $4, $5) RETURNING *`, [title, location_id, wRes.rows[0]?.id, urgency, due_date]);
-    res.json(newJob.rows[0]);
-  } catch (e) { res.status(500).send('Error'); }
-});
-app.post('/tasks/import', authenticateToken, upload.single('file'), async (req, res) => {
-    if (!req.file) return res.status(400).send('No file');
-    try {
-        const wb = xlsx.readFile(req.file.path);
-        const data = xlsx.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        for (const row of data) {
-            const loc = await pool.query('SELECT id FROM locations LIMIT 1');
-            const usr = await pool.query('SELECT id FROM users LIMIT 1');
-            await pool.query(`INSERT INTO tasks (title, location_id, worker_id, urgency, due_date) VALUES ($1, $2, $3, $4, $5)`, [row.Title || 'Imported', loc.rows[0].id, usr.rows[0].id, row.Urgency || 'Normal', row.DueDate ? new Date(row.DueDate) : new Date()]);
+    const creationImageUrl = req.file ? `http://192.168.0.106:3001/uploads/${req.file.filename}` : null;
+    const { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date } = req.body;
+    
+    const worker_id = assigned_worker_id || req.user.id;
+    
+    const isRecurring = is_recurring === 'true';
+    const selDays = selected_days ? JSON.parse(selected_days) : [];
+
+    if (!isRecurring) {
+        await pool.query(
+            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING')`,
+            [title, location_id, worker_id, urgency, due_date, description, creationImageUrl]
+        );
+        return res.json({ message: "משימה נוצרה" });
+    }
+
+    // משימות מחזוריות
+    const tasksToInsert = [];
+    const startDate = new Date(due_date);
+    const oneYearFromNow = new Date(startDate);
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+    let currentDate = new Date(startDate);
+
+    while (currentDate <= oneYearFromNow) {
+        let shouldInsert = false;
+        if (recurring_type === 'weekly') {
+            if (selDays.includes(currentDate.getDay())) shouldInsert = true;
+        } else if (recurring_type === 'monthly') {
+            if (currentDate.getDate() === parseInt(recurring_date)) shouldInsert = true;
         }
-        fs.unlinkSync(req.file.path); res.json({ message: 'Success' });
-    } catch (e) { res.status(500).send('Error'); }
+        if (shouldInsert) tasksToInsert.push(new Date(currentDate));
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    for (const date of tasksToInsert) {
+        await pool.query(
+            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING')`,
+            [title + ' (מחזורי)', location_id, worker_id, urgency, date, description, creationImageUrl]
+        );
+    }
+    res.json({ message: `נוצרו ${tasksToInsert.length} משימות מחזוריות` });
+
+  } catch (err) { console.error(err); res.status(500).send('Server Error'); }
+});
+
+// 3. דיווח ביצוע ע"י עובד
+app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_image'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { completion_note } = req.body;
+        
+        if (!req.file && !completion_note) {
+            return res.status(400).json({ error: "חובה להעלות תמונה או לכתוב הערה לסיום משימה" });
+        }
+
+        const completionImageUrl = req.file ? `http://192.168.0.106:3001/uploads/${req.file.filename}` : null;
+
+        await pool.query(
+            `UPDATE tasks SET status = 'WAITING_APPROVAL', completion_note = $1, completion_image_url = $2 WHERE id = $3`,
+            [completion_note, completionImageUrl, id]
+        );
+        res.json({ success: true });
+    } catch (err) { res.status(500).send('Error'); }
+});
+
+// 4. אישור משימה ע"י מנהל
+app.put('/tasks/:id/approve', authenticateToken, async (req, res) => {
+    if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
+    try {
+        await pool.query(`UPDATE tasks SET status = 'COMPLETED' WHERE id = $1`, [req.params.id]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).send('Error'); }
+});
+
+// 5. משימת המשך (Follow-up)
+app.post('/tasks/:id/follow-up', authenticateToken, async (req, res) => {
+    try {
+        const parentId = req.params.id;
+        const { due_date, description } = req.body;
+
+        const parentTask = await pool.query('SELECT * FROM tasks WHERE id = $1', [parentId]);
+        const pt = parentTask.rows[0];
+
+        await pool.query(
+            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, parent_task_id) 
+             VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7)`,
+            [`המשך ל: ${pt.title}`, pt.location_id, pt.worker_id, 'High', due_date, description, parentId]
+        );
+        
+        await pool.query(`UPDATE tasks SET status = 'COMPLETED', completion_note = 'נפתחה משימת המשך לתאריך ${due_date}' WHERE id = $1`, [parentId]);
+
+        res.json({ success: true });
+    } catch (err) { console.error(err); res.status(500).send('Error'); }
+});
+
+// 6. ייבוא חכם
+app.post('/tasks/import-smart', authenticateToken, async (req, res) => {
+    const { tasks } = req.body; 
+    if (!tasks || !Array.isArray(tasks)) return res.status(400).send("Invalid data");
+
+    let created = 0;
+    let updated = 0;
+
+    try {
+        for (const task of tasks) {
+            const urgency = task.urgency || 'Normal';
+            if (task.id) {
+                const check = await pool.query('SELECT id FROM tasks WHERE id = $1', [task.id]);
+                if (check.rows.length > 0) {
+                    await pool.query(
+                        `UPDATE tasks SET title=$1, urgency=$2, location_id=$3, worker_id=$4, due_date=$5 WHERE id=$6`,
+                        [task.title, urgency, task.location_id, task.worker_id, task.due_date, task.id]
+                    );
+                    updated++;
+                } else {
+                    await pool.query(
+                        `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date) VALUES ($1, $2, $3, $4, $5)`,
+                        [task.title, task.location_id, task.worker_id, urgency, task.due_date]
+                    );
+                    created++;
+                }
+            } else {
+                await pool.query(
+                    `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date) VALUES ($1, $2, $3, $4, $5)`,
+                    [task.title, task.location_id, task.worker_id, urgency, task.due_date]
+                );
+                created++;
+            }
+        }
+        res.json({ message: 'Import completed', stats: { created, updated } });
+    } catch (e) { res.status(500).send('Error importing'); }
 });
 
 app.listen(port, () => { console.log(`Server running on ${port}`); });
