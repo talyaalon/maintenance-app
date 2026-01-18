@@ -8,7 +8,7 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
 
   const fetchTeam = async () => {
     try {
-        const res = await fetch('http://localhost:3001/users', { 
+        const res = await fetch('http://192.168.0.106:3001/users', { 
              headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -22,23 +22,21 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
     fetchTeam();
   }, [refreshTrigger]);
 
-  // --- הפונקציה המעודכנת למחיקה עם אזהרה חכמה ---
   const handleDelete = async (userToDelete) => {
-    let warningMessage = "האם למחוק משתמש זה? הפעולה תמחק גם את המשימות שלו.";
-    
-    // בדיקה: אם המשתמש הוא מנהל או ביג-בוס, ניתן אזהרה חמורה
-    if (userToDelete.role === 'MANAGER' || userToDelete.role === 'BIG_BOSS') {
-        warningMessage = `⚠️ שים לב! \nאתה עומד למחוק את המנהל "${userToDelete.full_name}".\n\nפעולה זו תמחק לצמיתות:\n1. את המנהל עצמו.\n2. את כל העובדים תחתיו.\n3. את כל המשימות שלהם.\n\nהאם אתה בטוח לגמרי?`;
-    }
+    if (!window.confirm("האם למחוק משתמש זה?")) return;
 
-    if (!window.confirm(warningMessage)) return; // אם המשתמש לחץ "ביטול"
-
-    // ביצוע המחיקה
-    await fetch(`http://localhost:3001/users/${userToDelete.id}`, {
+    const res = await fetch(`http://192.168.0.106:3001/users/${userToDelete.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
     });
-    fetchTeam();
+
+    if (res.ok) {
+        fetchTeam();
+    } else {
+        // כאן אנחנו תופסים את השגיאה מהשרת (למשל: למנהל יש עובדים) ומציגים אותה
+        const errorData = await res.json();
+        alert(errorData.error || "שגיאה במחיקה");
+    }
   };
 
   const toggleManager = (managerId) => {
@@ -46,6 +44,7 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
     else setExpandedManager(managerId);
   };
 
+  // רשימת המנהלים (נשתמש בה גם להעברה)
   const managers = usersList.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
   
   const getWorkersForManager = (managerId) => {
@@ -91,7 +90,6 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
                                 <Pencil size={16}/>
                             </button>
                             {manager.id !== user.id && (
-                                // שימי לב: כאן העברנו את האובייקט manager כולו, לא רק את ה-ID
                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(manager); }} className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 rounded-full">
                                     <Trash2 size={16}/>
                                 </button>
@@ -112,7 +110,6 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
                                     </div>
                                     <div className="flex gap-2">
                                         <button onClick={() => setEditingUser(worker)} className="text-gray-400 hover:text-blue-600"><Pencil size={16}/></button>
-                                        {/* גם כאן, מעבירים את כל האובייקט worker */}
                                         <button onClick={() => handleDelete(worker)} className="text-gray-400 hover:text-red-500"><Trash2 size={16}/></button>
                                     </div>
                                 </div>
@@ -131,6 +128,8 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
         <EditUserModal 
             userToEdit={editingUser} 
             token={token} 
+            managersList={managers} // מעבירים את רשימת המנהלים כדי שיהיה אפשר להחליף
+            currentUserRole={user.role} // מעבירים את התפקיד של המשתמש הנוכחי (כדי לדעת אם הוא ביג בוס)
             onClose={() => setEditingUser(null)} 
             onSuccess={() => { setEditingUser(null); fetchTeam(); }}
         />
@@ -139,22 +138,26 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
   );
 };
 
-const EditUserModal = ({ userToEdit, token, onClose, onSuccess }) => {
+const EditUserModal = ({ userToEdit, token, onClose, onSuccess, managersList, currentUserRole }) => {
     const [formData, setFormData] = useState({
         full_name: userToEdit.full_name,
         email: userToEdit.email,
-        password: '' 
+        password: '',
+        parent_manager_id: userToEdit.parent_manager_id || '' // המנהל הנוכחי
     });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch(`http://localhost:3001/users/${userToEdit.id}`, {
+            const res = await fetch(`http://192.168.0.106:3001/users/${userToEdit.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(formData)
             });
-            if (res.ok) onSuccess();
+            if (res.ok) {
+                alert("הפרטים עודכנו בהצלחה! מייל נשלח למשתמש.");
+                onSuccess();
+            }
             else alert("שגיאה בעדכון");
         } catch (err) { alert("שגיאת שרת"); }
     };
@@ -164,25 +167,49 @@ const EditUserModal = ({ userToEdit, token, onClose, onSuccess }) => {
             <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
                 <h3 className="text-xl font-bold mb-4 text-purple-700">עריכת פרטים: {userToEdit.full_name}</h3>
                 <form onSubmit={handleSubmit} className="space-y-3">
-                    <input 
-                        className="w-full p-2 border rounded bg-gray-50" 
-                        value={formData.full_name} 
-                        onChange={e => setFormData({...formData, full_name: e.target.value})}
-                        placeholder="שם מלא"
-                    />
-                    <input 
-                        className="w-full p-2 border rounded bg-gray-50" 
-                        value={formData.email} 
-                        onChange={e => setFormData({...formData, email: e.target.value})}
-                        placeholder="אימייל"
-                    />
-                    <input 
-                        className="w-full p-2 border rounded bg-gray-50" 
-                        type="password"
-                        value={formData.password} 
-                        onChange={e => setFormData({...formData, password: e.target.value})}
-                        placeholder="סיסמה חדשה (השאר ריק אם לא משנה)"
-                    />
+                    <div>
+                        <label className="text-xs text-gray-500">שם מלא</label>
+                        <input 
+                            className="w-full p-2 border rounded bg-gray-50" 
+                            value={formData.full_name} 
+                            onChange={e => setFormData({...formData, full_name: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">אימייל</label>
+                        <input 
+                            className="w-full p-2 border rounded bg-gray-50" 
+                            value={formData.email} 
+                            onChange={e => setFormData({...formData, email: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">סיסמה (השאר ריק כדי לא לשנות)</label>
+                        <input 
+                            className="w-full p-2 border rounded bg-gray-50" 
+                            type="password"
+                            value={formData.password} 
+                            onChange={e => setFormData({...formData, password: e.target.value})}
+                        />
+                    </div>
+
+                    {/* אפשרות להחלפת מנהל - מופיעה רק לביג בוס ורק אם עורכים עובד */}
+                    {currentUserRole === 'BIG_BOSS' && userToEdit.role === 'EMPLOYEE' && (
+                        <div>
+                            <label className="text-xs text-gray-500 font-bold">שייך למנהל:</label>
+                            <select 
+                                className="w-full p-2 border rounded bg-gray-50"
+                                value={formData.parent_manager_id}
+                                onChange={e => setFormData({...formData, parent_manager_id: e.target.value})}
+                            >
+                                <option value="">ללא מנהל</option>
+                                {managersList.map(m => (
+                                    <option key={m.id} value={m.id}>{m.full_name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <div className="flex gap-2 mt-4">
                         <button type="button" onClick={onClose} className="flex-1 py-2 border rounded">ביטול</button>
                         <button type="submit" className="flex-1 py-2 bg-purple-600 text-white rounded">שמור שינויים</button>
