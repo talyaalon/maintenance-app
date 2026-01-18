@@ -13,28 +13,29 @@ const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
-// --- הגדרת המייל (גרסה מיוחדת לדיבאג - פורט 465) ---
-console.log("📧 Attempting to configure Email Service with PORT 465 (SSL)...");
+// --- הגדרת המייל (תיקון סופי: כפיית IPv4) ---
+console.log("📧 Configuring Email with IPv4 force...");
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 465,               // שימוש ב-SSL
-  secure: true,            // חובה ב-465
+  port: 587,              // נחזור לפורט 587 הסטנדרטי
+  secure: false,          // חובה ב-587
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   },
   tls: {
     rejectUnauthorized: false
-  }
+  },
+  family: 4 // <--- זה הקסם! מכריח שימוש בכתובת רגילה ולא IPv6
 });
 
-// בדיקת חיבור מיידית בעליית השרת
-transporter.verify(function (error, success) {
+// בדיקת חיבור
+transporter.verify((error, success) => {
   if (error) {
-    console.log('🔴 Error connecting to email server:', error);
+    console.error('🔴 Connection failed:', error);
   } else {
-    console.log('🟢 Email server is ready via Port 465!');
+    console.log('🟢 Email server is finally ready!');
   }
 });
 
