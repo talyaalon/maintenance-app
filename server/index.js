@@ -13,20 +13,20 @@ const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
-// --- הגדרת המייל ---
-// --- הגדרת המייל (תיקון ל-Timeout) ---
+// --- הגדרת המייל (ניסיון שני: פורט 465 SSL) ---
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com', // הכתובת הישירה של ג'ימייל
-  port: 587,              // הפורט הכי אמין לענן
-  secure: false,          // חובה להיות false בפורט 587
+  host: 'smtp.gmail.com',
+  port: 465,               // שינוי לפורט 465
+  secure: true,            // בפורט הזה חובה לכתוב true
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   },
   tls: {
-    rejectUnauthorized: false
+    // לפעמים זה עוזר למנוע בעיות אישור בשרתים מסוימים
+    rejectUnauthorized: false 
   }
-}); 
+});
 
 // --- פונקציה: שליחת מייל עדכון פרטים ---
 const sendUpdateEmail = async (email, fullName, changes) => {
