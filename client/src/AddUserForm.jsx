@@ -11,6 +11,7 @@ const AddUserForm = ({ currentUser, onClose }) => {
   
   const [managers, setManagers] = useState([]);
   const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false); // כדי למנוע לחיצות כפולות
 
   useEffect(() => {
     if (currentUser.role === 'BIG_BOSS') {
@@ -28,11 +29,10 @@ const AddUserForm = ({ currentUser, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true); // נועל את הכפתור
     const token = localStorage.getItem('token');
     
-    // --- התיקון: ניקוי הנתונים לפני השליחה ---
-    // אם המזהה של המנהל הוא ריק (מחרוזת ריקה), נהפוך אותו ל-null
-    // זה מונע את השגיאה ב-PostgreSQL
+    // תיקון למקרה של מחרוזת ריקה במנהל
     const dataToSend = {
         ...formData,
         parent_manager_id: formData.parent_manager_id === '' ? null : formData.parent_manager_id
@@ -45,31 +45,34 @@ const AddUserForm = ({ currentUser, onClose }) => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(dataToSend) // שולחים את המידע המתוקן
+        body: JSON.stringify(dataToSend)
       });
       
+      const responseData = await res.json();
+
       if (res.ok) {
         setMessage('משתמש נוצר בהצלחה!');
-        setTimeout(onClose, 1500);
+        // המתנה קצרה כדי שיראו את ההודעה הירוקה, ואז סגירה
+        setTimeout(() => {
+            onClose(); // <--- הקריאה הזו גורמת לרענון ב-App.js
+        }, 1000);
       } else {
-        // קריאת הודעת השגיאה המדויקת מהשרת (יעזור לנו להבין אם האימייל תפוס)
-        const errorData = await res.json();
-        setMessage(errorData.error || 'שגיאה ביצירת משתמש');
+        setMessage(responseData.error || 'שגיאה ביצירת משתמש');
+        setIsSubmitting(false);
       }
     } catch (err) {
       setMessage('שגיאת שרת');
+      setIsSubmitting(false);
     }
   };
-
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl" dir="rtl">
         <h2 className="text-xl font-bold mb-4 text-purple-700">הוספת איש צוות חדש</h2>
         
-        {message && <div className="bg-green-100 text-green-700 p-2 mb-2 rounded">{message}</div>}
+        {message && <div className={`p-2 mb-2 rounded ${message.includes('שגיאה') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{message}</div>}
 
-        {/* הוספנו autoComplete="off" לטופס עצמו כדי לנסות למנוע השלמות */}
         <form onSubmit={handleSubmit} className="space-y-3" autoComplete="off">
           
           <input 
@@ -80,7 +83,6 @@ const AddUserForm = ({ currentUser, onClose }) => {
             onChange={e => setFormData({...formData, full_name: e.target.value})}
           />
           
-          {/* תיקון: הוספת autoComplete="new-email" או "off" */}
           <input 
             type="email" 
             placeholder="אימייל" 
@@ -90,7 +92,6 @@ const AddUserForm = ({ currentUser, onClose }) => {
             onChange={e => setFormData({...formData, email: e.target.value})}
           />
           
-          {/* תיקון: הוספת autoComplete="new-password" */}
           <input 
             type="password" 
             placeholder="סיסמה ראשונית" 
@@ -114,7 +115,7 @@ const AddUserForm = ({ currentUser, onClose }) => {
             </div>
           )}
 
-          {currentUser.role === 'BIG_BOSS' && formData.role === 'EMPLOYEE' && (
+          {(currentUser.role === 'BIG_BOSS' && formData.role === 'EMPLOYEE') && (
             <div>
               <label className="block text-sm font-bold mb-1">שייך למנהל:</label>
               <select 
@@ -131,8 +132,10 @@ const AddUserForm = ({ currentUser, onClose }) => {
           )}
 
           <div className="flex gap-2 mt-4">
-            <button type="button" onClick={onClose} className="flex-1 py-2 border rounded">ביטול</button>
-            <button type="submit" className="flex-1 py-2 bg-purple-700 text-white rounded">צור משתמש</button>
+            <button type="button" onClick={onClose} className="flex-1 py-2 border rounded hover:bg-gray-50">ביטול</button>
+            <button type="submit" disabled={isSubmitting} className="flex-1 py-2 bg-purple-700 text-white rounded hover:bg-purple-800 disabled:opacity-50">
+                {isSubmitting ? 'יוצר...' : 'צור משתמש'}
+            </button>
           </div>
         </form>
       </div>

@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Camera, Save, X, LogOut, User } from 'lucide-react';
+import React, { useState } from 'react';
+import { Camera, Save, X, LogOut, Eye, EyeOff } from 'lucide-react'; // הוספתי Eye, EyeOff
 
 const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // סטייט חדש להצגת סיסמה
   
   // State לנתוני הטופס
   const [formData, setFormData] = useState({
     full_name: user.name || '',
-    email: user.email || '', // הערה: וודאי שהשרת מחזיר email בלוגין
+    email: user.email || '', 
     password: '', // סיסמה תמיד מתחילה ריקה
   });
 
@@ -33,7 +34,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
     if (formData.password) {
         dataToSend.append('password', formData.password);
     }
-    // אם יש תמונה חדשה, שולחים אותה. אם לא, שולחים את ה-URL הישן כדי שהשרת ידע לשמור עליו
+    // אם יש תמונה חדשה, שולחים אותה. אם לא, שולחים את ה-URL הישן
     if (fileToUpload) {
         dataToSend.append('profile_picture', fileToUpload);
     } else {
@@ -45,7 +46,6 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
         method: 'PUT',
         headers: {
             'Authorization': `Bearer ${token}` 
-            // ב-FormData הדפדפן מגדיר לבד את ה-Content-Type
         },
         body: dataToSend
       });
@@ -56,6 +56,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
         onUpdateUser(data.user); // עדכון ה-User ב-App.js
         setIsEditing(false);
         setFormData(prev => ({ ...prev, password: '' })); // איפוס שדה הסיסמה
+        setShowPassword(false); // מחזירים למצב מוסתר
       } else {
         alert("שגיאה בעדכון הפרטים");
       }
@@ -115,18 +116,31 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
             />
         </div>
 
-        {/* שדה סיסמה - מוצג רק בעריכה */}
+        {/* שדה סיסמה - מוצג רק בעריכה - עכשיו עם כפתור עין! */}
         {isEditing && (
-            <div className="animate-fade-in">
+            <div className="animate-fade-in relative">
                 <label className="block text-sm font-medium text-gray-500 mb-1">סיסמה חדשה (השאר ריק כדי לא לשנות)</label>
-                <input 
-                    type="password" 
-                    className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none"
-                    value={formData.password}
-                    onChange={e => setFormData({...formData, password: e.target.value})}
-                    placeholder="******"
-                    autoComplete="new-password"
-                />
+                <div className="relative">
+                    <input 
+                        // כאן הקסם: אם showPassword הוא אמת, מציגים טקסט, אחרת סיסמה
+                        type={showPassword ? "text" : "password"} 
+                        className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none pr-10" // pr-10 נותן מקום לאייקון
+                        value={formData.password}
+                        onChange={e => setFormData({...formData, password: e.target.value})}
+                        placeholder="הזן סיסמה חדשה..."
+                        autoComplete="new-password"
+                    />
+                    {/* כפתור העין */}
+                    <button 
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute left-3 top-3 text-gray-400 hover:text-purple-600 focus:outline-none"
+                        style={{ top: '12px', left: '10px' }} // כיוון עדין למיקום
+                    >
+                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">* הסיסמה הישנה מוסתרת מטעמי אבטחה</p>
             </div>
         )}
 

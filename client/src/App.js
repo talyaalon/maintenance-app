@@ -9,7 +9,7 @@ import { translations } from './translations';
 // ייבוא הטאבים
 import TasksTab from './TasksTab';
 import TeamTab from './TeamTab';
-import ProfileTab from './ProfileTab'; // <--- הוספנו את הייבוא של הטאב החדש
+import ProfileTab from './ProfileTab'; 
 
 // קומפוננטות זמניות לטאבים שעדיין לא בנינו (מיקומים)
 const LocationsTab = ({t, onAddLoc}) => (
@@ -40,6 +40,10 @@ function App() {
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
   const [isLocFormOpen, setIsLocFormOpen] = useState(false);
 
+  // --- חדש: טריגר לרענון רשימת הצוות ---
+  // בכל פעם שהמספר הזה משתנה, רשימת העובדים ב-TeamTab תיטען מחדש
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
   const fetchTasks = async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -58,11 +62,8 @@ function App() {
       fetchTasks();
   };
 
-  // --- פונקציה חדשה: עדכון פרטי משתמש בזמן אמת ---
-  // כשהפרופיל מתעדכן ב-ProfileTab, הפונקציה הזו מעדכנת את ה-State הראשי
-  // כך התמונה והשם יתעדכנו מיד בכל האפליקציה
+  // פונקציה לעדכון פרטי משתמש בזמן אמת
   const handleUserUpdate = (updatedUser) => {
-      // אנחנו משמרים את הנתונים הקיימים ומעדכנים רק את מה שהשתנה
       setUser(prevUser => ({
           ...prevUser,
           ...updatedUser
@@ -92,17 +93,22 @@ function App() {
           case 1: 
             return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} />;
           case 2: 
-            return <TeamTab user={user} token={token} t={t} onAddUser={() => setIsUserFormOpen(true)} />;
+            return <TeamTab 
+                        user={user} 
+                        token={token} 
+                        t={t} 
+                        onAddUser={() => setIsUserFormOpen(true)} 
+                        refreshTrigger={refreshTrigger} // מעבירים את הטריגר לטאב הצוות
+                   />;
           case 3: 
             return <LocationsTab t={t} onAddLoc={() => setIsLocFormOpen(true)} />;
           case 4: 
-            // כאן אנחנו מחזירים את ProfileTab האמיתי עם כל הפונקציות
             return <ProfileTab 
                         t={t} 
                         user={user} 
                         token={token}
                         onLogout={() => { setUser(null); localStorage.removeItem('token'); }} 
-                        onUpdateUser={handleUserUpdate} // מעבירים את הפונקציה לעדכון
+                        onUpdateUser={handleUserUpdate} 
                    />;
           default: 
             return <TasksTab tasks={tasks} t={t} />;
@@ -166,9 +172,24 @@ function App() {
       </nav>
 
       {/* החלונות הקופצים (Popups) */}
-      {isTaskFormOpen && <CreateTaskForm onTaskCreated={() => { setIsTaskFormOpen(false); fetchTasks(); }} onCancel={() => setIsTaskFormOpen(false)} />}
-      {isUserFormOpen && <AddUserForm currentUser={user} onClose={() => setIsUserFormOpen(false)} />}
-      {isLocFormOpen && <AddLocationForm onClose={() => setIsLocFormOpen(false)} />}
+      
+      {isTaskFormOpen && <CreateTaskForm 
+          onTaskCreated={() => { setIsTaskFormOpen(false); fetchTasks(); }} 
+          onCancel={() => setIsTaskFormOpen(false)} 
+      />}
+      
+      {/* כאן עדכנו את סגירת הטופס כדי לרענן את הטאב של הצוות */}
+      {isUserFormOpen && <AddUserForm 
+          currentUser={user} 
+          onClose={() => { 
+              setIsUserFormOpen(false); 
+              setRefreshTrigger(prev => prev + 1); // הרצת הטריגר
+          }} 
+      />}
+      
+      {isLocFormOpen && <AddLocationForm 
+          onClose={() => setIsLocFormOpen(false)} 
+      />}
       
     </div>
   );
