@@ -156,7 +156,7 @@ app.post('/login', async (req, res) => {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) return res.status(400).json({ error: "משתמש לא נמצא" });
     const user = result.rows[0];
-    if (password !== user.password_hash) return res.status(400).json({ error: "סיסמה שגויה" });
+    if (password !== user.password) return res.status(400).json({ error: "סיסמה שגויה" });
     const token = jwt.sign({ id: user.id, role: user.role, name: user.full_name }, SECRET_KEY, { expiresIn: '24h' });
     res.json({ token, user: { id: user.id, name: user.full_name, role: user.role, email: user.email, profile_picture_url: user.profile_picture_url } });
   } catch (err) { res.status(500).json({ error: "שגיאת שרת" }); }
