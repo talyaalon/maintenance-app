@@ -11,7 +11,7 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3001/login', {
+      const response = await fetch('https://maintenance-app-h84v.onrender.com/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

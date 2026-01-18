@@ -42,7 +42,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
     }
 
     try {
-      const res = await fetch('http://localhost:3001/users/profile', {
+      const res = await fetch('https://maintenance-app-h84v.onrender.com/users/profile', {
         method: 'PUT',
         headers: {
             'Authorization': `Bearer ${token}` 

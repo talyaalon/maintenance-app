@@ -17,7 +17,7 @@ const AddUserForm = ({ currentUser, onClose }) => {
     if (currentUser.role === 'BIG_BOSS') {
       const fetchManagers = async () => {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:3001/managers', {
+        const res = await fetch('https://maintenance-app-h84v.onrender.com/managers', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -39,7 +39,7 @@ const AddUserForm = ({ currentUser, onClose }) => {
     };
 
     try {
-      const res = await fetch('http://localhost:3001/users', {
+      const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
