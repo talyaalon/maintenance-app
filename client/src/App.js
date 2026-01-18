@@ -1,54 +1,39 @@
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, MapPin, UserCircle, Plus } from 'lucide-react'; // אייקונים לטאבים
+import { LayoutDashboard, Users, MapPin, UserCircle, Plus } from 'lucide-react'; 
 import Login from './Login';
 import CreateTaskForm from './CreateTaskForm';
 import AddUserForm from './AddUserForm';
-import AddLocationForm from './AddLocationForm';
+// שימי לב: מחקנו את AddLocationForm כי הטאב החדש מנהל את ההוספה בעצמו
 import { translations } from './translations'; 
 
 // ייבוא הטאבים
 import TasksTab from './TasksTab';
 import TeamTab from './TeamTab';
 import ProfileTab from './ProfileTab'; 
-
-// קומפוננטות זמניות לטאבים שעדיין לא בנינו (מיקומים)
-const LocationsTab = ({t, onAddLoc}) => (
-    <div className="p-4 pb-24">
-        <div className="flex justify-between items-center mb-4">
-             <h2 className="text-2xl font-bold">{t.nav_locations}</h2>
-             <button onClick={onAddLoc} className="bg-green-600 text-white px-4 py-2 rounded-full shadow text-sm">
-                 + {t.add_location}
-             </button>
-        </div>
-        <p className="text-center text-gray-500 mt-10">רשימת המיקומים תופיע כאן</p>
-    </div>
-);
+import LocationsTab from './LocationsTab'; // <--- הייבוא של הקובץ החדש שיצרנו
 
 function App() {
   const [user, setUser] = useState(null);
   const [tasks, setTasks] = useState([]);
   
-  // ניהול שפה (ברירת מחדל: עברית)
   const [lang, setLang] = useState('he'); 
   const t = translations[lang]; 
 
-  // ניהול טאבים (1=משימות, 2=צוות, 3=מיקומים, 4=פרופיל)
   const [activeTab, setActiveTab] = useState(1);
 
-  // ניהול מודאלים (חלונות קופצים)
+  // מודאלים
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
-  const [isLocFormOpen, setIsLocFormOpen] = useState(false);
+  // מחקנו את isLocFormOpen כי הטאב מנהל את זה לבד
 
-  // --- חדש: טריגר לרענון רשימת הצוות ---
-  // בכל פעם שהמספר הזה משתנה, רשימת העובדים ב-TeamTab תיטען מחדש
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const fetchTasks = async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await fetch('http://localhost:3001/tasks', {
+      // עדכון ל-IP שלך כדי שיעבוד בטלפון
+      const res = await fetch('http://192.168.0.106:3001/tasks', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.status === 401) { setUser(null); return; }
@@ -62,7 +47,6 @@ function App() {
       fetchTasks();
   };
 
-  // פונקציה לעדכון פרטי משתמש בזמן אמת
   const handleUserUpdate = (updatedUser) => {
       setUser(prevUser => ({
           ...prevUser,
@@ -74,7 +58,6 @@ function App() {
     if (user) fetchTasks();
   }, [user]);
 
-  // אם המשתמש לא מחובר - הצג מסך כניסה
   if (!user) {
     return (
         <Login 
@@ -86,22 +69,30 @@ function App() {
     );
   }
 
-  // הפונקציה שקובעת איזה מסך להציג לפי הטאב שנבחר למטה
+  // --- בדיקת הרשאה לעובד ---
+  // עובד רגיל הוא מי שהתפקיד שלו הוא EMPLOYEE
+  const isEmployee = user.role === 'EMPLOYEE';
+
   const renderContent = () => {
       const token = localStorage.getItem('token');
       switch (activeTab) {
           case 1: 
             return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} />;
           case 2: 
+            // הגנה: אם עובד מנסה לגשת לצוות - לא מציגים לו כלום
+            if (isEmployee) return null;
             return <TeamTab 
                         user={user} 
                         token={token} 
                         t={t} 
                         onAddUser={() => setIsUserFormOpen(true)} 
-                        refreshTrigger={refreshTrigger} // מעבירים את הטריגר לטאב הצוות
+                        refreshTrigger={refreshTrigger} 
                    />;
           case 3: 
-            return <LocationsTab t={t} onAddLoc={() => setIsLocFormOpen(true)} />;
+            // הגנה: אם עובד מנסה לגשת למיקומים - לא מציגים לו כלום
+            if (isEmployee) return null;
+            // משתמשים בקומפוננטה החדשה LocationsTab (בלי להעביר לה פונקציית הוספה, כי היא עושה לבד)
+            return <LocationsTab token={token} t={t} user={user} />;
           case 4: 
             return <ProfileTab 
                         t={t} 
@@ -124,11 +115,9 @@ function App() {
       <header className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-30">
         <h1 className="text-xl font-bold text-[#6A0DAD]">MAINTENANCE APP</h1>
         
-        {/* בחירת שפה */}
         <select value={lang} onChange={(e) => setLang(e.target.value)} className="p-1 border rounded text-xs bg-gray-50">
             <option value="he">HE</option>
             <option value="en">EN</option>
-            <option value="th">TH</option>
         </select>
       </header>
 
@@ -144,7 +133,7 @@ function App() {
         </button>
       )}
 
-      {/* תפריט ניווט תחתון (Bottom Navigation Bar) */}
+      {/* תפריט ניווט תחתון */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-5px_10px_rgba(0,0,0,0.05)] z-50 pb-safe">
         <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
             
@@ -153,15 +142,21 @@ function App() {
                 <span className="text-[10px] mt-1 font-medium">{t.nav_tasks}</span>
             </button>
 
-            <button onClick={() => setActiveTab(2)} className={`flex flex-col items-center w-full ${activeTab === 2 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
-                <Users size={24} strokeWidth={activeTab === 2 ? 2.5 : 2} />
-                <span className="text-[10px] mt-1 font-medium">{t.nav_team}</span>
-            </button>
+            {/* רק אם המשתמש הוא *לא* עובד, נציג לו את הטאב של הצוות */}
+            {!isEmployee && (
+                <button onClick={() => setActiveTab(2)} className={`flex flex-col items-center w-full ${activeTab === 2 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
+                    <Users size={24} strokeWidth={activeTab === 2 ? 2.5 : 2} />
+                    <span className="text-[10px] mt-1 font-medium">{t.nav_team}</span>
+                </button>
+            )}
 
-            <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
-                <MapPin size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
-                <span className="text-[10px] mt-1 font-medium">{t.nav_locations}</span>
-            </button>
+            {/* רק אם המשתמש הוא *לא* עובד, נציג לו את הטאב של המיקומים */}
+            {!isEmployee && (
+                <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
+                    <MapPin size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
+                    <span className="text-[10px] mt-1 font-medium">{t.nav_locations}</span>
+                </button>
+            )}
 
             <button onClick={() => setActiveTab(4)} className={`flex flex-col items-center w-full ${activeTab === 4 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
                 <UserCircle size={24} strokeWidth={activeTab === 4 ? 2.5 : 2} />
@@ -178,18 +173,15 @@ function App() {
           onCancel={() => setIsTaskFormOpen(false)} 
       />}
       
-      {/* כאן עדכנו את סגירת הטופס כדי לרענן את הטאב של הצוות */}
       {isUserFormOpen && <AddUserForm 
           currentUser={user} 
           onClose={() => { 
               setIsUserFormOpen(false); 
-              setRefreshTrigger(prev => prev + 1); // הרצת הטריגר
+              setRefreshTrigger(prev => prev + 1); 
           }} 
       />}
       
-      {isLocFormOpen && <AddLocationForm 
-          onClose={() => setIsLocFormOpen(false)} 
-      />}
+      {/* הערה: מחקנו את AddLocationForm מכאן כי LocationsTab מטפל בזה לבד */}
       
     </div>
   );
