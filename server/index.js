@@ -526,4 +526,57 @@ app.post('/tasks/import-smart', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send('Error importing'); }
 });
 
+
+// --- CONFIGURATION / ASSETS MANAGEMENT ---
+
+// קבלת כל הקטגוריות
+app.get('/categories', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM categories ORDER BY name');
+        res.json(result.rows);
+    } catch (err) { console.error(err); res.status(500).send('Error fetching categories'); }
+});
+
+// יצירת קטגוריה חדשה
+app.post('/categories', authenticateToken, async (req, res) => {
+    try {
+        const { name } = req.body;
+        const result = await pool.query('INSERT INTO categories (name) VALUES ($1) RETURNING *', [name]);
+        res.json(result.rows[0]);
+    } catch (err) { console.error(err); res.status(500).send('Error creating category'); }
+});
+
+// קבלת כל הנכסים
+app.get('/assets', authenticateToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT assets.*, categories.name as category_name 
+            FROM assets 
+            LEFT JOIN categories ON assets.category_id = categories.id 
+            ORDER BY assets.code
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) { console.error(err); res.status(500).send('Error fetching assets'); }
+});
+
+// יצירת נכס חדש
+app.post('/assets', authenticateToken, async (req, res) => {
+    try {
+        const { name, code, category_id } = req.body;
+        
+        // בדיקה אם הקוד כבר קיים
+        const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
+        if (check.rows.length > 0) {
+            return res.status(400).json({ error: "Asset code already exists" });
+        }
+
+        const result = await pool.query(
+            'INSERT INTO assets (name, code, category_id) VALUES ($1, $2, $3) RETURNING *',
+            [name, code, category_id]
+        );
+        res.json(result.rows[0]);
+    } catch (err) { console.error(err); res.status(500).send('Error creating asset'); }
+});
+
 app.listen(port, () => { console.log(`Server running on ${port}`); });

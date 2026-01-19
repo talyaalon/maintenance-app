@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, RefreshCw, Camera, FileText } from 'lucide-react';
+import { X, User, RefreshCw, Camera, FileText, Box, Tag } from 'lucide-react';
 
 const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
   // סטייט לכל הנתונים
@@ -8,6 +8,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
     urgency: 'Normal', 
     due_date: new Date().toISOString().split('T')[0],
     location_id: '', 
+    asset_id: '', // שדה חדש לנכס
     assigned_worker_id: currentUser?.role === 'EMPLOYEE' ? currentUser.id : '',
     description: '', 
     is_recurring: false, 
@@ -20,26 +21,51 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
   const [locations, setLocations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
 
-  // מערך ימי השבוע - משתמש בתרגום (t)
+  // נתונים חדשים לנכסים
+  const [categories, setCategories] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(''); // לסינון
+
+  // מערך ימי השבוע
   const daysOfWeek = [
-      { id: 0, label: t.day_0 }, { id: 1, label: t.day_1 }, { id: 2, label: t.day_2 }, 
-      { id: 3, label: t.day_3 }, { id: 4, label: t.day_4 }, { id: 5, label: t.day_5 }, { id: 6, label: t.day_6 }
+      { id: 0, label: t.day_0 || 'Sun' }, { id: 1, label: t.day_1 || 'Mon' }, { id: 2, label: t.day_2 || 'Tue' }, 
+      { id: 3, label: t.day_3 || 'Wed' }, { id: 4, label: t.day_4 || 'Thu' }, { id: 5, label: t.day_5 || 'Fri' }, { id: 6, label: t.day_6 || 'Sat' }
   ];
 
-  // טעינת נתונים (מיקומים ועובדים)
+  // טעינת נתונים
   useEffect(() => {
-    fetch('https://maintenance-app-h84v.onrender.com/locations', { headers: { 'Authorization': `Bearer ${token}` } })
+    const headers = { 'Authorization': `Bearer ${token}` };
+
+    // 1. מיקומים
+    fetch('https://maintenance-app-h84v.onrender.com/locations', { headers })
         .then(res => res.json())
         .then(setLocations)
         .catch(err => console.error("Error fetching locations", err));
 
+    // 2. קטגוריות ונכסים (חדש!)
+    fetch('https://maintenance-app-h84v.onrender.com/categories', { headers })
+        .then(res => res.json())
+        .then(setCategories)
+        .catch(err => console.error("Error fetching categories", err));
+
+    fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
+        .then(res => res.json())
+        .then(setAssets)
+        .catch(err => console.error("Error fetching assets", err));
+
+    // 3. עובדים (רק למנהלים)
     if (currentUser?.role !== 'EMPLOYEE') {
-        fetch('https://maintenance-app-h84v.onrender.com/users', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch('https://maintenance-app-h84v.onrender.com/users', { headers })
         .then(res => res.json())
         .then(setTeamMembers)
         .catch(err => console.error("Error fetching users", err));
     }
   }, [token, currentUser]);
+
+  // סינון נכסים לפי קטגוריה שנבחרה
+  const filteredAssets = selectedCategory 
+      ? assets.filter(a => a.category_id === parseInt(selectedCategory))
+      : [];
 
   const toggleDay = (dayId) => {
     setFormData(prev => ({ 
@@ -53,9 +79,8 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // יצירת FormData (כדי לתמוך בהעלאת קבצים)
+    // יצירת FormData
     const data = new FormData();
-    
     Object.keys(formData).forEach(key => {
         if (key === 'selected_days') {
             data.append(key, JSON.stringify(formData[key]));
@@ -97,7 +122,41 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
 
         <form onSubmit={handleSubmit} className="space-y-5">
             
-            {/* כותרת */}
+            {/* --- חלק 1: בחירת נכס (חדש) --- */}
+            <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 space-y-3">
+                <h3 className="font-bold text-purple-900 text-sm flex items-center gap-2">
+                    <Box size={16}/> בחירת נכס לטיפול (אופציונלי)
+                </h3>
+                
+                {/* בחירת קטגוריה */}
+                <div>
+                    <label className="text-xs text-gray-500 mb-1 block">קטגוריה</label>
+                    <select className="w-full p-2 border rounded bg-white text-sm" 
+                        value={selectedCategory} 
+                        onChange={e => { setSelectedCategory(e.target.value); setFormData({...formData, asset_id: ''}); }}
+                    >
+                        <option value="">-- בחר קטגוריה --</option>
+                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                </div>
+
+                {/* בחירת נכס */}
+                <div>
+                    <label className="text-xs text-gray-500 mb-1 block">הנכס הספציפי</label>
+                    <select className="w-full p-2 border rounded bg-white text-sm" 
+                        disabled={!selectedCategory}
+                        value={formData.asset_id} 
+                        onChange={e => setFormData({...formData, asset_id: e.target.value})}
+                    >
+                        <option value="">
+                             {selectedCategory ? (filteredAssets.length ? "-- בחר נכס --" : "אין נכסים בקטגוריה זו") : "-- קודם בחר קטגוריה --"}
+                        </option>
+                        {filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
+                    </select>
+                </div>
+            </div>
+
+            {/* --- חלק 2: פרטי משימה רגילים --- */}
             <div>
                 <label className="block text-sm font-bold mb-1 text-gray-700">{t.task_title_label}</label>
                 <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none" 
@@ -168,7 +227,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                 />
             </div>
 
-            {/* מחזוריות */}
+            {/* --- חלק 3: מחזוריות (החלק שהיה חסר!) --- */}
             <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 transition-all">
                 <div className="flex items-center gap-2 mb-3">
                     <input type="checkbox" id="recurring" className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"

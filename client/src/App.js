@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, MapPin, UserCircle, Plus } from 'lucide-react'; 
+import { LayoutDashboard, Users, MapPin, UserCircle, Plus, Settings } from 'lucide-react'; // הוספתי את Settings
 import Login from './Login';
 import CreateTaskForm from './CreateTaskForm';
 import AddUserForm from './AddUserForm';
-// שימי לב: אנחנו מייבאים את התרגומים מהקובץ החיצוני שיצרת בשלב 1
+// שימי לב: אנחנו מייבאים את התרגומים מהקובץ החיצוני
 import { translations } from './translations'; 
 
 // ייבוא הטאבים
 import TasksTab from './TasksTab';
 import TeamTab from './TeamTab';
 import ProfileTab from './ProfileTab'; 
-import LocationsTab from './LocationsTab'; 
+import ConfigurationTab from './ConfigurationTab'; // החלפנו את LocationsTab בחדש
 
 function App() {
   const [user, setUser] = useState(null);
@@ -90,7 +90,8 @@ function App() {
                    />;
           case 3: 
             if (isEmployee) return null;
-            return <LocationsTab token={token} t={t} user={user} />;
+            // כאן טעינת הטאב החדש של הקונפיגורציה
+            return <ConfigurationTab token={token} t={t} />;
           case 4: 
             return <ProfileTab 
                         t={t} 
@@ -151,10 +152,11 @@ function App() {
                 </button>
             )}
 
+            {/* כפתור הקונפיגורציה החדש (במקום מיקומים) */}
             {!isEmployee && (
                 <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
-                    <MapPin size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
-                    <span className="text-[10px] mt-1 font-medium">{t.nav_locations}</span>
+                    <Settings size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
+                    <span className="text-[10px] mt-1 font-medium">Config</span>
                 </button>
             )}
 
