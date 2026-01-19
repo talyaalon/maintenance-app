@@ -48,7 +48,7 @@ const sendUpdateEmail = async (email, fullName, changes) => {
     changesHtml += '</ul>';
 
     const mailOptions = {
-      from: 'onboarding@resend.dev', // חובה להשתמש בכתובת הזו כל עוד אין לך דומיין מאומת
+      from: '"Maintenance App" <onboarding@resend.dev>',
       to: email,
       subject: 'עדכון פרטים בחשבונך - ניהול אחזקה',
       html: `
@@ -93,7 +93,7 @@ const sendWelcomeEmail = async (email, fullName, password, role, managerName) =>
     }
 
     const mailOptions = {
-      from: 'onboarding@resend.dev', // חובה להשתמש בכתובת הזו כל עוד אין לך דומיין מאומת
+      from: '"Maintenance App" <onboarding@resend.dev>',
       to: email,
       subject: 'פרטי התחברות למערכת ניהול אחזקה',
       html: `
