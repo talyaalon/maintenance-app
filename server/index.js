@@ -18,17 +18,13 @@ const SECRET_KEY = 'my_super_secret_key';
 console.log("📧 Configuring Email using 'smtp.gmail.com' with Port 587...");
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',  // הכתובת המפורשת של ג'ימייל
-  port: 587,               // הפורט שתמיד עובד ב-Render
-  secure: false,           // חובה עבור פורט 587 (זה משתמש ב-STARTTLS)
+  host: 'smtp.resend.com',
+  port: 465,
+  secure: true,
   auth: {
-    user: process.env.EMAIL_USER,
+    user: 'resend',
     pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  family: 4                // מכריח IPv4 (מונע ניתוקים)
+  }
 });
 
 // בדיקת חיבור
@@ -52,7 +48,7 @@ const sendUpdateEmail = async (email, fullName, changes) => {
     changesHtml += '</ul>';
 
     const mailOptions = {
-      from: `Maintenance App <${process.env.EMAIL_USER}>`,
+      from: 'onboarding@resend.dev', // חובה להשתמש בכתובת הזו כל עוד אין לך דומיין מאומת
       to: email,
       subject: 'עדכון פרטים בחשבונך - ניהול אחזקה',
       html: `
@@ -97,7 +93,7 @@ const sendWelcomeEmail = async (email, fullName, password, role, managerName) =>
     }
 
     const mailOptions = {
-      from: `Maintenance App <${process.env.EMAIL_USER}>`,
+      from: 'onboarding@resend.dev', // חובה להשתמש בכתובת הזו כל עוד אין לך דומיין מאומת
       to: email,
       subject: 'פרטי התחברות למערכת ניהול אחזקה',
       html: `
