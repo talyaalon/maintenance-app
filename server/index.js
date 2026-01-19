@@ -1,3 +1,4 @@
+require('dotenv').config();
 // server/index.js - הקובץ המלא: משתמשים, הרשאות, משימות מתקדמות, תמונות וסטטוסים
 const express = require('express');
 const cors = require('cors');
