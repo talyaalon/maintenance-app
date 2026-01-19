@@ -37,7 +37,7 @@ transporter.verify((error, success) => {
 });
 
 // --- פונקציה: שליחת מייל עדכון פרטים ---
-cconst sendUpdateEmail = async (email, fullName, changes) => {
+const sendUpdateEmail = async (email, fullName, changes) => {
     const appLink = "https://maintenance-management-app.netlify.app";
     let changesHtml = '<ul style="padding-left: 20px; color: #333;">';
     changes.forEach(change => {
