@@ -50,7 +50,7 @@ const sendUpdateEmail = async (email, fullName, changes) => {
     changesHtml += '</ul>';
 
     const mailOptions = {
-      from: 'Maintenance App <maintenance.app.tkp@gmail.com>',
+      from: `Maintenance App <${process.env.EMAIL_USER}>`,
       to: email,
       subject: 'עדכון פרטים בחשבונך - ניהול אחזקה',
       html: `
@@ -95,7 +95,7 @@ const sendWelcomeEmail = async (email, fullName, password, role, managerName) =>
     }
 
     const mailOptions = {
-      from: 'Maintenance App <maintenance.app.tkp@gmail.com>',
+      from: `Maintenance App <${process.env.EMAIL_USER}>`,
       to: email,
       subject: 'פרטי התחברות למערכת ניהול אחזקה',
       html: `
@@ -118,7 +118,12 @@ const sendWelcomeEmail = async (email, fullName, password, role, managerName) =>
         </div>
       `
     };
-    try { await transporter.sendMail(mailOptions); } catch (e) {}
+    try { 
+        const info = await transporter.sendMail(mailOptions);
+        console.log("✅ Email sent successfully! Message ID: " + info.messageId);
+    } catch (error) { 
+        console.error("❌ Error sending email:", error); 
+    }
 };
 
 // --- הגדרת קבצים ---
