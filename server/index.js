@@ -14,11 +14,13 @@ const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
-// --- הגדרת המייל (הגרסה המשולבת והחזקה ביותר) ---
-console.log("📧 Configuring Email using 'service: gmail' with IPv4...");
+// --- הגדרת המייל (תיקון ל-Render: שימוש בפורט 587) ---
+console.log("📧 Configuring Email using 'smtp.gmail.com' with Port 587...");
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',        // נותנים לנוד-מיילר להחליט על הפורטים לבד
+  host: 'smtp.gmail.com',  // הכתובת המפורשת של ג'ימייל
+  port: 587,               // הפורט שתמיד עובד ב-Render
+  secure: false,           // חובה עבור פורט 587 (זה משתמש ב-STARTTLS)
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
@@ -26,7 +28,7 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false
   },
-  family: 4                // מכריח שימוש ב-IPv4 (מונע ניתוקים בענן)
+  family: 4                // מכריח IPv4 (מונע ניתוקים)
 });
 
 // בדיקת חיבור
