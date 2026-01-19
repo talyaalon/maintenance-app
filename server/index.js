@@ -15,18 +15,15 @@ const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
 // --- הגדרת המייל (תיקון ל-Render: שימוש בפורט 587) ---
-console.log("📧 Configuring Email using 'smtp.gmail.com' with Port 587...");
+console.log("📧 Configuring Email using Brevo SMTP...");
 
 const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
-  port: 2525,             // פורט חלופי שעוקף חסימות ב-Render
-  secure: false,          // חובה false בפורט זה
+  port: 2525, // הפורט שעוקף חסימות
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    rejectUnauthorized: false
   }
 });
 
@@ -40,11 +37,9 @@ transporter.verify((error, success) => {
 });
 
 // --- פונקציה: שליחת מייל עדכון פרטים ---
-const sendUpdateEmail = async (email, fullName, changes) => {
-    console.log(`Sending update email to: ${email}...`);
+cconst sendUpdateEmail = async (email, fullName, changes) => {
     const appLink = "https://maintenance-management-app.netlify.app";
-
-    let changesHtml = '<ul style="padding-right: 20px; color: #333;">';
+    let changesHtml = '<ul style="padding-left: 20px; color: #333;">';
     changes.forEach(change => {
         changesHtml += `<li style="margin-bottom: 5px;">${change}</li>`;
     });
@@ -53,19 +48,19 @@ const sendUpdateEmail = async (email, fullName, changes) => {
     const mailOptions = {
       from: '"Maintenance App" <maintenance.app.tkp@gmail.com>',
       to: email,
-      subject: 'עדכון פרטים בחשבונך - ניהול אחזקה',
+      subject: 'Account Update - Maintenance Management',
       html: `
-        <div dir="rtl" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;border:1px solid #e0e0e0;">
-          <h2 style="color:#6A0DAD;text-align:center;">עדכון פרטים בחשבונך</h2>
+        <div dir="ltr" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;border:1px solid #e0e0e0;">
+          <h2 style="color:#6A0DAD;text-align:center;">Account Profile Updated</h2>
           <div style="background:white;padding:20px;border-radius:8px;">
-            <p style="font-size:16px;">שלום <strong>${fullName}</strong>,</p>
-            <p>בוצעו השינויים הבאים בפרופיל המשתמש שלך:</p>
-            <div style="background-color:#f0f9ff; border-right: 4px solid #0ea5e9; padding: 10px; margin: 15px 0;">
+            <p style="font-size:16px;">Hello <strong>${fullName}</strong>,</p>
+            <p>The following changes were made to your profile:</p>
+            <div style="background-color:#f0f9ff; border-left: 4px solid #0ea5e9; padding: 10px; margin: 15px 0;">
                 ${changesHtml}
             </div>
-            <p style="font-size:14px; color:#666;">אם לא ביצעת או ביקשת את השינויים האלו, אנא פנה למנהל המערכת.</p>
+            <p style="font-size:14px; color:#666;">If you did not request these changes, please contact your manager.</p>
             <div style="text-align:center;margin-top:30px;">
-              <a href="${appLink}" style="background:#6A0DAD;color:white;padding:10px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">כניסה למערכת</a>
+              <a href="${appLink}" style="background:#6A0DAD;color:white;padding:10px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">Login to System</a>
             </div>
           </div>
         </div>
@@ -77,54 +72,38 @@ const sendUpdateEmail = async (email, fullName, changes) => {
 
 // --- פונקציה: שליחת מייל ברוכים הבאים ---
 const sendWelcomeEmail = async (email, fullName, password, role, managerName) => {
-    console.log(`Sending welcome email to: ${email}...`);
     const appLink = "https://maintenance-management-app.netlify.app";
-
-    let titleText = '', descriptionText = '', featuresList = '', managerInfo = '';
+    let titleText = 'Welcome to the team! 🛠️', descriptionText = 'Your account has been created.';
 
     if (role === 'MANAGER' || role === 'BIG_BOSS') {
-        titleText = `ברכות על הצטרפותך לצוות הניהול! 💼`;
-        descriptionText = `כמנהל/ת במערכת, נפתח עבורך חשבון עם הרשאות מורחבות.`;
-        featuresList = `<ul style="color: #555;"><li>👥 ניהול צוות</li><li>📋 יצירת משימות</li></ul>`;
-    } else {
-        titleText = `שמחים שאת/ה איתנו! 🛠️`;
-        descriptionText = `נפתח עבורך משתמש באפליקציה לקבלת משימות.`;
-        if (managerName) {
-            managerInfo = `<div style="background:#eef2ff;padding:10px;margin-bottom:15px;border:1px solid #c7d2fe;"><p style="margin:0;color:#3730a3;font-weight:bold;">👤 המנהל שלך:</p><p style="margin:0;">${managerName}</p></div>`;
-        }
-        featuresList = `<ul style="color: #555;"><li>✅ צפייה במשימות</li><li>📍 עדכונים מהשטח</li></ul>`;
+        titleText = `Welcome to the Management Team! 💼`;
+        descriptionText = `A manager account has been created for you with extended permissions.`;
     }
 
     const mailOptions = {
       from: '"Maintenance App" <maintenance.app.tkp@gmail.com>',
       to: email,
-      subject: 'פרטי התחברות למערכת ניהול אחזקה',
+      subject: 'Login Details - Maintenance Management',
       html: `
-        <div dir="rtl" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;">
-          <h1 style="color:#6A0DAD;text-align:center;">ניהול אחזקה</h1>
+        <div dir="ltr" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;">
+          <h1 style="color:#6A0DAD;text-align:center;">Maintenance Management</h1>
           <div style="background:white;padding:20px;border-radius:8px;">
-            <h2>שלום ${fullName},</h2>
+            <h2>Hello ${fullName},</h2>
             <h3 style="color:#6A0DAD;">${titleText}</h3>
             <p>${descriptionText}</p>
-            ${managerInfo}
-            ${featuresList}
-            <div style="background:#f3f4f6;padding:15px;border-radius:8px;margin:20px 0;border-right:4px solid #6A0DAD;">
-              <p><strong>📧 אימייל:</strong> ${email}</p>
-              <p><strong>🔑 סיסמה:</strong> ${password}</p>
+            <div style="background:#f3f4f6;padding:15px;border-radius:8px;margin:20px 0;border-left:4px solid #6A0DAD;">
+              <p><strong>📧 Email:</strong> ${email}</p>
+              <p><strong>🔑 Password:</strong> ${password}</p>
             </div>
             <div style="text-align:center;margin-top:30px;">
-              <a href="${appLink}" style="background:#6A0DAD;color:white;padding:12px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">כניסה למערכת</a>
+              <a href="${appLink}" style="background:#6A0DAD;color:white;padding:12px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">Login to App</a>
             </div>
           </div>
         </div>
       `
     };
-    try { 
-        const info = await transporter.sendMail(mailOptions);
-        console.log("✅ Email sent successfully! Message ID: " + info.messageId);
-    } catch (error) { 
-        console.error("❌ Error sending email:", error); 
-    }
+    try { await transporter.sendMail(mailOptions); } 
+    catch (error) { console.error("❌ Error sending email:", error); }
 };
 
 // --- הגדרת קבצים ---

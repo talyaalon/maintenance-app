@@ -107,7 +107,9 @@ const TasksTab = ({ tasks, t, token, user, onRefresh }) => {
           return (
               <div className="animate-fade-in flex flex-col items-center">
                   <Calendar 
-                    onChange={setSelectedDate} value={selectedDate} locale="he-IL"
+                    onChange={setSelectedDate} 
+                    value={selectedDate} 
+                    // הוסר locale="he-IL" כדי לאפשר אנגלית/תאילנדית
                     tileContent={({ date, view }) => {
                         if (view === 'month') {
                             const dayTasks = pendingTasks.filter(t => isSameDay(parseISO(t.due_date), date));
@@ -233,24 +235,28 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
 
     const handleComplete = async () => {
-        if (!note && !file) return alert("Required");
+        // שימוש בתרגום או באנגלית כברירת מחדל
+        if (!note && !file) return alert(t.alert_required || "Required field");
         const formData = new FormData();
         formData.append('completion_note', note);
         if (file) formData.append('completion_image', file);
         await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/complete`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
-        alert("Sent!"); onRefresh(); onClose();
+        alert(t.alert_sent || "Sent successfully!"); 
+        onRefresh(); onClose();
     };
     const handleApprove = async () => {
         await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/approve`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
-        alert("Approved!"); onRefresh(); onClose();
+        alert(t.alert_approved || "Approved successfully!"); 
+        onRefresh(); onClose();
     };
     const handleFollowUp = async () => {
-        if (!followUpDate) return alert("Date required");
+        if (!followUpDate) return alert(t.alert_required || "Date required");
         await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/follow-up`, {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ due_date: followUpDate, description: note || 'Follow up' })
         });
-        alert("Created!"); onRefresh(); onClose();
+        alert(t.alert_created || "Created successfully!"); 
+        onRefresh(); onClose();
     };
 
     return (

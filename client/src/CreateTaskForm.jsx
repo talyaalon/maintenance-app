@@ -8,7 +8,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
     urgency: 'Normal', 
     due_date: new Date().toISOString().split('T')[0],
     location_id: '', 
-    asset_id: '', // שדה חדש לנכס
+    asset_id: '', 
     assigned_worker_id: currentUser?.role === 'EMPLOYEE' ? currentUser.id : '',
     description: '', 
     is_recurring: false, 
@@ -17,14 +17,14 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
     recurring_date: 1
   });
 
-  const [file, setFile] = useState(null); // לתמונה
+  const [file, setFile] = useState(null); 
   const [locations, setLocations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
 
   // נתונים חדשים לנכסים
   const [categories, setCategories] = useState([]);
   const [assets, setAssets] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState(''); // לסינון
+  const [selectedCategory, setSelectedCategory] = useState(''); 
 
   // מערך ימי השבוע
   const daysOfWeek = [
@@ -42,7 +42,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
         .then(setLocations)
         .catch(err => console.error("Error fetching locations", err));
 
-    // 2. קטגוריות ונכסים (חדש!)
+    // 2. קטגוריות ונכסים
     fetch('https://maintenance-app-h84v.onrender.com/categories', { headers })
         .then(res => res.json())
         .then(setCategories)
@@ -79,7 +79,6 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // יצירת FormData
     const data = new FormData();
     Object.keys(formData).forEach(key => {
         if (key === 'selected_days') {
@@ -101,13 +100,13 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
       });
 
       if (res.ok) { 
-          alert(t.save + '!'); // הודעה מתורגמת
+          alert((t.save || "Saved") + '!'); 
           onTaskCreated(); 
       } else { 
-          alert('Error creating task'); 
+          alert(t.error_create_task || 'Error creating task'); 
       }
     } catch (err) { 
-        alert('Server Error'); 
+        alert(t.server_error || 'Server Error'); 
     }
   };
 
@@ -116,40 +115,42 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
       <div className="bg-white rounded-xl p-6 w-full max-w-lg h-auto max-h-[90vh] overflow-y-auto shadow-2xl">
         
         <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <h2 className="text-2xl font-bold text-[#6A0DAD]">{t.create_new_task}</h2>
+            <h2 className="text-2xl font-bold text-[#6A0DAD]">{t.create_new_task || "Create New Task"}</h2>
             <button onClick={onCancel} className="p-2 hover:bg-gray-100 rounded-full transition"><X /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
             
-            {/* --- חלק 1: בחירת נכס (חדש) --- */}
+            {/* --- חלק 1: בחירת נכס --- */}
             <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 space-y-3">
                 <h3 className="font-bold text-purple-900 text-sm flex items-center gap-2">
-                    <Box size={16}/> בחירת נכס לטיפול (אופציונלי)
+                    <Box size={16}/> {t.select_asset_title || "Select Asset (Optional)"}
                 </h3>
                 
                 {/* בחירת קטגוריה */}
                 <div>
-                    <label className="text-xs text-gray-500 mb-1 block">קטגוריה</label>
+                    <label className="text-xs text-gray-500 mb-1 block">{t.category_label || "Category"}</label>
                     <select className="w-full p-2 border rounded bg-white text-sm" 
                         value={selectedCategory} 
                         onChange={e => { setSelectedCategory(e.target.value); setFormData({...formData, asset_id: ''}); }}
                     >
-                        <option value="">-- בחר קטגוריה --</option>
+                        <option value="">-- {t.select_category || "Select Category"} --</option>
                         {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                 </div>
 
                 {/* בחירת נכס */}
                 <div>
-                    <label className="text-xs text-gray-500 mb-1 block">הנכס הספציפי</label>
+                    <label className="text-xs text-gray-500 mb-1 block">{t.specific_asset_label || "Specific Asset"}</label>
                     <select className="w-full p-2 border rounded bg-white text-sm" 
                         disabled={!selectedCategory}
                         value={formData.asset_id} 
                         onChange={e => setFormData({...formData, asset_id: e.target.value})}
                     >
                         <option value="">
-                             {selectedCategory ? (filteredAssets.length ? "-- בחר נכס --" : "אין נכסים בקטגוריה זו") : "-- קודם בחר קטגוריה --"}
+                             {selectedCategory 
+                                ? (filteredAssets.length ? `-- ${t.select_asset || "Select Asset"} --` : (t.no_assets_in_category || "No assets in category")) 
+                                : `-- ${t.select_category_first || "Select category first"} --`}
                         </option>
                         {filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
                     </select>
@@ -161,7 +162,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                 <label className="block text-sm font-bold mb-1 text-gray-700">{t.task_title_label}</label>
                 <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none" 
                     value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} 
-                    placeholder={t.task_title_placeholder}
+                    placeholder={t.task_title_placeholder || "e.g., Fix AC"}
                 />
             </div>
             
@@ -176,7 +177,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
 
             {/* תמונה */}
             <div>
-                <label className="block text-sm font-bold mb-1 flex gap-2 text-gray-700"><Camera size={16}/> {t.add_image}</label>
+                <label className="block text-sm font-bold mb-1 flex gap-2 text-gray-700"><Camera size={16}/> {t.add_image || "Add Photo"}</label>
                 <input type="file" accept="image/*" onChange={e => setFile(e.target.files[0])} 
                     className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
                 />
@@ -185,10 +186,10 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
             {/* בחירת עובד (למנהלים בלבד) */}
             {currentUser?.role !== 'EMPLOYEE' && (
                 <div>
-                    <label className="block text-sm font-bold mb-1 flex items-center gap-1 text-gray-700"><User size={14}/> {t.assign_to_label}</label>
+                    <label className="block text-sm font-bold mb-1 flex items-center gap-1 text-gray-700"><User size={14}/> {t.assign_to_label || "Assign To"}</label>
                     <select className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-purple-200 outline-none" 
                         value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
-                        <option value={currentUser.id}>{t.assign_self}</option>
+                        <option value={currentUser.id}>{t.assign_self || "Assign to myself"}</option>
                         {teamMembers.map(u => (
                             <option key={u.id} value={u.id}>
                                 {u.full_name}
@@ -204,7 +205,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                     <label className="block text-sm font-bold mb-1 text-gray-700">{t.location}</label>
                     <select required className="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-purple-200 outline-none" 
                         value={formData.location_id} onChange={e => setFormData({...formData, location_id: e.target.value})}>
-                        <option value="">{t.select_location}</option>
+                        <option value="">{t.select_location || "Select Location"}</option>
                         {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select>
                 </div>
@@ -214,7 +215,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                         value={formData.urgency} onChange={e => setFormData({...formData, urgency: e.target.value})}>
                         <option value="Normal">{t.normal_label}</option>
                         <option value="High">{t.urgent_label}</option>
-                        <option value="Low">{t.low_label}</option>
+                        {/* הוספתי Low אם תרצי בעתיד */}
                     </select>
                 </div>
             </div>
@@ -227,14 +228,14 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                 />
             </div>
 
-            {/* --- חלק 3: מחזוריות (החלק שהיה חסר!) --- */}
+            {/* --- חלק 3: מחזוריות --- */}
             <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 transition-all">
                 <div className="flex items-center gap-2 mb-3">
                     <input type="checkbox" id="recurring" className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
                         checked={formData.is_recurring} onChange={e => setFormData({...formData, is_recurring: e.target.checked})} 
                     />
                     <label htmlFor="recurring" className="font-bold text-purple-900 flex items-center gap-2 cursor-pointer select-none">
-                        <RefreshCw size={16}/> {t.recurring_task}
+                        <RefreshCw size={16}/> {t.recurring_task || "Recurring Task"}
                     </label>
                 </div>
 
@@ -242,8 +243,8 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                     <div className="space-y-4 animate-fade-in pl-7">
                         <select className="w-full p-2 border rounded-lg bg-white text-sm" 
                             value={formData.recurring_type} onChange={e => setFormData({...formData, recurring_type: e.target.value})}>
-                            <option value="weekly">{t.recurring_weekly}</option>
-                            <option value="monthly">{t.recurring_monthly}</option>
+                            <option value="weekly">{t.recurring_weekly || "Weekly"}</option>
+                            <option value="monthly">{t.recurring_monthly || "Monthly"}</option>
                         </select>
 
                         {formData.recurring_type === 'weekly' ? (
@@ -263,6 +264,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                             </div>
                         ) : (
                             <div className="flex items-center gap-2 text-sm text-gray-700 bg-white p-2 rounded border w-fit">
+                                <span className="text-gray-500">{t.day_of_month || "Day"}:</span>
                                 <input type="number" min="1" max="31" className="w-12 p-1 border rounded text-center font-bold" 
                                     value={formData.recurring_date} onChange={e => setFormData({...formData, recurring_date: e.target.value})} 
                                 />
@@ -273,7 +275,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
             </div>
 
             <button type="submit" className="w-full py-3.5 bg-[#6A0DAD] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition transform active:scale-95 text-lg">
-                {t.save_task_btn}
+                {t.save_task_btn || "Save Task"}
             </button>
         </form>
       </div>

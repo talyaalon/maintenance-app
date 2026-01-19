@@ -23,7 +23,8 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
   }, [refreshTrigger]);
 
   const handleDelete = async (userToDelete) => {
-    if (!window.confirm("האם למחוק משתמש זה?")) return;
+    // תרגום: אישור מחיקה
+    if (!window.confirm(t.confirm_delete_user || "Are you sure you want to delete this user?")) return;
 
     const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${userToDelete.id}`, {
         method: 'DELETE',
@@ -33,9 +34,9 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
     if (res.ok) {
         fetchTeam();
     } else {
-        // כאן אנחנו תופסים את השגיאה מהשרת (למשל: למנהל יש עובדים) ומציגים אותה
         const errorData = await res.json();
-        alert(errorData.error || "שגיאה במחיקה");
+        // תרגום: שגיאת מחיקה
+        alert(errorData.error || t.error_delete || "Error deleting user");
     }
   };
 
@@ -44,7 +45,6 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
     else setExpandedManager(managerId);
   };
 
-  // רשימת המנהלים (נשתמש בה גם להעברה)
   const managers = usersList.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
   
   const getWorkersForManager = (managerId) => {
@@ -57,7 +57,7 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
         <h2 className="text-2xl font-bold text-gray-800">{t.nav_team}</h2>
         {(user.role === 'BIG_BOSS' || user.role === 'MANAGER') && (
             <button onClick={onAddUser} className="bg-[#6A0DAD] text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-md text-sm hover:bg-purple-800 transition">
-                <UserPlus size={18} /> הוסף איש צוות
+                <UserPlus size={18} /> {t.add_team_member} {/* הוחלף: הוסף איש צוות */}
             </button>
         )}
       </div>
@@ -79,9 +79,10 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
                             <div>
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2">
                                     {manager.full_name} 
-                                    {manager.role === 'BIG_BOSS' && <span className="bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full">CEO</span>}
+                                    {manager.role === 'BIG_BOSS' && <span className="bg-purple-100 text-purple-700 text-[10px] px-2 py-0.5 rounded-full">{t.ceo_role || 'CEO'}</span>}
                                 </h3>
-                                <p className="text-xs text-gray-500">{manager.email} | {myWorkers.length} עובדים</p>
+                                {/* הוחלף: עובדים */}
+                                <p className="text-xs text-gray-500">{manager.email} | {myWorkers.length} {t.workers_suffix}</p>
                             </div>
                         </div>
 
@@ -128,22 +129,23 @@ const TeamTab = ({ user, token, t, onAddUser, refreshTrigger }) => {
         <EditUserModal 
             userToEdit={editingUser} 
             token={token} 
-            managersList={managers} // מעבירים את רשימת המנהלים כדי שיהיה אפשר להחליף
-            currentUserRole={user.role} // מעבירים את התפקיד של המשתמש הנוכחי (כדי לדעת אם הוא ביג בוס)
+            managersList={managers} 
+            currentUserRole={user.role} 
             onClose={() => setEditingUser(null)} 
             onSuccess={() => { setEditingUser(null); fetchTeam(); }}
+            t={t} // חשוב: העברנו את t למודאל
         />
       )}
     </div>
   );
 };
 
-const EditUserModal = ({ userToEdit, token, onClose, onSuccess, managersList, currentUserRole }) => {
+const EditUserModal = ({ userToEdit, token, onClose, onSuccess, managersList, currentUserRole, t }) => {
     const [formData, setFormData] = useState({
         full_name: userToEdit.full_name,
         email: userToEdit.email,
         password: '',
-        parent_manager_id: userToEdit.parent_manager_id || '' // המנהל הנוכחי
+        parent_manager_id: userToEdit.parent_manager_id || '' 
     });
 
     const handleSubmit = async (e) => {
@@ -155,20 +157,22 @@ const EditUserModal = ({ userToEdit, token, onClose, onSuccess, managersList, cu
                 body: JSON.stringify(formData)
             });
             if (res.ok) {
-                alert("הפרטים עודכנו בהצלחה! מייל נשלח למשתמש.");
+                // תרגום: הצלחה
+                alert(t.alert_update_success || "Details updated!");
                 onSuccess();
             }
-            else alert("שגיאה בעדכון");
-        } catch (err) { alert("שגיאת שרת"); }
+            else alert(t.alert_update_error || "Update error");
+        } catch (err) { alert(t.server_error || "Server error"); }
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
-                <h3 className="text-xl font-bold mb-4 text-purple-700">עריכת פרטים: {userToEdit.full_name}</h3>
+                {/* הוחלף: עריכת פרטים */}
+                <h3 className="text-xl font-bold mb-4 text-purple-700">{t.edit_details_title}: {userToEdit.full_name}</h3>
                 <form onSubmit={handleSubmit} className="space-y-3">
                     <div>
-                        <label className="text-xs text-gray-500">שם מלא</label>
+                        <label className="text-xs text-gray-500">{t.full_name_label}</label>
                         <input 
                             className="w-full p-2 border rounded bg-gray-50" 
                             value={formData.full_name} 
@@ -176,7 +180,7 @@ const EditUserModal = ({ userToEdit, token, onClose, onSuccess, managersList, cu
                         />
                     </div>
                     <div>
-                        <label className="text-xs text-gray-500">אימייל</label>
+                        <label className="text-xs text-gray-500">{t.email_label}</label>
                         <input 
                             className="w-full p-2 border rounded bg-gray-50" 
                             value={formData.email} 
@@ -184,7 +188,7 @@ const EditUserModal = ({ userToEdit, token, onClose, onSuccess, managersList, cu
                         />
                     </div>
                     <div>
-                        <label className="text-xs text-gray-500">סיסמה (השאר ריק כדי לא לשנות)</label>
+                        <label className="text-xs text-gray-500">{t.password_placeholder_edit}</label>
                         <input 
                             className="w-full p-2 border rounded bg-gray-50" 
                             type="password"
@@ -193,16 +197,17 @@ const EditUserModal = ({ userToEdit, token, onClose, onSuccess, managersList, cu
                         />
                     </div>
 
-                    {/* אפשרות להחלפת מנהל - מופיעה רק לביג בוס ורק אם עורכים עובד */}
                     {currentUserRole === 'BIG_BOSS' && userToEdit.role === 'EMPLOYEE' && (
                         <div>
-                            <label className="text-xs text-gray-500 font-bold">שייך למנהל:</label>
+                            {/* הוחלף: שייך למנהל */}
+                            <label className="text-xs text-gray-500 font-bold">{t.assign_to_manager}:</label>
                             <select 
                                 className="w-full p-2 border rounded bg-gray-50"
                                 value={formData.parent_manager_id}
                                 onChange={e => setFormData({...formData, parent_manager_id: e.target.value})}
                             >
-                                <option value="">ללא מנהל</option>
+                                {/* הוחלף: ללא מנהל */}
+                                <option value="">{t.no_manager}</option>
                                 {managersList.map(m => (
                                     <option key={m.id} value={m.id}>{m.full_name}</option>
                                 ))}
@@ -211,8 +216,8 @@ const EditUserModal = ({ userToEdit, token, onClose, onSuccess, managersList, cu
                     )}
 
                     <div className="flex gap-2 mt-4">
-                        <button type="button" onClick={onClose} className="flex-1 py-2 border rounded">ביטול</button>
-                        <button type="submit" className="flex-1 py-2 bg-purple-600 text-white rounded">שמור שינויים</button>
+                        <button type="button" onClick={onClose} className="flex-1 py-2 border rounded">{t.cancel}</button>
+                        <button type="submit" className="flex-1 py-2 bg-purple-600 text-white rounded">{t.save_changes}</button>
                     </div>
                 </form>
             </div>

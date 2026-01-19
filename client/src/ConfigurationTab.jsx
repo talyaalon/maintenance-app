@@ -37,15 +37,15 @@ const ConfigurationTab = ({ token, t }) => {
       if (res.ok) {
         setNewCategory('');
         fetchData();
-        alert("Category Added!");
+        alert(t.category_added || "Category Added!");
       }
-    } catch (e) { alert("Error adding category"); }
+    } catch (e) { alert(t.error_adding_category || "Error adding category"); }
   };
 
   const handleAddAsset = async (e) => {
     e.preventDefault();
     if (!newAsset.name || !newAsset.code || !newAsset.category_id) {
-        alert("Please fill all fields");
+        alert(t.fill_all_fields || "Please fill all fields");
         return;
     }
     try {
@@ -58,28 +58,29 @@ const ConfigurationTab = ({ token, t }) => {
       if (res.ok) {
         setNewAsset({ name: '', code: '', category_id: '' });
         fetchData();
-        alert("Asset Created Successfully!");
+        alert(t.asset_created || "Asset Created Successfully!");
       } else {
-        alert(data.error || "Error creating asset");
+        alert(data.error || t.error_creating_asset || "Error creating asset");
       }
-    } catch (e) { alert("Error"); }
+    } catch (e) { alert(t.server_error || "Error"); }
   };
 
   return (
     <div className="p-4 pb-24">
-      <h2 className="text-2xl font-bold text-[#6A0DAD] mb-4">Configuration & Assets</h2>
+      {/* תרגום: כותרת הגדרות */}
+      <h2 className="text-2xl font-bold text-[#6A0DAD] mb-4">{t.config_title}</h2>
       
       {/* כפתורי ניווט פנימיים */}
       <div className="flex gap-2 mb-6 bg-white p-1 rounded-lg shadow-sm border">
         <button 
             onClick={() => setActiveSubTab('assets')}
             className={`flex-1 py-2 rounded-md font-bold text-sm flex justify-center items-center gap-2 ${activeSubTab === 'assets' ? 'bg-[#6A0DAD] text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}>
-            <Box size={16}/> Assets (הנכסים שלי)
+            <Box size={16}/> {t.assets_tab} {/* תרגום: נכסים */}
         </button>
         <button 
             onClick={() => setActiveSubTab('categories')}
             className={`flex-1 py-2 rounded-md font-bold text-sm flex justify-center items-center gap-2 ${activeSubTab === 'categories' ? 'bg-[#6A0DAD] text-white shadow' : 'text-gray-500 hover:bg-gray-50'}`}>
-            <Tag size={16}/> Categories (קטגוריות)
+            <Tag size={16}/> {t.categories_tab} {/* תרגום: קטגוריות */}
         </button>
       </div>
 
@@ -88,7 +89,7 @@ const ConfigurationTab = ({ token, t }) => {
         <div className="animate-fade-in">
            <form onSubmit={handleAddCategory} className="bg-white p-4 rounded-xl shadow-sm border mb-4 flex gap-2">
               <input 
-                type="text" placeholder="שם קטגוריה חדשה (למשל: מוצרי חשמל)" 
+                type="text" placeholder={t.category_placeholder} 
                 className="flex-1 p-2 border rounded-lg bg-gray-50 outline-none focus:ring-2 focus:ring-purple-200"
                 value={newCategory} onChange={e => setNewCategory(e.target.value)}
               />
@@ -101,7 +102,7 @@ const ConfigurationTab = ({ token, t }) => {
                       <span className="font-medium">{c.name}</span>
                   </div>
               ))}
-              {categories.length === 0 && <p className="p-4 text-center text-gray-400">No categories yet</p>}
+              {categories.length === 0 && <p className="p-4 text-center text-gray-400">{t.no_categories}</p>}
            </div>
         </div>
       )}
@@ -110,15 +111,15 @@ const ConfigurationTab = ({ token, t }) => {
       {activeSubTab === 'assets' && (
         <div className="animate-fade-in">
            <form onSubmit={handleAddAsset} className="bg-white p-4 rounded-xl shadow-sm border mb-4 space-y-3">
-              <h3 className="font-bold text-gray-700 text-sm">הוספת נכס חדש:</h3>
+              <h3 className="font-bold text-gray-700 text-sm">{t.add_new_asset}:</h3>
               <div className="grid grid-cols-2 gap-3">
                   <input 
-                    type="text" placeholder="שם הנכס (למשל: תנור פיצה)" 
+                    type="text" placeholder={t.asset_name_placeholder} 
                     className="p-2 border rounded-lg bg-gray-50 outline-none focus:ring-2 focus:ring-purple-200"
                     value={newAsset.name} onChange={e => setNewAsset({...newAsset, name: e.target.value})}
                   />
                   <input 
-                    type="text" placeholder="קוד ייחודי (למשל: OVN-324)" 
+                    type="text" placeholder={t.asset_code_placeholder} 
                     className="p-2 border rounded-lg bg-gray-50 outline-none focus:ring-2 focus:ring-purple-200"
                     value={newAsset.code} onChange={e => setNewAsset({...newAsset, code: e.target.value})}
                   />
@@ -127,11 +128,11 @@ const ConfigurationTab = ({ token, t }) => {
                 className="w-full p-2 border rounded-lg bg-gray-50 outline-none focus:ring-2 focus:ring-purple-200"
                 value={newAsset.category_id} onChange={e => setNewAsset({...newAsset, category_id: e.target.value})}
               >
-                  <option value="">בחר קטגוריה...</option>
+                  <option value="">{t.select_category}...</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <button type="submit" className="w-full bg-[#6A0DAD] text-white py-2 rounded-lg font-bold shadow hover:bg-purple-800">
-                  שמור נכס
+                  {t.save_asset_btn}
               </button>
            </form>
 
@@ -149,7 +150,7 @@ const ConfigurationTab = ({ token, t }) => {
                       </div>
                   </div>
               ))}
-              {assets.length === 0 && <p className="text-center text-gray-400 mt-4">No assets yet. Create categories first!</p>}
+              {assets.length === 0 && <p className="text-center text-gray-400 mt-4">{t.no_assets}</p>}
            </div>
         </div>
       )}

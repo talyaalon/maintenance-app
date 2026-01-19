@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, MapPin, UserCircle, Plus, Settings } from 'lucide-react'; // הוספתי את Settings
+import { LayoutDashboard, Users, UserCircle, Plus, Settings } from 'lucide-react'; 
 import Login from './Login';
 import CreateTaskForm from './CreateTaskForm';
 import AddUserForm from './AddUserForm';
-// שימי לב: אנחנו מייבאים את התרגומים מהקובץ החיצוני
 import { translations } from './translations'; 
 
 // ייבוא הטאבים
 import TasksTab from './TasksTab';
 import TeamTab from './TeamTab';
 import ProfileTab from './ProfileTab'; 
-import ConfigurationTab from './ConfigurationTab'; // החלפנו את LocationsTab בחדש
+import ConfigurationTab from './ConfigurationTab'; 
 
 function App() {
   const [user, setUser] = useState(null);
@@ -42,7 +41,8 @@ function App() {
   };
 
   const handleCompleteTask = async (taskId) => {
-      alert("Task Updated!"); 
+      // תרגום: עודכן בהצלחה
+      alert(t.alert_update_success || "Task Updated!"); 
       fetchTasks();
   };
 
@@ -87,10 +87,9 @@ function App() {
                         t={t} 
                         onAddUser={() => setIsUserFormOpen(true)} 
                         refreshTrigger={refreshTrigger} 
-                   />;
+                    />;
           case 3: 
             if (isEmployee) return null;
-            // כאן טעינת הטאב החדש של הקונפיגורציה
             return <ConfigurationTab token={token} t={t} />;
           case 4: 
             return <ProfileTab 
@@ -99,7 +98,7 @@ function App() {
                         token={token}
                         onLogout={() => { setUser(null); localStorage.removeItem('token'); }} 
                         onUpdateUser={handleUserUpdate} 
-                   />;
+                    />;
           default: 
             return <TasksTab tasks={tasks} t={t} />;
       }
@@ -110,13 +109,15 @@ function App() {
       
       {/* כותרת עליונה */}
       <header className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-30">
-        <h1 className="text-xl font-bold text-[#6A0DAD]">MAINTENANCE APP</h1>
+        {/* תרגום: שם האפליקציה */}
+        <h1 className="text-xl font-bold text-[#6A0DAD]">{t.app_name}</h1>
         
         {/* בחירת שפה */}
         <select 
             value={lang} 
             onChange={(e) => setLang(e.target.value)} 
-            className="p-1 border rounded text-xs bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="p-1 border rounded text-xs bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+            dir="ltr"
         >
             <option value="en">🇺🇸 EN</option>
             <option value="he">🇮🇱 HE</option>
@@ -152,11 +153,11 @@ function App() {
                 </button>
             )}
 
-            {/* כפתור הקונפיגורציה החדש (במקום מיקומים) */}
             {!isEmployee && (
                 <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
                     <Settings size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
-                    <span className="text-[10px] mt-1 font-medium">Config</span>
+                    {/* תרגום: הגדרות */}
+                    <span className="text-[10px] mt-1 font-medium">{t.nav_config}</span> 
                 </button>
             )}
 

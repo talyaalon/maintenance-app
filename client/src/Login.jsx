@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
+import { Globe } from 'lucide-react'; // אייקון קטן לשפה
 
-// מקבלים את lang ואת setLang מהאבא (App.js)
 const Login = ({ onLoginSuccess, t, lang, setLang }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,44 +23,56 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
         localStorage.setItem('token', data.token);
         onLoginSuccess(data.user);
       } else {
-        setError(data.error || t.login_failed);
+        // שימוש בתרגום לשגיאה
+        setError(data.error || t.login_failed || "Login failed");
       }
     } catch (err) {
-      setError(t.server_error);
+      setError(t.server_error || "Server error");
     }
   };
 
+  // פונקציה לשינוי כיוון הטקסט לפי השפה
+  const dir = lang === 'he' ? 'rtl' : 'ltr';
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 font-sans" dir={lang === 'he' ? 'rtl' : 'ltr'}>
-      <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md relative">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 font-sans" dir={dir}>
+      <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md relative border-t-4 border-[#6A0DAD]">
         
-        {/* --- זה השינוי: כפתור שפה אמיתי --- */}
-        <div className="absolute top-5 right-5">
+        {/* בחירת שפה */}
+        <div className={`absolute top-4 ${lang === 'he' ? 'left-4' : 'right-4'} flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full border border-gray-200`}>
+           <Globe size={14} className="text-gray-400"/>
            <select 
              value={lang} 
              onChange={(e) => setLang(e.target.value)}
-             className="bg-transparent text-gray-600 text-sm font-bold cursor-pointer outline-none border-none hover:text-purple-700"
-             style={{ direction: 'ltr' }} // כדי שהאייקונים לא יקפצו
+             className="bg-transparent text-gray-600 text-xs font-bold cursor-pointer outline-none border-none hover:text-purple-700 appearance-none pr-2"
+             style={{ direction: 'ltr' }} 
            >
-             <option value="en">🇺🇸 English</option>
-             <option value="he">🇮🇱 עברית</option>
-             <option value="th">🇹🇭 Thai</option>
+             <option value="en">English</option>
+             <option value="he">עברית</option>
+             <option value="th">ไทย</option>
            </select>
         </div>
 
-        {/* כותרת מתורגמת */}
-        <h2 className="text-2xl font-bold text-center text-[#5D4A66] mb-8 mt-4 tracking-wide">
-          {t.login_title}
-        </h2>
+        {/* כותרת */}
+        <div className="text-center mb-8 mt-4">
+            <h2 className="text-3xl font-bold text-[#6A0DAD] tracking-wide mb-1">
+            {t.app_name || "Maintenance App"}
+            </h2>
+            <p className="text-gray-400 text-sm font-medium">{t.login_title}</p>
+        </div>
         
-        {error && <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm text-center border border-red-200">{error}</div>}
+        {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-6 text-sm text-center border border-red-100 animate-pulse">
+                {error}
+            </div>
+        )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-bold text-gray-500 mb-1">{t.login_email}</label>
+            <label className="block text-sm font-bold text-gray-600 mb-1.5">{t.login_email}</label>
             <input
               type="email"
-              className="w-full p-3 bg-[#EEF2F6] rounded-lg border-none focus:ring-2 focus:ring-purple-300 outline-none text-gray-700"
+              className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-800"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@example.com"
@@ -69,10 +81,10 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-500 mb-1">{t.login_password}</label>
+            <label className="block text-sm font-bold text-gray-600 mb-1.5">{t.login_password}</label>
             <input
               type="password"
-              className="w-full p-3 bg-[#EEF2F6] rounded-lg border-none focus:ring-2 focus:ring-purple-300 outline-none text-gray-700"
+              className="w-full p-3 bg-gray-50 rounded-lg border border-gray-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 outline-none transition-all text-gray-800"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -82,7 +94,7 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
 
           <button
             type="submit"
-            className="w-full py-3 bg-[#6A4C6D] hover:bg-[#533a56] text-white font-bold rounded-lg transition-all duration-200 shadow-md mt-4"
+            className="w-full py-3.5 bg-[#6A0DAD] hover:bg-purple-800 text-white font-bold rounded-xl transition-all duration-200 shadow-lg mt-2 flex justify-center items-center gap-2"
           >
             {t.login_btn}
           </button>

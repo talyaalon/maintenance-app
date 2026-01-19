@@ -1,239 +1,448 @@
 export const translations = {
-  // --- אנגלית ---
+  // --- English ---
   en: {
-    // Nav
+    // --- Navigation ---
+    app_name: "MAINTENANCE APP",
     nav_tasks: "Tasks",
     nav_team: "Team",
-    nav_locations: "Locations",
+    nav_config: "Config",
     nav_profile: "Profile",
     
-    // Auth
-    login_title: "Login",
-    email: "Email",
-    password: "Password",
+    // --- Auth (Login) ---
+    login_title: "Sign in to your account",
+    login_email: "Email Address",
+    login_password: "Password",
     login_btn: "Sign In",
-    
-    // General Actions
+    login_failed: "Invalid email or password",
+    server_error: "Server error",
+
+    // --- General Actions ---
     save: "Save",
     cancel: "Cancel",
     delete: "Delete",
     edit: "Edit",
     confirm: "Confirm",
+    save_changes: "Save Changes",
     
-    // Tasks Main Tab
+    // --- Tasks Tab ---
     task_management_title: "Task Management",
-    tab_todo: "To Do (Today)",
+    tab_todo: "To Do",
     tab_waiting: "Waiting Approval",
-    tab_completed: "Completed",
+    tab_completed: "History",
     view_daily: "Daily",
     view_weekly: "Weekly",
     view_calendar: "Calendar",
     
-    // Task Status / Messages
-    no_tasks_today: "No tasks for today! You can relax ☕",
-    no_tasks_week: "No tasks this week",
-    no_tasks_waiting: "No tasks waiting for approval",
-    no_tasks_completed: "No completed tasks yet",
+    // --- Task Messages / Status ---
+    no_tasks_today: "No tasks for today! Great job.",
+    no_tasks_waiting: "No tasks waiting for approval.",
+    no_tasks_completed: "No completed tasks yet.",
     tasks_for_date: "Tasks for",
-    urgent_label: "Urgent 🔥",
+    urgent_label: "Urgent",
     normal_label: "Normal",
     low_label: "Low",
-    overdue: "Overdue since",
-    
-    // Task Card
+    overdue: "Overdue",
+    status_label: "Status",
+    urgent: "Urgent",
+    task_done: "Completed",
+
+    // --- Task Card ---
     location: "Location",
-    assigned_to: "Assigned to",
-    has_notes: "Has notes",
-    has_image: "Has image",
+    assigned_to: "Assigned To",
+    has_notes: "Notes",
+    has_image: "Photo Attached",
     
-    // Create Task Form
+    // --- Create Task Form ---
     create_new_task: "Create New Task",
+    select_asset_title: "Select Asset (Optional)",
+    category_label: "Category",
+    specific_asset_label: "Specific Asset",
+    select_category: "Select Category",
+    select_category_first: "Select category first",
+    select_asset: "Select Asset",
+    no_assets_in_category: "No assets in this category",
     task_title_label: "Task Title",
-    task_title_placeholder: "e.g., Fix AC in meeting room",
-    description_label: "Description / Notes",
-    description_placeholder: "Add more details here...",
-    add_image: "Add Image (Optional)",
-    assign_to_label: "Assign to",
-    assign_self: "Myself",
+    task_title_placeholder: "e.g., Fix AC unit",
+    description_label: "Description",
+    description_placeholder: "Enter details here...",
+    add_image: "Add Photo",
+    assign_to_label: "Assign To",
+    assign_self: "Assign to myself",
     urgency_label: "Urgency",
     date_label: "Due Date",
     recurring_task: "Recurring Task",
     recurring_weekly: "Weekly",
     recurring_monthly: "Monthly",
-    save_task_btn: "Save Task",
-    select_location: "Select Location...",
-    
-    // Task Details Modal
-    complete_task_btn: "Mark as Done",
+    day_of_month: "Day of month",
+    select_location: "Select Location",
+    save_task_btn: "Create Task",
+    error_create_task: "Error creating task",
+
+    // --- Task Details Modal ---
+    complete_task: "Complete Task",
+    complete_task_btn: "Report Completion",
     followup_task_btn: "Follow-up Task",
     approve_close_btn: "Approve & Close",
     report_execution: "Execution Report",
-    what_was_done: "What was done? (Required)",
-    upload_proof: "Upload proof image",
+    what_was_done: "Describe what was done...",
+    upload_proof: "Upload Photo Proof",
     send_for_approval: "Send for Approval",
-    new_date: "New Date",
-    manager_notes: "Manager Notes",
-    worker_report: "Worker Report",
-    
-    // Days
-    day_0: "Sun", day_1: "Mon", day_2: "Tue", day_3: "Wed", day_4: "Thu", day_5: "Fri", day_6: "Sat",
-    
-    // Team & Locations
-    add_worker: "Add Team Member",
-    add_location: "Add Location",
-    workers_under: "Workers under",
-    search_placeholder: "Search...",
+    new_date: "New Due Date",
+    manager_notes: "Manager's Notes",
+    worker_report: "Worker's Report",
+    alert_required: "Required field",
+    alert_sent: "Sent successfully!",
+    alert_approved: "Approved successfully!",
+    alert_created: "Created successfully!",
+
+    // --- Days ---
+    day_0: "Sunday", day_1: "Monday", day_2: "Tuesday", day_3: "Wednesday", day_4: "Thursday", day_5: "Friday", day_6: "Saturday",
+
+    // --- Team Tab ---
+    add_team_member: "Add Team Member",
+    ceo_role: "CEO",
+    workers_suffix: "employees",
+    workers_under: "Employees under",
+    confirm_delete_user: "Are you sure you want to delete this user?",
+    error_delete: "Error deleting user",
+    edit_details_title: "Edit Details",
+    full_name_label: "Full Name",
+    email_label: "Email",
+    password_placeholder_edit: "Password (leave empty to keep current)",
+    assign_to_manager: "Assign to Manager",
+    no_manager: "No Manager",
+    alert_update_success: "Update successful!",
+    alert_update_error: "Error updating details.",
+
+    // --- Add User Form ---
+    add_new_user_title: "Add New Team Member",
+    user_created_success: "User created successfully!",
+    error_create_user: "Error creating user",
+    password_label: "Initial Password",
+    role_label: "Role",
+    role_employee: "Employee",
+    role_manager: "Manager",
+    select_manager: "Select Manager",
+    create_btn: "Create User",
+    creating: "Creating...",
+
+    // --- Configuration Tab ---
+    config_title: "Configuration & Assets",
+    assets_tab: "Assets",
+    categories_tab: "Categories",
+    category_placeholder: "New Category Name",
+    category_added: "Category Added!",
+    error_adding_category: "Error adding category",
+    no_categories: "No categories yet",
+    add_new_asset: "Add New Asset",
+    asset_name_placeholder: "Asset Name",
+    asset_code_placeholder: "Unique Code",
+    save_asset_btn: "Save Asset",
+    asset_created: "Asset Created Successfully!",
+    error_creating_asset: "Error creating asset",
+    fill_all_fields: "Please fill all fields",
+    no_assets: "No assets yet. Create categories first!",
+
+    // --- Profile Tab ---
+    edit_profile_btn: "Edit Profile",
+    password_security_note: "Old password hidden for security"
   },
 
-  // --- עברית ---
+  // --- Hebrew ---
   he: {
+    // --- Navigation ---
+    app_name: "מערכת אחזקה",
     nav_tasks: "משימות",
-    nav_team: "צוות",
-    nav_locations: "מיקומים",
-    nav_profile: "אזור אישי",
+    nav_team: "הצוות שלי",
+    nav_config: "הגדרות",
+    nav_profile: "פרופיל",
     
-    login_title: "התחברות",
-    email: "אימייל",
-    password: "סיסמה",
-    login_btn: "כניסה",
-    
+    // --- Auth (Login) ---
+    login_title: "התחברות למערכת",
+    login_email: "כתובת אימייל",
+    login_password: "סיסמה",
+    login_btn: "כניסה למערכת",
+    login_failed: "אימייל או סיסמה שגויים",
+    server_error: "שגיאת שרת",
+
+    // --- General Actions ---
     save: "שמור",
     cancel: "ביטול",
     delete: "מחק",
     edit: "ערוך",
     confirm: "אישור",
+    save_changes: "שמור שינויים",
     
+    // --- Tasks Tab ---
     task_management_title: "ניהול משימות",
-    tab_todo: "לביצוע (היום)",
-    tab_waiting: "לאישור",
-    tab_completed: "הושלמו",
-    view_daily: "היום",
-    view_weekly: "השבוע",
+    tab_todo: "לביצוע",
+    tab_waiting: "ממתין לאישור",
+    tab_completed: "היסטוריה",
+    view_daily: "יומי",
+    view_weekly: "שבועי",
     view_calendar: "יומן",
     
-    no_tasks_today: "אין משימות להיום! אתה יכול לנוח ☕",
-    no_tasks_week: "אין משימות השבוע",
-    no_tasks_waiting: "אין משימות שממתינות לאישור",
-    no_tasks_completed: "עדיין אין משימות שהושלמו",
-    tasks_for_date: "משימות ל-",
-    urgent_label: "דחופה 🔥",
-    normal_label: "רגילה",
-    low_label: "נמוכה",
-    overdue: "באיחור מתאריך",
-    
+    // --- Task Messages / Status ---
+    no_tasks_today: "אין משימות להיום! עבודה טובה.",
+    no_tasks_waiting: "אין משימות הממתינות לאישורך.",
+    no_tasks_completed: "עדיין אין משימות שהושלמו.",
+    tasks_for_date: "משימות לתאריך",
+    urgent_label: "דחוף",
+    normal_label: "רגיל",
+    low_label: "נמוך",
+    overdue: "באיחור",
+    status_label: "סטטוס",
+    urgent: "דחוף",
+    task_done: "הושלם",
+
+    // --- Task Card ---
     location: "מיקום",
-    assigned_to: "אחראי",
+    assigned_to: "באחריות",
     has_notes: "יש הערות",
     has_image: "יש תמונה",
     
+    // --- Create Task Form ---
     create_new_task: "יצירת משימה חדשה",
+    select_asset_title: "בחירת נכס לטיפול (אופציונלי)",
+    category_label: "קטגוריה",
+    specific_asset_label: "הנכס הספציפי",
+    select_category: "בחר קטגוריה",
+    select_category_first: "בחר קטגוריה תחילה",
+    select_asset: "בחר נכס",
+    no_assets_in_category: "אין נכסים בקטגוריה זו",
     task_title_label: "כותרת המשימה",
-    task_title_placeholder: "לדוגמה: תיקון מזגן בחדר ישיבות",
-    description_label: "תיאור / הערות נוספות",
-    description_placeholder: "פרט כאן מידע נוסף...",
-    add_image: "צרף תמונה (אופציונלי)",
-    assign_to_label: "למי להקצות?",
-    assign_self: "לעצמי",
+    task_title_placeholder: "לדוגמה: תיקון מזגן",
+    description_label: "תיאור",
+    description_placeholder: "הכנס פרטים כאן...",
+    add_image: "הוסף תמונה",
+    assign_to_label: "שייך לעובד",
+    assign_self: "שייך לעצמי",
     urgency_label: "דחיפות",
-    date_label: "תאריך ביצוע",
-    recurring_task: "משימה חוזרת (קבועה)",
-    recurring_weekly: "שבועית",
-    recurring_monthly: "חודשית",
-    save_task_btn: "שמור משימה",
-    select_location: "בחר מיקום...",
-    
-    complete_task_btn: "סמן כבוצע",
+    date_label: "תאריך יעד",
+    recurring_task: "משימה מחזורית",
+    recurring_weekly: "שבועי",
+    recurring_monthly: "חודשי",
+    day_of_month: "יום בחודש",
+    select_location: "בחר מיקום",
+    save_task_btn: "צור משימה",
+    error_create_task: "שגיאה ביצירת המשימה",
+
+    // --- Task Details Modal ---
+    complete_task: "סיים משימה",
+    complete_task_btn: "דווח ביצוע",
     followup_task_btn: "משימת המשך",
-    approve_close_btn: "אשר וסגור משימה",
-    report_execution: "דיווח ביצוע",
-    what_was_done: "מה בוצע? (חובה)",
-    upload_proof: "לחץ להוספת תמונת ביצוע",
+    approve_close_btn: "אשר וסגור",
+    report_execution: "דיווח ביצוע משימה",
+    what_was_done: "תאר מה בוצע בשטח...",
+    upload_proof: "העלה תמונת הוכחה",
     send_for_approval: "שלח לאישור",
-    new_date: "תאריך חדש",
+    new_date: "תאריך יעד חדש",
     manager_notes: "הערות מנהל",
     worker_report: "דיווח עובד",
-    
-    day_0: "א'", day_1: "ב'", day_2: "ג'", day_3: "ד'", day_4: "ה'", day_5: "ו'", day_6: "ש'",
-    
-    add_worker: "הוסף איש צוות",
-    add_location: "הוסף מיקום",
+    alert_required: "שדה חובה",
+    alert_sent: "נשלח בהצלחה!",
+    alert_approved: "אושר בהצלחה!",
+    alert_created: "נוצר בהצלחה!",
+
+    // --- Days ---
+    day_0: "ראשון", day_1: "שני", day_2: "שלישי", day_3: "רביעי", day_4: "חמישי", day_5: "שישי", day_6: "שבת",
+
+    // --- Team Tab ---
+    add_team_member: "הוסף איש צוות",
+    ceo_role: "מנכ״ל",
+    workers_suffix: "עובדים",
     workers_under: "עובדים תחת",
-    search_placeholder: "חיפוש...",
+    confirm_delete_user: "האם למחוק משתמש זה?",
+    error_delete: "שגיאה במחיקה",
+    edit_details_title: "עריכת פרטים",
+    full_name_label: "שם מלא",
+    email_label: "אימייל",
+    password_placeholder_edit: "סיסמה (השאר ריק כדי לא לשנות)",
+    assign_to_manager: "שייך למנהל",
+    no_manager: "ללא מנהל",
+    alert_update_success: "העדכון בוצע בהצלחה!",
+    alert_update_error: "שגיאה בעדכון",
+
+    // --- Add User Form ---
+    add_new_user_title: "הוספת איש צוות חדש",
+    user_created_success: "משתמש נוצר בהצלחה!",
+    error_create_user: "שגיאה ביצירת משתמש",
+    password_label: "סיסמה ראשונית",
+    role_label: "תפקיד",
+    role_employee: "עובד רגיל",
+    role_manager: "מנהל אזור",
+    select_manager: "בחר מנהל",
+    create_btn: "צור משתמש",
+    creating: "יוצר...",
+
+    // --- Configuration Tab ---
+    config_title: "הגדרות ונכסים",
+    assets_tab: "נכסים",
+    categories_tab: "קטגוריות",
+    category_placeholder: "שם קטגוריה חדשה (למשל: מוצרי חשמל)",
+    category_added: "קטגוריה נוספה!",
+    error_adding_category: "שגיאה בהוספת קטגוריה",
+    no_categories: "אין קטגוריות עדיין",
+    add_new_asset: "הוספת נכס חדש",
+    asset_name_placeholder: "שם הנכס (למשל: תנור פיצה)",
+    asset_code_placeholder: "קוד ייחודי (למשל: OVN-324)",
+    save_asset_btn: "שמור נכס",
+    asset_created: "נכס נוצר בהצלחה!",
+    error_creating_asset: "שגיאה ביצירת נכס",
+    fill_all_fields: "אנא מלא את כל השדות",
+    no_assets: "אין נכסים עדיין. צור קטגוריות קודם!",
+
+    // --- Profile Tab ---
+    edit_profile_btn: "ערוך פרופיל",
+    password_security_note: "הסיסמה הישנה מוסתרת מטעמי אבטחה"
   },
 
-  // --- תאילנדית ---
+  // --- Thai ---
   th: {
+    // --- Navigation ---
+    app_name: "แอพซ่อมบำรุง",
     nav_tasks: "งาน",
-    nav_team: "ทีม",
-    nav_locations: "สถานที่",
+    nav_team: "ทีมของฉัน",
+    nav_config: "การตั้งค่า",
     nav_profile: "โปรไฟล์",
     
-    login_title: "เข้าสู่ระบบ",
-    email: "อีเมล",
-    password: "รหัสผ่าน",
+    // --- Auth (Login) ---
+    login_title: "ลงชื่อเข้าใช้บัญชีของคุณ",
+    login_email: "ที่อยู่อีเมล",
+    login_password: "รหัสผ่าน",
     login_btn: "ลงชื่อเข้าใช้",
-    
+    login_failed: "อีเมลหรือรหัสผ่านไม่ถูกต้อง",
+    server_error: "ข้อผิดพลาดของเซิร์ฟเวอร์",
+
+    // --- General Actions ---
     save: "บันทึก",
     cancel: "ยกเลิก",
     delete: "ลบ",
     edit: "แก้ไข",
     confirm: "ยืนยัน",
+    save_changes: "บันทึกการเปลี่ยนแปลง",
     
+    // --- Tasks Tab ---
     task_management_title: "การจัดการงาน",
-    tab_todo: "สิ่งที่ต้องทำ (วันนี้)",
-    tab_waiting: "รอการอนุมัติ",
-    tab_completed: "เสร็จสมบูรณ์",
+    tab_todo: "ต้องทำ",
+    tab_waiting: "รออนุมัติ",
+    tab_completed: "ประวัติ",
     view_daily: "รายวัน",
     view_weekly: "รายสัปดาห์",
     view_calendar: "ปฏิทิน",
     
-    no_tasks_today: "ไม่มีงานสำหรับวันนี้! พักผ่อนได้ ☕",
-    no_tasks_week: "ไม่มีงานในสัปดาห์นี้",
+    // --- Task Messages / Status ---
+    no_tasks_today: "วันนี้ไม่มีงาน! ทำได้ดีมาก",
     no_tasks_waiting: "ไม่มีงานที่รอการอนุมัติ",
     no_tasks_completed: "ยังไม่มีงานที่เสร็จสมบูรณ์",
     tasks_for_date: "งานสำหรับวันที่",
-    urgent_label: "เร่งด่วน 🔥",
+    urgent_label: "ด่วน",
     normal_label: "ปกติ",
     low_label: "ต่ำ",
-    overdue: "เกินกำหนดตั้งแต่วันที่",
-    
+    overdue: "เกินกำหนด",
+    status_label: "สถานะ",
+    urgent: "ด่วน",
+    task_done: "เสร็จสมบูรณ์",
+
+    // --- Task Card ---
     location: "สถานที่",
-    assigned_to: "มอบหมายให้",
+    assigned_to: "ผู้รับผิดชอบ",
     has_notes: "มีบันทึก",
     has_image: "มีรูปภาพ",
     
+    // --- Create Task Form ---
     create_new_task: "สร้างงานใหม่",
+    select_asset_title: "เลือกทรัพย์สิน (ไม่บังคับ)",
+    category_label: "หมวดหมู่",
+    specific_asset_label: "ทรัพย์สินเฉพาะ",
+    select_category: "เลือกหมวดหมู่",
+    select_category_first: "เลือกหมวดหมู่ก่อน",
+    select_asset: "เลือกทรัพย์สิน",
+    no_assets_in_category: "ไม่มีทรัพย์สินในหมวดหมู่นี้",
     task_title_label: "หัวข้องาน",
-    task_title_placeholder: "เช่น ซ่อมแอร์ห้องประชุม",
-    description_label: "รายละเอียด / หมายเหตุ",
-    description_placeholder: "เพิ่มรายละเอียดที่นี่...",
-    add_image: "เพิ่มรูปภาพ (ไม่บังคับ)",
+    task_title_placeholder: "เช่น ซ่อมแอร์",
+    description_label: "รายละเอียด",
+    description_placeholder: "ใส่รายละเอียดที่นี่...",
+    add_image: "เพิ่มรูปภาพ",
     assign_to_label: "มอบหมายให้",
-    assign_self: "ตัวฉันเอง",
+    assign_self: "มอบหมายให้ตัวเอง",
     urgency_label: "ความเร่งด่วน",
-    date_label: "วันที่ครบกำหนด",
+    date_label: "วันที่กำหนด",
     recurring_task: "งานที่ทำซ้ำ",
     recurring_weekly: "รายสัปดาห์",
     recurring_monthly: "รายเดือน",
-    save_task_btn: "บันทึกงาน",
-    select_location: "เลือกสถานที่...",
-    
-    complete_task_btn: "ทำเครื่องหมายว่าเสร็จ",
-    followup_task_btn: "งานต่อเนื่อง",
+    day_of_month: "วันที่ของเดือน",
+    select_location: "เลือกสถานที่",
+    save_task_btn: "สร้างงาน",
+    error_create_task: "เกิดข้อผิดพลาดในการสร้างงาน",
+
+    // --- Task Details Modal ---
+    complete_task: "เสร็จสิ้นงาน",
+    complete_task_btn: "รายงานการเสร็จสิ้น",
+    followup_task_btn: "งานติดตามผล",
     approve_close_btn: "อนุมัติและปิดงาน",
-    report_execution: "รายงานการดำเนินการ",
-    what_was_done: "ทำอะไรไปบ้าง? (จำเป็น)",
+    report_execution: "รายงานการปฏิบัติงาน",
+    what_was_done: "อธิบายสิ่งที่ได้ทำไป...",
     upload_proof: "อัปโหลดรูปภาพหลักฐาน",
     send_for_approval: "ส่งเพื่ออนุมัติ",
-    new_date: "วันที่ใหม่",
-    manager_notes: "บันทึกของผู้จัดการ",
-    worker_report: "รายงานของพนักงาน",
-    
-    day_0: "อา", day_1: "จ", day_2: "อ", day_3: "พ", day_4: "พฤ", day_5: "ศ", day_6: "ส",
-    
-    add_worker: "เพิ่มสมาชิกทีม",
-    add_location: "เพิ่มสถานที่",
+    new_date: "กำหนดวันเสร็จใหม่",
+    manager_notes: "บันทึกจากผู้จัดการ",
+    worker_report: "รายงานจากพนักงาน",
+    alert_required: "จำเป็นต้องระบุ",
+    alert_sent: "ส่งเรียบร้อยแล้ว!",
+    alert_approved: "อนุมัติเรียบร้อยแล้ว!",
+    alert_created: "สร้างเรียบร้อยแล้ว!",
+
+    // --- Days ---
+    day_0: "วันอาทิตย์", day_1: "วันจันทร์", day_2: "วันอังคาร", day_3: "วันพุธ", day_4: "วันพฤหัสบดี", day_5: "วันศุกร์", day_6: "วันเสาร์",
+
+    // --- Team Tab ---
+    add_team_member: "เพิ่มสมาชิกในทีม",
+    ceo_role: "ซีอีโอ",
+    workers_suffix: "พนักงาน",
     workers_under: "พนักงานภายใต้",
-    search_placeholder: "ค้นหา...",
+    confirm_delete_user: "คุณแน่ใจหรือไม่ว่าต้องการลบผู้ใช้นี้?",
+    error_delete: "เกิดข้อผิดพลาดในการลบ",
+    edit_details_title: "แก้ไขรายละเอียด",
+    full_name_label: "ชื่อเต็ม",
+    email_label: "อีเมล",
+    password_placeholder_edit: "รหัสผ่าน (เว้นว่างไว้หากไม่ต้องการเปลี่ยน)",
+    assign_to_manager: "มอบหมายให้ผู้จัดการ",
+    no_manager: "ไม่มีผู้จัดการ",
+    alert_update_success: "อัปเดตสำเร็จ!",
+    alert_update_error: "เกิดข้อผิดพลาดในการอัปเดต",
+
+    // --- Add User Form ---
+    add_new_user_title: "เพิ่มสมาชิกในทีมใหม่",
+    user_created_success: "สร้างผู้ใช้สำเร็จ!",
+    error_create_user: "เกิดข้อผิดพลาดในการสร้างผู้ใช้",
+    password_label: "รหัสผ่านเริ่มต้น",
+    role_label: "บทบาท",
+    role_employee: "พนักงาน",
+    role_manager: "ผู้จัดการ",
+    select_manager: "เลือกผู้จัดการ",
+    create_btn: "สร้างผู้ใช้",
+    creating: "กำลังสร้าง...",
+
+    // --- Configuration Tab ---
+    config_title: "การตั้งค่าและทรัพย์สิน",
+    assets_tab: "ทรัพย์สิน",
+    categories_tab: "หมวดหมู่",
+    category_placeholder: "ชื่อหมวดหมู่ใหม่",
+    category_added: "เพิ่มหมวดหมู่แล้ว!",
+    error_adding_category: "เกิดข้อผิดพลาดในการเพิ่มหมวดหมู่",
+    no_categories: "ยังไม่มีหมวดหมู่",
+    add_new_asset: "เพิ่มทรัพย์สินใหม่",
+    asset_name_placeholder: "ชื่อทรัพย์สิน",
+    asset_code_placeholder: "รหัสเฉพาะ",
+    save_asset_btn: "บันทึกทรัพย์สิน",
+    asset_created: "สร้างทรัพย์สินสำเร็จ!",
+    error_creating_asset: "เกิดข้อผิดพลาดในการสร้างทรัพย์สิน",
+    fill_all_fields: "กรุณากรอกข้อมูลให้ครบถ้วน",
+    no_assets: "ยังไม่มีทรัพย์สิน สร้างหมวดหมู่ก่อน!",
+
+    // --- Profile Tab ---
+    edit_profile_btn: "แก้ไขโปรไฟล์",
+    password_security_note: "รหัสผ่านเก่าถูกซ่อนเพื่อความปลอดภัย"
   }
 };

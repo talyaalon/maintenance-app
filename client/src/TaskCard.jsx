@@ -1,8 +1,7 @@
-// client/src/TaskCard.jsx
 import React from 'react';
 
-const TaskCard = ({ task, onComplete }) => {
-  const isDone = task.status === 'Done';
+const TaskCard = ({ task, onComplete, t }) => { // הוספנו את t כאן
+  const isDone = task.status === 'Done' || task.status === 'COMPLETED';
   const isUrgent = task.urgency === 'High';
 
   return (
@@ -14,11 +13,12 @@ const TaskCard = ({ task, onComplete }) => {
           <h3 className={`font-bold text-lg ${isDone ? 'line-through text-gray-500' : 'text-gray-800'}`}>
             {task.title}
           </h3>
-          <p className="text-sm text-gray-500">סטטוס: {task.status}</p>
+          {/* הוחלף: סטטוס */}
+          <p className="text-sm text-gray-500">{t.status_label}: {task.status}</p>
         </div>
         {isUrgent && (
           <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded animate-pulse">
-            דחוף
+            {t.urgent} {/* הוחלף: דחוף */}
           </span>
         )}
       </div>
@@ -30,12 +30,13 @@ const TaskCard = ({ task, onComplete }) => {
             className="w-full py-2 rounded text-white text-sm font-medium hover:bg-purple-800 transition"
             style={{ backgroundColor: '#6A0DAD' }}
           >
-            סיים משימה
+            {t.complete_task} {/* הוחלף: סיים משימה */}
           </button>
         </div>
       )}
       
-      {isDone && <div className="mt-2 text-green-600 font-bold">✓ הושלם</div>}
+      {/* הוחלף: הושלם */}
+      {isDone && <div className="mt-2 text-green-600 font-bold">✓ {t.task_done}</div>}
     </div>
   );
 };

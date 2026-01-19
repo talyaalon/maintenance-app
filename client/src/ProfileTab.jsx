@@ -1,40 +1,37 @@
 import React, { useState } from 'react';
-import { Camera, Save, X, LogOut, Eye, EyeOff } from 'lucide-react'; // הוספתי Eye, EyeOff
+import { Camera, Save, X, LogOut, Eye, EyeOff } from 'lucide-react'; 
 
 const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // סטייט חדש להצגת סיסמה
+  const [showPassword, setShowPassword] = useState(false); 
   
-  // State לנתוני הטופס
   const [formData, setFormData] = useState({
     full_name: user.name || '',
     email: user.email || '', 
-    password: '', // סיסמה תמיד מתחילה ריקה
+    password: '', 
   });
 
   const [previewImage, setPreviewImage] = useState(user.profile_picture_url);
   const [fileToUpload, setFileToUpload] = useState(null);
 
-  // טיפול בבחירת תמונה חדשה
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setFileToUpload(file);
-      setPreviewImage(URL.createObjectURL(file)); // מציג תצוגה מקדימה מיד
+      setPreviewImage(URL.createObjectURL(file)); 
     }
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
 
-    // שימוש ב-FormData כדי לשלוח גם טקסט וגם קובץ
     const dataToSend = new FormData();
     dataToSend.append('full_name', formData.full_name);
     dataToSend.append('email', formData.email);
     if (formData.password) {
         dataToSend.append('password', formData.password);
     }
-    // אם יש תמונה חדשה, שולחים אותה. אם לא, שולחים את ה-URL הישן
+    
     if (fileToUpload) {
         dataToSend.append('profile_picture', fileToUpload);
     } else {
@@ -52,17 +49,19 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
 
       const data = await res.json();
       if (res.ok) {
-        alert("הפרטים עודכנו בהצלחה!");
-        onUpdateUser(data.user); // עדכון ה-User ב-App.js
+        // תרגום: עדכון בהצלחה
+        alert(t.alert_update_success || "Profile updated successfully!");
+        onUpdateUser(data.user); 
         setIsEditing(false);
-        setFormData(prev => ({ ...prev, password: '' })); // איפוס שדה הסיסמה
-        setShowPassword(false); // מחזירים למצב מוסתר
+        setFormData(prev => ({ ...prev, password: '' })); 
+        setShowPassword(false); 
       } else {
-        alert("שגיאה בעדכון הפרטים");
+        // תרגום: שגיאת עדכון
+        alert(t.alert_update_error || "Error updating profile");
       }
     } catch (err) {
       console.error(err);
-      alert("שגיאת תקשורת");
+      alert(t.server_error || "Communication error");
     }
   };
 
@@ -82,7 +81,6 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
             )}
         </div>
         
-        {/* כפתור החלפת תמונה (מופיע רק במצב עריכה) */}
         {isEditing && (
             <label className="absolute bottom-0 right-0 bg-purple-600 p-2 rounded-full text-white cursor-pointer hover:bg-purple-700 shadow-md transition-transform transform hover:scale-110">
                 <Camera size={20} />
@@ -91,11 +89,10 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
         )}
       </div>
 
-      {/* הטופס */}
       <form onSubmit={handleSave} className="w-full max-w-md bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
         
         <div>
-            <label className="block text-sm font-medium text-gray-500 mb-1">שם מלא</label>
+            <label className="block text-sm font-medium text-gray-500 mb-1">{t.full_name_label}</label> {/* תרגום: שם מלא */}
             <input 
                 type="text" 
                 className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none disabled:bg-gray-100 disabled:text-gray-400"
@@ -106,7 +103,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
         </div>
 
         <div>
-            <label className="block text-sm font-medium text-gray-500 mb-1">אימייל</label>
+            <label className="block text-sm font-medium text-gray-500 mb-1">{t.email_label}</label> {/* תרגום: אימייל */}
             <input 
                 type="email" 
                 className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none disabled:bg-gray-100 disabled:text-gray-400"
@@ -116,35 +113,33 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
             />
         </div>
 
-        {/* שדה סיסמה - מוצג רק בעריכה - עכשיו עם כפתור עין! */}
         {isEditing && (
             <div className="animate-fade-in relative">
-                <label className="block text-sm font-medium text-gray-500 mb-1">סיסמה חדשה (השאר ריק כדי לא לשנות)</label>
+                {/* תרגום: סיסמה חדשה */}
+                <label className="block text-sm font-medium text-gray-500 mb-1">{t.password_placeholder_edit}</label>
                 <div className="relative">
                     <input 
-                        // כאן הקסם: אם showPassword הוא אמת, מציגים טקסט, אחרת סיסמה
                         type={showPassword ? "text" : "password"} 
-                        className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none pr-10" // pr-10 נותן מקום לאייקון
+                        className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none pr-10" 
                         value={formData.password}
                         onChange={e => setFormData({...formData, password: e.target.value})}
-                        placeholder="הזן סיסמה חדשה..."
+                        placeholder={t.password_placeholder_edit} // תרגום: פלייסהולדר
                         autoComplete="new-password"
                     />
-                    {/* כפתור העין */}
                     <button 
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute left-3 top-3 text-gray-400 hover:text-purple-600 focus:outline-none"
-                        style={{ top: '12px', left: '10px' }} // כיוון עדין למיקום
+                        style={{ top: '12px', left: '10px' }} 
                     >
                         {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">* הסיסמה הישנה מוסתרת מטעמי אבטחה</p>
+                {/* תרגום: הערת אבטחה */}
+                <p className="text-xs text-gray-400 mt-1">* {t.password_security_note || "Old password hidden for security"}</p>
             </div>
         )}
 
-        {/* כפתורי פעולה */}
         <div className="pt-4 flex gap-3">
             {isEditing ? (
                 <>
@@ -157,13 +152,13 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser }) => {
                 </>
             ) : (
                 <button type="button" onClick={() => setIsEditing(true)} className="w-full py-3 bg-[#6A0DAD] text-white rounded-lg hover:bg-purple-800 transition flex justify-center gap-2">
-                     {t.edit} פרטים
+                     {/* תרגום: כפתור עריכה */}
+                     <Camera size={18} /> {t.edit_profile_btn || "Edit Profile"}
                 </button>
             )}
         </div>
       </form>
         
-      {/* כפתור יציאה - תמיד למטה */}
       <button onClick={onLogout} className="mt-8 text-red-500 flex items-center gap-2 hover:bg-red-50 px-4 py-2 rounded-full transition">
           <LogOut size={18} /> {t.logout}
       </button>
