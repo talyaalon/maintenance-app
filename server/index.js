@@ -18,11 +18,11 @@ const SECRET_KEY = 'my_super_secret_key';
 console.log("📧 Configuring Email using 'smtp.gmail.com' with Port 587...");
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.resend.com',
-  port: 465,
-  secure: true,
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false, 
   auth: {
-    user: 'resend',
+    user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   }
 });
@@ -48,7 +48,7 @@ const sendUpdateEmail = async (email, fullName, changes) => {
     changesHtml += '</ul>';
 
     const mailOptions = {
-      from: '"Maintenance App" <onboarding@resend.dev>',
+      from: '"Maintenance App" <maintenance.app.tkp@gmail.com>',
       to: email,
       subject: 'עדכון פרטים בחשבונך - ניהול אחזקה',
       html: `
@@ -93,7 +93,7 @@ const sendWelcomeEmail = async (email, fullName, password, role, managerName) =>
     }
 
     const mailOptions = {
-      from: '"Maintenance App" <onboarding@resend.dev>',
+      from: '"Maintenance App" <maintenance.app.tkp@gmail.com>',
       to: email,
       subject: 'פרטי התחברות למערכת ניהול אחזקה',
       html: `
