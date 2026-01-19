@@ -19,11 +19,14 @@ console.log("📧 Configuring Email using 'smtp.gmail.com' with Port 587...");
 
 const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false, 
+  port: 2525,             // פורט חלופי שעוקף חסימות ב-Render
+  secure: false,          // חובה false בפורט זה
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false
   }
 });
 
