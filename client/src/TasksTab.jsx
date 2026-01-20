@@ -2,9 +2,17 @@ import React, { useState } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, parseISO, startOfWeek, endOfWeek, addDays, isBefore, startOfDay } from 'date-fns';
-import { CheckSquare, Clock, CheckCircle, Calendar as CalIcon, List, AlertCircle, Camera, ArrowRight, X } from 'lucide-react';
+import { CheckSquare, Clock, CheckCircle, Calendar as CalIcon, List, AlertCircle, Camera, ArrowRight, X, FileSpreadsheet } from 'lucide-react';
+import AdvancedExcel from './AdvancedExcel';
 
-// --- עיצוב הלוח שנה ---
+// --- Helper for Calendar Language ---
+const getLocale = (lang) => {
+    if (lang === 'he') return 'he-IL';
+    if (lang === 'th') return 'th-TH';
+    return 'en-US';
+};
+
+// --- CSS Styles ---
 const calendarStyles = `
   .react-calendar { width: 95%; max-width: 800px; margin: 0 auto; border: none; font-family: inherit; background: white; border-radius: 1.5rem; padding: 1.5rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
   .react-calendar__navigation button { font-size: 1.2rem; font-weight: bold; color: #4c1d95; }
@@ -20,44 +28,49 @@ const calendarStyles = `
   .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.2); color: white; }
 `;
 
-const TasksTab = ({ tasks, t, token, user, onRefresh }) => {
+const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => { // Added 'lang' prop
   const [mainTab, setMainTab] = useState('todo'); 
   const [viewMode, setViewMode] = useState('daily'); 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTask, setSelectedTask] = useState(null); 
+  const [showExcel, setShowExcel] = useState(false); // State for Excel toggle
 
-  const pendingTasks = tasks.filter(t => t.status === 'PENDING');
+  // --- Filtering Logic ---
+  
+  // 1. Pending (To Do): Includes Today AND Overdue tasks
+  const pendingTasks = tasks.filter(task => {
+      if (task.status !== 'PENDING') return false;
+      const taskDate = parseISO(task.due_date);
+      // Show if it is today OR in the past (overdue)
+      return isSameDay(taskDate, new Date()) || isBefore(taskDate, startOfDay(new Date()));
+  });
+
+  // 2. Waiting: Show ALL waiting tasks (No date filter - see entire history)
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
+
+  // 3. Completed: Show ALL completed tasks (No date filter - see entire history)
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
 
-  // ספירה חכמה: היום + פגי תוקף
-  const todoCount = pendingTasks.filter(task => {
-      const taskDate = parseISO(task.due_date);
-      return isSameDay(taskDate, new Date()) || isBefore(taskDate, startOfDay(new Date()));
-  }).length;
+  // Helper for Calendar View (Only tasks for the specific selected date)
+  const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(parseISO(t.due_date), selectedDate));
 
   const renderTodoView = () => {
-      // יומי
+      // Daily View
       if (viewMode === 'daily') {
-          const todaysTasks = pendingTasks.filter(task => {
-              const taskDate = parseISO(task.due_date);
-              return isSameDay(taskDate, new Date()) || isBefore(taskDate, startOfDay(new Date()));
-          });
-          
           return (
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto">
                   <div className="bg-white p-4 rounded-2xl shadow-sm border border-purple-100 text-center mb-6">
                       <h3 className="text-xl font-bold text-gray-800">{t.tab_todo}</h3>
                       <p className="text-purple-600 font-medium">{format(new Date(), 'dd/MM/yyyy')}</p>
                   </div>
-                  {todaysTasks.length === 0 ? (
+                  {pendingTasks.length === 0 ? (
                       <div className="text-center py-10 opacity-70">
                           <CheckCircle size={60} className="mx-auto text-green-300 mb-3"/>
                           <p className="text-gray-500 text-lg">{t.no_tasks_today}</p>
                       </div>
                   ) : (
                       <div className="space-y-3">
-                          {todaysTasks.map(task => {
+                          {pendingTasks.map(task => {
                               const isOverdue = isBefore(parseISO(task.due_date), startOfDay(new Date()));
                               return (
                                   <div key={task.id}>
@@ -71,14 +84,15 @@ const TasksTab = ({ tasks, t, token, user, onRefresh }) => {
               </div>
           );
       }
-      // שבועי
+      // Weekly View
       if (viewMode === 'weekly') {
           const start = startOfWeek(new Date(), { weekStartsOn: 0 }); 
           const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(start, i));
           return (
               <div className="space-y-4 animate-fade-in h-[65vh] overflow-y-auto max-w-2xl mx-auto pr-1">
                   {weekDays.map(day => {
-                      const dayTasks = pendingTasks.filter(t => isSameDay(parseISO(t.due_date), day));
+                      // Show tasks for this specific day (Future tasks included)
+                      const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(parseISO(t.due_date), day));
                       const isToday = isSameDay(day, new Date());
                       return (
                           <div key={day.toString()} className={`rounded-xl border transition-all ${isToday ? 'border-purple-300 shadow-md bg-purple-50' : 'border-gray-200 bg-white'}`}>
@@ -102,17 +116,17 @@ const TasksTab = ({ tasks, t, token, user, onRefresh }) => {
               </div>
           );
       }
-      // יומן
+      // Calendar View
       if (viewMode === 'calendar') {
           return (
               <div className="animate-fade-in flex flex-col items-center">
                   <Calendar 
                     onChange={setSelectedDate} 
                     value={selectedDate} 
-                    // הוסר locale="he-IL" כדי לאפשר אנגלית/תאילנדית
+                    locale={getLocale(lang)} // Fixed: Dynamic Language
                     tileContent={({ date, view }) => {
                         if (view === 'month') {
-                            const dayTasks = pendingTasks.filter(t => isSameDay(parseISO(t.due_date), date));
+                            const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(parseISO(t.due_date), date));
                             if (dayTasks.length > 0) {
                                 return (
                                     <div className="flex flex-col items-center">
@@ -129,7 +143,8 @@ const TasksTab = ({ tasks, t, token, user, onRefresh }) => {
                   />
                   <div className="mt-8 w-full max-w-[800px]">
                       <h4 className="font-bold mb-4 text-gray-700 text-lg border-b pb-2">{t.tasks_for_date} {format(selectedDate, 'dd/MM/yyyy')}:</h4>
-                      {pendingTasks.filter(t => isSameDay(parseISO(t.due_date), selectedDate)).map(task => (
+                      {calendarTasks.length === 0 && <p className="text-gray-400 text-sm p-2">No tasks for this date.</p>}
+                      {calendarTasks.map(task => (
                           <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} />
                       ))}
                   </div>
@@ -138,7 +153,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh }) => {
       }
   };
 
-  // תצוגת אישור
+  // Approval View
   const renderApprovalView = () => {
       const grouped = waitingTasks.reduce((acc, task) => {
           const name = task.worker_name || 'Unknown';
@@ -159,7 +174,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh }) => {
       );
   };
 
-  // תצוגת היסטוריה
+  // History View
   const renderCompletedView = () => {
       return (
           <div className="space-y-3 animate-fade-in max-w-3xl mx-auto">
@@ -172,10 +187,29 @@ const TasksTab = ({ tasks, t, token, user, onRefresh }) => {
   return (
     <div className="p-4 pb-24 min-h-screen bg-gray-50">
       <style>{calendarStyles}</style>
-      <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-[#6A0DAD]">{t.task_management_title}</h2></div>
+      <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-[#6A0DAD]">{t.task_management_title}</h2>
+          
+          {/* Excel Button (Visible for Managers) */}
+          {(user.role === 'MANAGER' || user.role === 'BIG_BOSS') && (
+            <button onClick={() => setShowExcel(!showExcel)} className="p-2 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition shadow-sm">
+                <FileSpreadsheet size={20} />
+            </button>
+          )}
+      </div>
       
+      {/* Excel Modal */}
+        {showExcel && (
+            <AdvancedExcel 
+                token={token} 
+                t={t} 
+                onRefresh={onRefresh} 
+                onClose={() => setShowExcel(false)} // הוספנו כפתור סגירה
+            />
+        )}  
+
       <div className="flex bg-white p-1.5 rounded-2xl shadow-sm mb-8 mx-auto max-w-3xl">
-          <TabButton active={mainTab === 'todo'} onClick={() => setMainTab('todo')} label={t.tab_todo} icon={<Clock size={18}/>} count={todoCount} />
+          <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={pendingTasks.length} />
           <TabButton active={mainTab === 'waiting'} onClick={() => setMainTab('waiting')} label={t.tab_waiting} icon={<AlertCircle size={18}/>} count={waitingTasks.length} color="orange" />
           <TabButton active={mainTab === 'completed'} onClick={() => setMainTab('completed')} label={t.tab_completed} icon={<CheckCircle size={18}/>} count={completedTasks.length} color="green" />
       </div>
@@ -197,7 +231,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh }) => {
   );
 };
 
-// --- רכיבים ---
+// --- Components ---
 const TabButton = ({ active, onClick, label, icon, count, color = 'purple' }) => (
     <button onClick={onClick} className={`flex-1 flex flex-col items-center py-3 rounded-xl transition-all ${active ? `bg-${color}-50 text-${color}-700 shadow-inner` : 'text-gray-400 hover:bg-gray-50'}`}>
         <div className={`flex items-center gap-2 mb-1 ${active ? 'font-bold' : ''}`}>{icon}<span className="text-sm">{label}</span></div>
@@ -225,7 +259,7 @@ const getDayName = (date, t) => {
     return days[date.getDay()];
 };
 
-// --- מודאל ---
+// --- Modal ---
 const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
@@ -235,7 +269,6 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
 
     const handleComplete = async () => {
-        // שימוש בתרגום או באנגלית כברירת מחדל
         if (!note && !file) return alert(t.alert_required || "Required field");
         const formData = new FormData();
         formData.append('completion_note', note);

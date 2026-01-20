@@ -1,18 +1,20 @@
 require('dotenv').config();
-// server/index.js - הקובץ המלא: משתמשים, הרשאות, משימות מתקדמות, תמונות וסטטוסים
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
-const multer = require('multer');
-const xlsx = require('xlsx');
-const fs = require('fs');
-const path = require('path'); 
+const path = require('path');
 const nodemailer = require('nodemailer');
+
+// --- ספריות לאקסל והעלאת קבצים ---
+const xlsx = require('xlsx');
+const multer = require('multer');
+const fs = require('fs'); // הגדרה אחת בלבד של fs
 
 const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
+
 
 // --- הגדרת המייל (תיקון ל-Render: שימוש בפורט 587) ---
 console.log("📧 Configuring Email using Brevo SMTP...");
@@ -563,6 +565,127 @@ app.post('/assets', authenticateToken, async (req, res) => {
         );
         res.json(result.rows[0]);
     } catch (err) { console.error(err); res.status(500).send('Error creating asset'); }
+});
+
+// --- 1. ייצוא מתקדם (עם בחירת שדות) ---
+app.post('/tasks/export-advanced', authenticateToken, async (req, res) => {
+    try {
+        const { selectedFields } = req.body; // רשימת השדות שהמשתמש בחר
+        
+        // שליפת כל הנתונים
+        let query = `
+            SELECT t.id, t.title, t.description, t.urgency, t.due_date, t.status, 
+                   u.full_name as worker_name, l.name as location_name
+            FROM tasks t
+            LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN locations l ON t.location_id = l.id
+            ORDER BY t.due_date DESC
+        `;
+        
+        const result = await pool.query(query);
+        let data = result.rows;
+
+        // סינון: משאירים רק את השדות שנבחרו
+        if (selectedFields && selectedFields.length > 0) {
+            data = data.map(row => {
+                const filteredRow = {};
+                selectedFields.forEach(field => {
+                    // אם השדה קיים בתוצאה, נוסיף אותו
+                    if(row[field] !== undefined) filteredRow[field] = row[field];
+                });
+                return filteredRow;
+            });
+        }
+        
+        // יצירת קובץ אקסל
+        const wb = xlsx.utils.book_new();
+        const ws = xlsx.utils.json_to_sheet(data);
+        xlsx.utils.book_append_sheet(wb, ws, "Tasks");
+        
+        const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buf);
+        
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Export error");
+    }
+});
+
+// --- 2. בדיקת ייבוא (Test Import) - לא שומר, רק בודק ---
+app.post('/tasks/import/test', authenticateToken, upload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "No file" });
+    
+    try {
+        const workbook = xlsx.readFile(req.file.path);
+        const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+        
+        const errors = [];
+        const preview = [];
+
+        rawData.forEach((row, index) => {
+            const rowErrors = [];
+            // בדיקות תקינות (אפשר להוסיף עוד)
+            if (!row.title) rowErrors.push("Missing Title");
+            
+            // זיהוי אם זה עדכון או יצירה
+            const type = row.id ? "Update" : "Create New";
+            
+            if (rowErrors.length > 0) {
+                errors.push({ row: index + 2, error: rowErrors.join(", ") });
+            }
+            
+            // שולחים 5 שורות ראשונות לתצוגה מקדימה
+            if (index < 5) preview.push({ ...row, _action: type });
+        });
+
+        // מחיקת הקובץ הזמני
+        fs.unlinkSync(req.file.path);
+
+        res.json({ 
+            isValid: errors.length === 0, 
+            totalRows: rawData.length,
+            errors,
+            preview
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: "Test failed" });
+    }
+});
+
+// --- 3. ביצוע ייבוא (Execute Import) - שומר באמת ---
+app.post('/tasks/import/execute', authenticateToken, upload.single('file'), async (req, res) => {
+     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    
+    try {
+        const workbook = xlsx.readFile(req.file.path);
+        const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+        
+        let updated = 0; let created = 0;
+
+        for (const row of rawData) {
+            if (row.id) {
+                // עדכון משימה קיימת
+                await pool.query(
+                    `UPDATE tasks SET title=$1, description=$2, urgency=$3, status=$4 WHERE id=$5`,
+                    [row.title, row.description, row.urgency, row.status, row.id]
+                );
+                updated++;
+            } else {
+                // יצירת משימה חדשה
+                await pool.query(
+                    `INSERT INTO tasks (title, description, urgency, due_date, status, worker_id) VALUES ($1, $2, $3, $4, 'PENDING', $5)`,
+                    [row.title, row.description || '', row.urgency || 'Normal', new Date(), req.user.id]
+                );
+                created++;
+            }
+        }
+        fs.unlinkSync(req.file.path);
+        res.json({ message: "Success", created, updated });
+    } catch (err) {
+        res.status(500).json({ error: "Import failed" });
+    }
 });
 
 app.listen(port, () => { console.log(`Server running on ${port}`); });

@@ -143,6 +143,22 @@ export const translations = {
     fill_all_fields: "Please fill all fields",
     no_assets: "No assets yet. Create categories first!",
 
+    // --- excel export and import ---
+    export_data: "Export Data",
+    import_data: "Import Data",
+    available_fields: "Available Fields",
+    fields_to_export: "Fields to Export",
+    upload_instruction: "Upload Excel file (.xlsx) to update or create tasks.",
+    test_import: "Test Import",
+    test_passed: "Everything looks good!",
+    test_failed: "Issues Found",
+    ready_to_import: "Ready to import.",
+    fix_errors: "Please fix the errors below.",
+    download_excel: "Download Excel",
+    execute_import: "Import Data",
+    select_fields_error: "Select at least one field",
+    confirm_import: "Are you sure? This will update the database.",
+
     // --- Profile Tab ---
     edit_profile_btn: "Edit Profile",
     password_security_note: "Old password hidden for security"
@@ -292,6 +308,22 @@ export const translations = {
     fill_all_fields: "אנא מלא את כל השדות",
     no_assets: "אין נכסים עדיין. צור קטגוריות קודם!",
 
+    // --- excel export and import ---
+    export_data: "ייצוא נתונים",
+    import_data: "ייבוא נתונים",
+    available_fields: "שדות זמינים",
+    fields_to_export: "שדות לייצוא",
+    upload_instruction: "העלה קובץ אקסל לעדכון או יצירת משימות.",
+    test_import: "בדיקת קובץ",
+    test_passed: "הקובץ תקין!",
+    test_failed: "נמצאו שגיאות",
+    ready_to_import: "מוכן לייבוא.",
+    fix_errors: "אנא תקן את השגיאות למטה.",
+    download_excel: "הורד אקסל",
+    execute_import: "בצע ייבוא",
+    select_fields_error: "יש לבחור לפחות שדה אחד",
+    confirm_import: "האם אתה בטוח? הפעולה תעדכן את מסד הנתונים.",
+
     // --- Profile Tab ---
     edit_profile_btn: "ערוך פרופיל",
     password_security_note: "הסיסמה הישנה מוסתרת מטעמי אבטחה"
@@ -440,6 +472,22 @@ export const translations = {
     error_creating_asset: "เกิดข้อผิดพลาดในการสร้างทรัพย์สิน",
     fill_all_fields: "กรุณากรอกข้อมูลให้ครบถ้วน",
     no_assets: "ยังไม่มีทรัพย์สิน สร้างหมวดหมู่ก่อน!",
+
+    // --- excel export and import ---
+    export_data: "ส่งออกข้อมูล",
+    import_data: "นำเข้าข้อมูล",
+    available_fields: "ฟิลด์ที่มีอยู่",
+    fields_to_export: "ฟิลด์ที่จะส่งออก",
+    upload_instruction: "อัปโหลดไฟล์ Excel เพื่ออัปเดตหรือสร้างงาน",
+    test_import: "ทดสอบการนำเข้า",
+    test_passed: "ทุกอย่างดูดี!",
+    test_failed: "พบปัญหา",
+    ready_to_import: "พร้อมนำเข้า",
+    fix_errors: "โปรดแก้ไขข้อผิดพลาดด้านล่าง",
+    download_excel: "ดาวน์โหลด Excel",
+    execute_import: "นำเข้าข้อมูล",
+    select_fields_error: "เลือกอย่างน้อยหนึ่งฟิลด์",
+    confirm_import: "คุณแน่ใจหรือไม่? นี่จะเป็นการอัปเดตฐานข้อมูล",
 
     // --- Profile Tab ---
     edit_profile_btn: "แก้ไขโปรไฟล์",

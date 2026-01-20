@@ -53,8 +53,22 @@ function App() {
       }));
   };
 
+  // --- הקוד החדש (רענון כל 30 שניות) ---
   useEffect(() => {
+    // 1. קריאה ראשונית מיד כשהמשתמש מתחבר
     if (user) fetchTasks();
+
+    // 2. הגדרת טיימר שרץ כל 30 שניות
+    const interval = setInterval(() => {
+      if (user) {
+          // אופציונלי: הודעה לקונסול כדי שתראי שזה עובד
+          // console.log("🔄 Auto-refreshing tasks..."); 
+          fetchTasks(); 
+      }
+    }, 30000); // 30,000 מילישניות = 30 שניות
+
+    // 3. ניקוי הטיימר ביציאה
+    return () => clearInterval(interval);
   }, [user]);
 
   // לוגיקה לכיוון הטקסט (RTL/LTR)
@@ -78,7 +92,7 @@ function App() {
       const token = localStorage.getItem('token');
       switch (activeTab) {
           case 1: 
-            return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} />;
+            return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
           case 2: 
             if (isEmployee) return null;
             return <TeamTab 
