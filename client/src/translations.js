@@ -170,6 +170,12 @@ export const translations = {
     general_task: "General Task",
     no_location: "No Location",
 
+    // --- update yearly option ---
+    yearly: "Yearly",
+    day_of_month: "Day of month",
+    month: "Month",
+    day: "Day",
+
     // --- Profile Tab ---
     edit_profile_btn: "Edit Profile",
     password_security_note: "Old password hidden for security"
@@ -346,6 +352,12 @@ export const translations = {
     general_task: "משימה כללית",
     no_location: "ללא מיקום",
 
+    // --- update yearly option ---
+    yearly: "שנתי",
+    day_of_month: "יום בחודש",
+    month: "חודש",
+    day: "יום",
+
     // --- Profile Tab ---
     edit_profile_btn: "ערוך פרופיל",
     password_security_note: "הסיסמה הישנה מוסתרת מטעמי אבטחה"
@@ -521,6 +533,12 @@ export const translations = {
     asset_name: "ชื่อทรัพย์สิน",
     general_task: "งานทั่วไป",
     no_location: "ไม่มีสถานที่",
+
+    // --- update yearly option ---
+    yearly: "รายปี",
+    day_of_month: "วันที่ของเดือน",
+    month: "เดือน",
+    day: "วัน",
 
     // --- Profile Tab ---
     edit_profile_btn: "แก้ไขโปรไฟล์",

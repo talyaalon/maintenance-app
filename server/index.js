@@ -341,9 +341,36 @@ app.get('/locations', authenticateToken, async (req, res) => {
 app.post('/locations', authenticateToken, async (req, res) => {
   try { const r = await pool.query('INSERT INTO locations (name, created_by) VALUES ($1, $2) RETURNING *', [req.body.name, req.user.id]); res.json(r.rows[0]); } catch (e) { res.status(500).send('Error'); }
 });
+// --- Edit Items (PUT) ---
+
+// עריכת מיקום
 app.put('/locations/:id', authenticateToken, async (req, res) => {
-    if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
-    try { const r = await pool.query('UPDATE locations SET name = $1 WHERE id = $2 RETURNING *', [req.body.name, req.params.id]); res.json(r.rows[0]); } catch (e) { res.status(500).send('Error'); }
+    try {
+        const { name } = req.body;
+        await pool.query('UPDATE locations SET name = $1 WHERE id = $2', [name, req.params.id]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).send("Error updating location"); }
+});
+
+// עריכת קטגוריה
+app.put('/categories/:id', authenticateToken, async (req, res) => {
+    try {
+        const { name } = req.body;
+        await pool.query('UPDATE categories SET name = $1 WHERE id = $2', [name, req.params.id]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).send("Error updating category"); }
+});
+
+// עריכת נכס
+app.put('/assets/:id', authenticateToken, async (req, res) => {
+    try {
+        const { name, code, category_id } = req.body;
+        await pool.query(
+            'UPDATE assets SET name=$1, code=$2, category_id=$3 WHERE id=$4',
+            [name, code, category_id, req.params.id]
+        );
+        res.json({ success: true });
+    } catch (e) { res.status(500).send("Error updating asset"); }
 });
 app.delete('/locations/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");

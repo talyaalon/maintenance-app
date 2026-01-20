@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, RefreshCw, Camera, FileText, Box, Tag } from 'lucide-react';
+import { X, User, RefreshCw, Camera, FileText, Box } from 'lucide-react';
 
 const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
-  // סטייט לכל הנתונים
+  // סטייט לכל הנתונים (הוספתי שדות לטיפול בשנתי/חודשי)
   const [formData, setFormData] = useState({
     title: '', 
     urgency: 'Normal', 
@@ -12,27 +12,31 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
     assigned_worker_id: currentUser?.role === 'EMPLOYEE' ? currentUser.id : '',
     description: '', 
     is_recurring: false, 
-    recurring_type: 'weekly', 
+    recurring_type: 'weekly', // weekly, monthly, yearly
     selected_days: [], 
-    recurring_date: 1
+    recurring_date: 1, // יום בחודש (1-31)
+    recurring_month: 0 // חודש בשנה (0-11) - חדש!
   });
 
   const [file, setFile] = useState(null); 
   const [locations, setLocations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
 
-  // נתונים חדשים לנכסים
+  // נתונים לנכסים
   const [categories, setCategories] = useState([]);
   const [assets, setAssets] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(''); 
 
-  // מערך ימי השבוע
-  const daysOfWeek = [
-      { id: 0, label: t.day_0 || 'Sun' }, { id: 1, label: t.day_1 || 'Mon' }, { id: 2, label: t.day_2 || 'Tue' }, 
-      { id: 3, label: t.day_3 || 'Wed' }, { id: 4, label: t.day_4 || 'Thu' }, { id: 5, label: t.day_5 || 'Fri' }, { id: 6, label: t.day_6 || 'Sat' }
+  // שמות ימים קצרים קבועים (כדי שהעיגולים יראו טוב)
+  const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
+  // שמות חודשים
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June', 
+    'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  // טעינת נתונים
+  // טעינת נתונים (מהקוד המקורי שלך)
   useEffect(() => {
     const headers = { 'Authorization': `Bearer ${token}` };
 
@@ -62,20 +66,22 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
     }
   }, [token, currentUser]);
 
-  // סינון נכסים לפי קטגוריה שנבחרה
+  // סינון נכסים לפי קטגוריה
   const filteredAssets = selectedCategory 
       ? assets.filter(a => a.category_id === parseInt(selectedCategory))
       : [];
 
-  const toggleDay = (dayId) => {
+  // בחירת ימים בשבוע
+  const toggleDay = (dayIndex) => {
     setFormData(prev => ({ 
         ...prev, 
-        selected_days: prev.selected_days.includes(dayId) 
-            ? prev.selected_days.filter(d => d !== dayId) 
-            : [...prev.selected_days, dayId] 
+        selected_days: prev.selected_days.includes(dayIndex) 
+            ? prev.selected_days.filter(d => d !== dayIndex) 
+            : [...prev.selected_days, dayIndex] 
     }));
   };
 
+  // שליחת הטופס
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -111,9 +117,10 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-xl p-6 w-full max-w-lg h-auto max-h-[90vh] overflow-y-auto shadow-2xl">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50 overflow-y-auto backdrop-blur-sm">
+      <div className="bg-white rounded-xl p-6 w-full max-w-lg h-auto max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-in">
         
+        {/* כותרת */}
         <div className="flex justify-between items-center mb-6 border-b pb-4">
             <h2 className="text-2xl font-bold text-[#6A0DAD]">{t.create_new_task || "Create New Task"}</h2>
             <button onClick={onCancel} className="p-2 hover:bg-gray-100 rounded-full transition"><X /></button>
@@ -121,7 +128,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
 
         <form onSubmit={handleSubmit} className="space-y-5">
             
-            {/* --- חלק 1: בחירת נכס --- */}
+            {/* --- חלק 1: בחירת נכס (מקורי שלך) --- */}
             <div className="bg-purple-50 p-3 rounded-lg border border-purple-100 space-y-3">
                 <h3 className="font-bold text-purple-900 text-sm flex items-center gap-2">
                     <Box size={16}/> {t.select_asset_title || "Select Asset (Optional)"}
@@ -149,7 +156,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                     >
                         <option value="">
                              {selectedCategory 
-                                ? (filteredAssets.length ? `-- ${t.select_asset || "Select Asset"} --` : (t.no_assets_in_category || "No assets in category")) 
+                                ? (filteredAssets.length ? `-- ${t.select_asset || "Select Asset"} --` : (t.no_assets_in_category || "No assets")) 
                                 : `-- ${t.select_category_first || "Select category first"} --`}
                         </option>
                         {filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
@@ -183,7 +190,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                 />
             </div>
 
-            {/* בחירת עובד (למנהלים בלבד) */}
+            {/* בחירת עובד */}
             {currentUser?.role !== 'EMPLOYEE' && (
                 <div>
                     <label className="block text-sm font-bold mb-1 flex items-center gap-1 text-gray-700"><User size={14}/> {t.assign_to_label || "Assign To"}</label>
@@ -191,9 +198,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                         value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
                         <option value={currentUser.id}>{t.assign_self || "Assign to myself"}</option>
                         {teamMembers.map(u => (
-                            <option key={u.id} value={u.id}>
-                                {u.full_name}
-                            </option>
+                            <option key={u.id} value={u.id}>{u.full_name}</option>
                         ))}
                     </select>
                 </div>
@@ -215,7 +220,6 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                         value={formData.urgency} onChange={e => setFormData({...formData, urgency: e.target.value})}>
                         <option value="Normal">{t.normal_label}</option>
                         <option value="High">{t.urgent_label}</option>
-                        {/* הוספתי Low אם תרצי בעתיד */}
                     </select>
                 </div>
             </div>
@@ -228,7 +232,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                 />
             </div>
 
-            {/* --- חלק 3: מחזוריות --- */}
+            {/* --- חלק 3: מחזוריות (החלק החדש והמשודרג!) --- */}
             <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 transition-all">
                 <div className="flex items-center gap-2 mb-3">
                     <input type="checkbox" id="recurring" className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
@@ -240,34 +244,70 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                 </div>
 
                 {formData.is_recurring && (
-                    <div className="space-y-4 animate-fade-in pl-7">
-                        <select className="w-full p-2 border rounded-lg bg-white text-sm" 
+                    <div className="space-y-4 animate-fade-in pl-1">
+                        {/* בחירת סוג מחזוריות */}
+                        <select className="w-full p-2 border rounded-lg bg-white text-sm font-medium" 
                             value={formData.recurring_type} onChange={e => setFormData({...formData, recurring_type: e.target.value})}>
                             <option value="weekly">{t.recurring_weekly || "Weekly"}</option>
                             <option value="monthly">{t.recurring_monthly || "Monthly"}</option>
+                            <option value="yearly">{t.yearly || "Yearly"}</option> {/* חדש! */}
                         </select>
 
-                        {formData.recurring_type === 'weekly' ? (
-                            <div className="flex justify-between gap-2">
-                                {daysOfWeek.map(day => (
-                                    <button type="button" key={day.id} 
-                                        onClick={() => toggleDay(day.id)} 
-                                        className={`w-9 h-9 rounded-full text-xs font-bold transition-all shadow-sm ${
-                                            formData.selected_days.includes(day.id) 
+                        {/* --- שבועי (Weekly) --- */}
+                        {formData.recurring_type === 'weekly' && (
+                            <div className="flex justify-between gap-1">
+                                {daysShort.map((day, index) => (
+                                    <button type="button" key={day} 
+                                        onClick={() => toggleDay(index)} 
+                                        className={`w-9 h-9 rounded-full text-xs font-bold transition-all shadow-sm flex items-center justify-center ${
+                                            formData.selected_days.includes(index) 
                                             ? 'bg-purple-600 text-white scale-110 ring-2 ring-purple-300' 
                                             : 'bg-white border text-gray-500 hover:bg-gray-50'
                                         }`}
                                     >
-                                        {day.label}
+                                        {day}
                                     </button>
                                 ))}
                             </div>
-                        ) : (
-                            <div className="flex items-center gap-2 text-sm text-gray-700 bg-white p-2 rounded border w-fit">
-                                <span className="text-gray-500">{t.day_of_month || "Day"}:</span>
-                                <input type="number" min="1" max="31" className="w-12 p-1 border rounded text-center font-bold" 
-                                    value={formData.recurring_date} onChange={e => setFormData({...formData, recurring_date: e.target.value})} 
-                                />
+                        )}
+
+                        {/* --- חודשי (Monthly) --- */}
+                        {formData.recurring_type === 'monthly' && (
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 mb-1 block">{t.day_of_month || "Day of month"}:</label>
+                                <select className="w-full p-2 border rounded-lg bg-white text-sm"
+                                    value={formData.recurring_date} onChange={e => setFormData({...formData, recurring_date: parseInt(e.target.value)})}
+                                >
+                                    {[...Array(31)].map((_, i) => (
+                                        <option key={i+1} value={i+1}>{i+1}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {/* --- שנתי (Yearly) - חדש! --- */}
+                        {formData.recurring_type === 'yearly' && (
+                             <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-600 mb-1 block">{t.month || "Month"}:</label>
+                                    <select className="w-full p-2 border rounded-lg bg-white text-sm"
+                                        value={formData.recurring_month} onChange={e => setFormData({...formData, recurring_month: parseInt(e.target.value)})}
+                                    >
+                                        {months.map((m, i) => (
+                                            <option key={i} value={i}>{m}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-gray-600 mb-1 block">{t.day || "Day"}:</label>
+                                    <select className="w-full p-2 border rounded-lg bg-white text-sm"
+                                        value={formData.recurring_date} onChange={e => setFormData({...formData, recurring_date: parseInt(e.target.value)})}
+                                    >
+                                        {[...Array(31)].map((_, i) => (
+                                            <option key={i+1} value={i+1}>{i+1}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         )}
                     </div>
