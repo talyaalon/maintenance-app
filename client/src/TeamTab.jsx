@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Edit2, ChevronDown, ChevronUp, User, X, Clock, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Trash2, Edit2, ChevronDown, ChevronUp, User, X } from 'lucide-react';
+import TasksTab from './TasksTab'; // <--- זה הייבוא הקריטי שחוסך לנו 100 שורות קוד
 
-const TeamTab = ({ token, t, user, onRefresh }) => {
+const TeamTab = ({ token, t, user, onRefresh, lang }) => {
+    // --- 1. State for Team Management ---
     const [team, setTeam] = useState([]);
     const [expandedManager, setExpandedManager] = useState(null);
     
-    // סטייטים לצפייה במשימות עובד
-    const [selectedMember, setSelectedMember] = useState(null); // העובד שנבחר
-    const [memberTasks, setMemberTasks] = useState([]); // המשימות של העובד שנבחר
-    const [activeTaskTab, setActiveTaskTab] = useState('todo'); // todo, waiting, history
-    const [isLoadingTasks, setIsLoadingTasks] = useState(false);
-
-    // סטייטים לעריכה ומחיקה (הקיימים)
+    // --- 2. State for Editing User ---
     const [editMember, setEditMember] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '' });
 
+    // --- 3. State for Viewing Employee Tasks (The new feature!) ---
+    const [selectedMember, setSelectedMember] = useState(null); 
+    const [memberTasks, setMemberTasks] = useState([]); 
+    const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+
+    // --- Fetch Team Data ---
     useEffect(() => {
         fetchTeam();
     }, []);
@@ -30,18 +31,17 @@ const TeamTab = ({ token, t, user, onRefresh }) => {
         } catch (e) { console.error(e); }
     };
 
-    // --- פונקציה חדשה: לחיצה על עובד וטעינת משימותיו ---
+    // --- Handle Member Click (Open Simulation Mode) ---
     const handleMemberClick = async (member) => {
         setSelectedMember(member);
         setIsLoadingTasks(true);
-        setActiveTaskTab('todo'); // ברירת מחדל
         try {
+            // שולפים את כל המשימות של העובד
             const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/user/${member.id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
-                const tasks = await res.json();
-                setMemberTasks(tasks);
+                setMemberTasks(await res.json());
             }
         } catch (e) {
             console.error("Error fetching tasks", e);
@@ -51,11 +51,7 @@ const TeamTab = ({ token, t, user, onRefresh }) => {
         }
     };
 
-    // סינון משימות לטאבים
-    const todoTasks = memberTasks.filter(t => t.status === 'PENDING' || t.status === 'IN_PROGRESS');
-    const waitingTasks = memberTasks.filter(t => t.status === 'WAITING_APPROVAL');
-    const historyTasks = memberTasks.filter(t => t.status === 'COMPLETED');
-
+    // --- Team Management Functions ---
     const toggleManager = (managerId) => {
         setExpandedManager(expandedManager === managerId ? null : managerId);
     };
@@ -68,11 +64,10 @@ const TeamTab = ({ token, t, user, onRefresh }) => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) fetchTeam();
-            else alert("Error deleting");
+            else alert("Error deleting user");
         } catch (e) { alert("Server error"); }
     };
 
-    // --- Edit Functions ---
     const openEditModal = (member) => {
         setEditMember(member);
         setEditForm({ full_name: member.full_name, email: member.email, phone: member.phone || '' });
@@ -97,16 +92,16 @@ const TeamTab = ({ token, t, user, onRefresh }) => {
         } catch (e) { alert("Server error"); }
     };
 
+    // --- Render Member Row Component ---
     const renderMemberRow = (member, isSub = false) => (
         <div key={member.id} className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center ${isSub ? 'ml-6 border-l-4 border-l-purple-200' : 'mb-3'}`}>
             <div className="flex items-center gap-3">
-                {/* אייקון עובד */}
                 <div className={`p-2 rounded-full ${member.role === 'MANAGER' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
                     <User size={20} />
                 </div>
                 
                 <div className="flex flex-col">
-                    {/* --- השינוי כאן: השם הוא כפתור --- */}
+                    {/* השם הוא כפתור לחיץ */}
                     <span 
                         onClick={() => handleMemberClick(member)}
                         className="font-bold text-gray-800 cursor-pointer hover:text-purple-600 hover:underline transition-colors text-lg"
@@ -120,14 +115,11 @@ const TeamTab = ({ token, t, user, onRefresh }) => {
             </div>
 
             <div className="flex items-center gap-2">
-                {/* תגית תפקיד */}
-                {member.role === 'MANAGER' && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-bold">מנהל</span>}
+                {member.role === 'MANAGER' && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-bold">Manager</span>}
                 
-                {/* כפתורי פעולה */}
                 <button onClick={() => openEditModal(member)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition"><Edit2 size={16}/></button>
                 <button onClick={() => handleDelete(member.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash2 size={16}/></button>
                 
-                {/* חץ למנהלים */}
                 {member.role === 'MANAGER' && (
                     <button onClick={() => toggleManager(member.id)} className="p-1 text-gray-400">
                         {expandedManager === member.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
@@ -142,15 +134,16 @@ const TeamTab = ({ token, t, user, onRefresh }) => {
 
     return (
         <div className="p-4 pb-24 min-h-screen bg-gray-50">
+            {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-black">{t.my_team_title || "My Team"}</h2>
-                <button className="bg-[#6A0DAD] text-white px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2" onClick={() => alert("Please use the 'Add User' page to add new members")}>
+                <button className="bg-[#6A0DAD] text-white px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2" onClick={() => alert("Please use the 'Add User' page")}>
                    <User size={18}/> {t.add_team_member || "Add User"}
                 </button>
             </div>
 
+            {/* Team List */}
             <div className="space-y-4 max-w-3xl mx-auto">
-                {/* רשימת המנהלים שתחתיי */}
                 {managers.map(manager => {
                     const subEmployees = team.filter(u => u.parent_manager_id === manager.id);
                     return (
@@ -158,7 +151,7 @@ const TeamTab = ({ token, t, user, onRefresh }) => {
                             {renderMemberRow(manager)}
                             {expandedManager === manager.id && (
                                 <div className="space-y-2 animate-fade-in">
-                                    {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">No employees under this manager</p>}
+                                    {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">No employees</p>}
                                     {subEmployees.map(sub => renderMemberRow(sub, true))}
                                 </div>
                             )}
@@ -166,7 +159,6 @@ const TeamTab = ({ token, t, user, onRefresh }) => {
                     );
                 })}
 
-                {/* רשימת עובדים ישירים */}
                 {managers.length === 0 && directEmployees.length > 0 && (
                     <>
                         <h3 className="text-sm font-bold text-gray-500 mt-6 mb-2">{t.direct_employees || "Direct Employees"}</h3>
@@ -175,58 +167,36 @@ const TeamTab = ({ token, t, user, onRefresh }) => {
                 )}
             </div>
 
-            {/* --- User Tasks Modal (החלון החדש!) --- */}
+            {/* --- Full Simulation Modal (החלק החדש שחוסך שורות) --- */}
             {selectedMember && (
-                <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-50 backdrop-blur-sm">
-                    <div className="bg-white w-full sm:w-[90%] max-w-2xl h-[85vh] rounded-t-2xl sm:rounded-2xl flex flex-col shadow-2xl animate-slide-up overflow-hidden">
+                <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 backdrop-blur-sm p-4">
+                    <div className="bg-white w-full h-full max-w-6xl max-h-[95vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-scale-in">
                         
                         {/* Header */}
-                        <div className="p-5 border-b flex justify-between items-center bg-gray-50">
+                        <div className="bg-[#6A0DAD] text-white p-4 flex justify-between items-center shadow-md z-10 shrink-0">
                             <div>
-                                <h3 className="text-xl font-bold text-gray-800">{selectedMember.full_name}</h3>
-                                <p className="text-xs text-gray-500">Tasks Overview</p>
+                                <h3 className="text-lg font-bold flex items-center gap-2">
+                                    <User size={20}/> {t.viewing_as || "Viewing as"}: {selectedMember.full_name}
+                                </h3>
+                                <p className="text-xs text-purple-200 opacity-80">Full Access View</p>
                             </div>
-                            <button onClick={() => setSelectedMember(null)} className="p-2 bg-white rounded-full hover:bg-gray-200 transition"><X size={20}/></button>
+                            <button onClick={() => setSelectedMember(null)} className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition"><X size={20}/></button>
                         </div>
 
-                        {/* Tabs */}
-                        <div className="flex p-2 gap-2 bg-white border-b">
-                            <button onClick={() => setActiveTaskTab('todo')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${activeTaskTab === 'todo' ? 'bg-purple-100 text-purple-700' : 'text-gray-500 hover:bg-gray-50'}`}>
-                                To Do ({todoTasks.length})
-                            </button>
-                            <button onClick={() => setActiveTaskTab('waiting')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${activeTaskTab === 'waiting' ? 'bg-orange-100 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}>
-                                Waiting ({waitingTasks.length})
-                            </button>
-                            <button onClick={() => setActiveTaskTab('history')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${activeTaskTab === 'history' ? 'bg-green-100 text-green-700' : 'text-gray-500 hover:bg-gray-50'}`}>
-                                Completed ({historyTasks.length})
-                            </button>
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+                        {/* Content: We render the FULL TasksTab component here! */}
+                        <div className="flex-1 overflow-y-auto bg-gray-50 relative">
                             {isLoadingTasks ? (
-                                <div className="text-center py-10 text-gray-500">Loading tasks...</div>
+                                <div className="flex justify-center items-center h-full text-purple-600 font-bold">Loading Employee View...</div>
                             ) : (
-                                <div className="space-y-3">
-                                    {activeTaskTab === 'todo' && todoTasks.length === 0 && <p className="text-center text-gray-400 mt-10">No pending tasks.</p>}
-                                    {activeTaskTab === 'waiting' && waitingTasks.length === 0 && <p className="text-center text-gray-400 mt-10">No tasks waiting for approval.</p>}
-                                    {activeTaskTab === 'history' && historyTasks.length === 0 && <p className="text-center text-gray-400 mt-10">No completed tasks yet.</p>}
-
-                                    {/* Task List */}
-                                    {(activeTaskTab === 'todo' ? todoTasks : activeTaskTab === 'waiting' ? waitingTasks : historyTasks).map(task => (
-                                        <div key={task.id} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h4 className="font-bold text-gray-800">{task.title}</h4>
-                                                <span className={`text-[10px] px-2 py-1 rounded font-bold ${task.urgency === 'High' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                                    {task.urgency}
-                                                </span>
-                                            </div>
-                                            <div className="text-xs text-gray-500 space-y-1">
-                                                <div className="flex items-center gap-1"><Clock size={12}/> Due: {format(parseISO(task.due_date), 'dd/MM/yyyy')}</div>
-                                                <div>📍 {task.location_name || 'No Location'}</div>
-                                            </div>
-                                        </div>
-                                    ))}
+                                <div className="pointer-events-auto h-full"> 
+                                    <TasksTab 
+                                        tasks={memberTasks} 
+                                        t={t} 
+                                        token={token}
+                                        user={selectedMember} // We trick the component to think this is the logged-in user
+                                        onRefresh={() => handleMemberClick(selectedMember)} 
+                                        lang={lang}
+                                    />
                                 </div>
                             )}
                         </div>
@@ -234,24 +204,15 @@ const TeamTab = ({ token, t, user, onRefresh }) => {
                 </div>
             )}
 
-            {/* --- Edit Modal (Existing) --- */}
+            {/* --- Edit User Modal (נשאר ללא שינוי) --- */}
             {showEditModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
                     <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
                         <h3 className="text-lg font-bold mb-4">Edit User</h3>
                         <form onSubmit={handleEditSubmit} className="space-y-3">
-                            <div>
-                                <label className="text-sm font-bold text-gray-700">Name</label>
-                                <input className="w-full p-2 border rounded" value={editForm.full_name} onChange={e => setEditForm({...editForm, full_name: e.target.value})} required/>
-                            </div>
-                            <div>
-                                <label className="text-sm font-bold text-gray-700">Email</label>
-                                <input className="w-full p-2 border rounded" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} required/>
-                            </div>
-                            <div>
-                                <label className="text-sm font-bold text-gray-700">Phone</label>
-                                <input className="w-full p-2 border rounded" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} />
-                            </div>
+                            <div><label className="text-sm font-bold text-gray-700">Name</label><input className="w-full p-2 border rounded" value={editForm.full_name} onChange={e => setEditForm({...editForm, full_name: e.target.value})} required/></div>
+                            <div><label className="text-sm font-bold text-gray-700">Email</label><input className="w-full p-2 border rounded" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} required/></div>
+                            <div><label className="text-sm font-bold text-gray-700">Phone</label><input className="w-full p-2 border rounded" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} /></div>
                             <div className="flex gap-2 mt-4">
                                 <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 py-2 border rounded">Cancel</button>
                                 <button type="submit" className="flex-1 py-2 bg-purple-600 text-white rounded font-bold">Save</button>
