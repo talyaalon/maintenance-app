@@ -141,7 +141,7 @@ const authenticateToken = (req, res, next) => {
 
 // --- מסלולים (Routes) ---
 
-// Login - (מעודכן: מחזיר גם טלפון)
+// Login
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -150,16 +150,15 @@ app.post('/login', async (req, res) => {
     const user = result.rows[0];
     if (password !== user.password) return res.status(400).json({ error: "סיסמה שגויה" });
     const token = jwt.sign({ id: user.id, role: user.role, name: user.full_name }, SECRET_KEY, { expiresIn: '24h' });
-    // הוספתי את ה-phone לאובייקט שחוזר
     res.json({ token, user: { id: user.id, name: user.full_name, role: user.role, email: user.email, phone: user.phone, profile_picture_url: user.profile_picture_url } });
   } catch (err) { res.status(500).json({ error: "שגיאת שרת" }); }
 });
 
-// עדכון פרופיל (מעודכן: מקבל ומעדכן טלפון)
+// עדכון פרופיל
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
         const userId = req.user.id;
-        const { full_name, email, password, phone } = req.body; // הוספתי phone
+        const { full_name, email, password, phone } = req.body; // כולל טלפון
         let profilePictureUrl = req.body.existing_picture; 
         if (req.file) profilePictureUrl = `https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}`;
         
@@ -172,7 +171,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         if (full_name !== oldUser.full_name) changes.push(`שמך שונה ל: <strong>${full_name}</strong>`);
         if (email !== oldUser.email) changes.push(`כתובת האימייל שונתה ל: <strong>${email}</strong>`);
         if (password && password.trim() !== '') changes.push('הסיסמה שלך שונתה');
-        if (phone && phone !== oldUser.phone) changes.push('מספר הטלפון עודכן'); // לוג לשינוי טלפון
+        if (phone && phone !== oldUser.phone) changes.push('מספר הטלפון עודכן');
         if (req.file) changes.push('תמונת הפרופיל הוחלפה');
 
         if (password && password.trim() !== '') {
@@ -193,7 +192,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
     } catch (err) { res.status(500).send("Update failed"); }
 });
 
-// ניהול משתמשים (מעודכן: שולף גם טלפון)
+// ניהול משתמשים
 app.get('/users', authenticateToken, async (req, res) => {
     try {
         let query = `
@@ -215,9 +214,9 @@ app.get('/users', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Server Error'); }
 });
 
-// יצירת משתמש (מעודכן: שומר טלפון)
+// יצירת משתמש
 app.post('/users', authenticateToken, async (req, res) => {
-  const { full_name, email, password, role, parent_manager_id, phone } = req.body; // הוספתי phone
+  const { full_name, email, password, role, parent_manager_id, phone } = req.body;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "אימייל לא תקין" });
   if (req.user.role === 'EMPLOYEE') return res.status(403).json({ error: "אין הרשאה" });
 
@@ -240,11 +239,11 @@ app.post('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// עריכת משתמש (מעודכן: מעדכן טלפון)
+// עריכת משתמש
 app.put('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     const { id } = req.params;
-    const { full_name, email, password, parent_manager_id, phone } = req.body; // הוספתי phone
+    const { full_name, email, password, parent_manager_id, phone } = req.body; 
     
     try {
         const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
@@ -323,7 +322,7 @@ app.get('/managers', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).send('Server Error'); }
 });
 
-// --- LOCATIONS / CATEGORIES / ASSETS (מעודכן: בדיקות כפילות) ---
+// --- LOCATIONS / CATEGORIES / ASSETS ---
 
 app.get('/locations', authenticateToken, async (req, res) => {
   try {
@@ -335,7 +334,6 @@ app.get('/locations', authenticateToken, async (req, res) => {
 app.post('/locations', authenticateToken, async (req, res) => {
   try { 
       const { name } = req.body;
-      // בדיקת כפילות שם מיקום
       const check = await pool.query('SELECT id FROM locations WHERE name = $1', [name]);
       if (check.rows.length > 0) return res.status(400).json({ error: "Location name already exists" });
 
@@ -351,7 +349,6 @@ app.get('/categories', authenticateToken, async (req, res) => {
 app.post('/categories', authenticateToken, async (req, res) => {
     try { 
         const { name } = req.body;
-        // בדיקת כפילות שם קטגוריה
         const check = await pool.query('SELECT id FROM categories WHERE name = $1', [name]);
         if (check.rows.length > 0) return res.status(400).json({ error: "Category name already exists" });
 
@@ -367,7 +364,6 @@ app.get('/assets', authenticateToken, async (req, res) => {
 app.post('/assets', authenticateToken, async (req, res) => {
     try {
         const { name, code, category_id } = req.body;
-        // בדיקת כפילות קוד נכס
         const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
         if (check.rows.length > 0) return res.status(400).json({ error: "Asset code already exists" });
         
@@ -455,7 +451,10 @@ app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, r
     
     const worker_id = assigned_worker_id || req.user.id;
     const isRecurring = is_recurring === 'true';
-    const selDays = selected_days ? JSON.parse(selected_days) : [];
+    
+    // --- התיקון הקריטי למשימות מחזוריות (ParseInt) ---
+    // המרת ימים למספרים (כי באקסל/HTML זה מגיע כמחרוזת)
+    const selDays = selected_days ? JSON.parse(selected_days).map(d => parseInt(d)) : []; 
 
     if (!isRecurring) {
         await pool.query(
@@ -476,6 +475,7 @@ app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, r
     while (currentDate <= oneYearFromNow) {
         let shouldInsert = false;
         if (recurring_type === 'weekly') {
+            // התיקון: בדיקה מול מערך מספרים
             if (selDays.includes(currentDate.getDay())) shouldInsert = true;
         } else if (recurring_type === 'monthly') {
             if (currentDate.getDate() === parseInt(recurring_date)) shouldInsert = true;
@@ -605,7 +605,9 @@ app.post('/tasks/import-data', authenticateToken, async (req, res) => {
         let created = 0, updated = 0;
 
         for (const row of tasks) {
-            let worker_id = null;
+            // התיקון: תמיכה בייבוא לעובד ספציפי (אם נשלח ב-URL)
+            let worker_id = req.query.target_worker_id || null;
+
             if (row['Worker Name']) {
                 const userRes = await client.query('SELECT id FROM users WHERE full_name = $1', [row['Worker Name']]);
                 if (userRes.rows.length === 0) {
@@ -676,7 +678,7 @@ app.post('/tasks/import-data', authenticateToken, async (req, res) => {
     }
 });
 
-// --- 5. Get Tasks for Specific User (Manager View - התיקון הגדול!) ---
+// --- 5. Get Tasks for Specific User (Manager View) ---
 app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
     try {
         const { userId } = req.params;

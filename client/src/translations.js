@@ -207,6 +207,23 @@ export const translations = {
     category_placeholder: "New Category Name",
     location_placeholder: "New Location Name",
 
+    // ...
+    optional: "Optional",
+    phone: "Phone",
+    logout: "Logout",
+    view_daily: "Daily",
+    view_weekly: "Weekly",
+    view_monthly: "Monthly",
+    view_yearly: "Yearly",
+    view_waiting: "Waiting",
+    view_history: "History",
+    task_singular: "Task",
+    tasks_plural: "Tasks",
+    urgent: "Urgent",
+    normal: "Normal",
+    nav_locations: "Locations",
+    // ...
+
     // --- Profile Tab ---
     edit_profile_btn: "Edit Profile",
     password_security_note: "Old password hidden for security"
@@ -420,6 +437,23 @@ export const translations = {
     category_placeholder: "שם קטגוריה חדשה",
     location_placeholder: "שם מיקום חדש",
 
+    // ...
+    optional: "אופציונלי",
+    phone: "טלפון",
+    logout: "התנתק",
+    view_daily: "יומי",
+    view_weekly: "שבועי",
+    view_monthly: "חודשי",
+    view_yearly: "שנתי",
+    view_waiting: "ממתין לאישור",
+    view_history: "היסטוריה",
+    task_singular: "משימה",
+    tasks_plural: "משימות",
+    urgent: "דחוף",
+    normal: "רגיל",
+    nav_locations: "מיקומים", // התיקון שביקשת
+    // ...
+
     // --- Profile Tab ---
     edit_profile_btn: "ערוך פרופיל",
     password_security_note: "הסיסמה הישנה מוסתרת מטעמי אבטחה"
@@ -632,6 +666,61 @@ export const translations = {
     asset_code_placeholder: "รหัสภายใน",
     category_placeholder: "ชื่อหมวดหมู่ใหม่",
     location_placeholder: "ชื่อสถานที่ใหม่",
+
+    // --- New Additions (Thai) ---
+    optional: "ไม่บังคับ",  // Optional
+    phone: "โทรศัพท์", // Phone
+    phone_label: "เบอร์โทรศัพท์", // Phone Number label
+    logout: "ออกจากระบบ", // Logout
+    
+    // Views
+    view_daily: "รายวัน", // Daily
+    view_weekly: "รายสัปดาห์", // Weekly
+    view_monthly: "รายเดือน", // Monthly
+    view_yearly: "รายปี", // Yearly
+    view_waiting: "รออนุมัติ", // Waiting
+    view_history: "ประวัติ", // History
+    
+    // Task details
+    task_singular: "งาน", // Task
+    tasks_plural: "งาน", // Tasks
+    urgent: "ด่วน", // Urgent
+    normal: "ปกติ", // Normal
+    nav_locations: "สถานที่", // Locations
+    
+    // Profile & General
+    edit_profile_btn: "แก้ไขโปรไฟล์", // Edit Profile
+    password_placeholder_edit: "รหัสผ่านใหม่ (ไม่บังคับ)", // New Password
+    password_security_note: "รหัสผ่านเก่าถูกซ่อนเพื่อความปลอดภัย", // Old password hidden
+    
+    // Alerts & Errors
+    error_code_exists: "⚠️ ข้อผิดพลาด: รหัสทรัพย์สินนี้มีอยู่แล้ว!",
+    error_category_exists: "⚠️ ข้อผิดพลาด: ชื่อหมวดหมู่นี้มีอยู่แล้ว",
+    error_location_exists: "⚠️ ข้อผิดพลาด: ชื่อสถานที่นี้มีอยู่แล้ว",
+    fill_all_fields: "กรุณากรอกข้อมูลให้ครบถ้วน",
+    alert_update_success: "อัปเดตโปรไฟล์เรียบร้อยแล้ว!",
+    alert_update_error: "ข้อผิดพลาดในการอัปเดตโปรไฟล์",
+    confirm_delete_user: "คุณแน่ใจหรือไม่ว่าต้องการลบผู้ใช้นี้?",
+    
+    // Config Forms
+    save_asset_btn: "บันทึกทรัพย์สิน",
+    asset_name_placeholder: "ชื่อทรัพย์สิน",
+    asset_code_placeholder: "รหัสภายใน",
+    category_placeholder: "ชื่อหมวดหมู่ใหม่",
+    location_placeholder: "ชื่อสถานที่ใหม่",
+    
+    // Task Actions
+    complete_task_btn: "แจ้งงานเสร็จ",
+    followup_task_btn: "สร้างงานต่อเนื่อง",
+    approve_close_btn: "อนุมัติและปิดงาน",
+    report_execution: "รายงานผลการปฏิบัติงาน",
+    what_was_done: "ทำอะไรไปบ้าง...",
+    upload_proof: "อัปโหลดหลักฐาน",
+    send_for_approval: "ส่งขออนุมัติ",
+    new_date: "วันที่กำหนดใหม่",
+    alert_sent: "ส่งสำเร็จ!",
+    manager_notes: "บันทึกจากผู้จัดการ",
+    worker_report: "รายงานจากพนักงาน",
 
     // --- Profile Tab ---
     edit_profile_btn: "แก้ไขโปรไฟล์",

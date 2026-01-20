@@ -170,6 +170,7 @@ const ConfigurationTab = ({ token, t }) => {
       <div className="flex gap-2 mb-6 bg-white p-1 rounded-lg shadow-sm border overflow-x-auto">
         <button onClick={() => setActiveSubTab('assets')} className={`flex-1 py-2 px-3 rounded-md font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap ${activeSubTab === 'assets' ? 'bg-[#6A0DAD] text-white shadow' : 'text-gray-500'}`}><Box size={16}/> {t.assets_tab}</button>
         <button onClick={() => setActiveSubTab('categories')} className={`flex-1 py-2 px-3 rounded-md font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap ${activeSubTab === 'categories' ? 'bg-[#6A0DAD] text-white shadow' : 'text-gray-500'}`}><Tag size={16}/> {t.categories_tab}</button>
+        {/* התיקון: שימוש ב-t.nav_locations */}
         <button onClick={() => setActiveSubTab('locations')} className={`flex-1 py-2 px-3 rounded-md font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap ${activeSubTab === 'locations' ? 'bg-[#6A0DAD] text-white shadow' : 'text-gray-500'}`}><MapPin size={16}/> {t.nav_locations || "Locations"}</button>
       </div>
 
