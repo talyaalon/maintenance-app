@@ -6,7 +6,7 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
     
     // --- Export State ---
     const allFields = [
-        { id: 'id', label: 'ID (חובה לעדכון / For Update)' },
+        { id: 'id', label: 'ID (Database ID)' },
         { id: 'title', label: t.task_title_label || 'Title' },
         { id: 'description', label: t.description_label || 'Description' },
         { id: 'urgency', label: t.urgency_label || 'Urgency' },
@@ -16,9 +16,9 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
         { id: 'location_name', label: t.location || 'Location' }
     ];
     
-    // מצב התחלתי: הכל זמין, כלום לא נבחר
     const [availableFields, setAvailableFields] = useState(allFields);
     const [selectedFields, setSelectedFields] = useState([]);
+    const [isUpdateMode, setIsUpdateMode] = useState(false); // הסטייט החדש לתיבת הסימון
 
     // --- Import State ---
     const [importFile, setImportFile] = useState(null);
@@ -34,6 +34,20 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
     const moveToAvailable = (field) => {
         setAvailableFields([...availableFields, field]);
         setSelectedFields(selectedFields.filter(f => f.id !== field.id));
+    };
+
+    // הלוגיקה החדשה של ה-Checkbox
+    const handleUpdateModeChange = (e) => {
+        const checked = e.target.checked;
+        setIsUpdateMode(checked);
+        
+        if (checked) {
+            // אם סימנו V, אנחנו מחפשים את שדה ה-ID ברשימה השמאלית ומעבירים לימנית
+            const idField = availableFields.find(f => f.id === 'id');
+            if (idField) {
+                moveToSelected(idField);
+            }
+        }
     };
 
     const handleExport = async () => {
@@ -54,7 +68,7 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
         } catch (e) { alert("Export Error"); }
     };
 
-    // --- לוגיקה לייבוא ---
+    // --- לוגיקה לייבוא (ללא שינוי) ---
     const handleTest = async () => {
         if (!importFile) return;
         setIsTesting(true);
@@ -72,7 +86,7 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
     };
 
     const handleExecuteImport = async () => {
-        if (!window.confirm(t.confirm_import || "Are you sure? This will update database.")) return;
+        if (!window.confirm(t.confirm_import || "Are you sure?")) return;
         const formData = new FormData();
         formData.append('file', importFile);
         
@@ -92,7 +106,7 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
             <div className="bg-white rounded-xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-fade-in">
                 
-                {/* כותרת עליונה */}
+                {/* Header */}
                 <div className="p-4 border-b flex justify-between items-center bg-gray-50">
                     <div className="flex gap-4">
                         <button onClick={() => setMode('export')} className={`pb-2 font-bold transition-all ${mode === 'export' ? 'text-[#6A0DAD] border-b-2 border-[#6A0DAD]' : 'text-gray-500 hover:text-gray-700'}`}>
@@ -105,47 +119,63 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
                     <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full"><X size={20}/></button>
                 </div>
 
-                {/* תוכן ראשי */}
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50">
                     
-                    {/* --- ממשק ייצוא (כמו Odoo) --- */}
+                    {/* --- EXPORT UI --- */}
                     {mode === 'export' && (
-                        <div className="flex flex-col md:flex-row gap-6 h-full">
-                            {/* צד שמאל: שדות זמינים */}
-                            <div className="flex-1 border rounded-lg p-3 bg-white flex flex-col shadow-sm h-full max-h-[60vh]">
-                                <h4 className="font-bold text-gray-700 mb-2 border-b pb-2 text-sm">{t.available_fields || "Available Fields"}</h4>
-                                <div className="overflow-y-auto flex-1 space-y-1 pr-1">
-                                    {availableFields.map(f => (
-                                        <div key={f.id} onClick={() => moveToSelected(f)} className="p-2 bg-gray-50 border border-gray-100 rounded cursor-pointer hover:bg-purple-50 hover:border-purple-200 flex justify-between items-center group transition-all">
-                                            <span className="text-sm">{f.label}</span>
-                                            <Plus size={16} className="text-gray-400 group-hover:text-purple-600"/>
-                                        </div>
-                                    ))}
+                        <div className="flex flex-col h-full">
+                            
+                            {/* --- התיקון: שורת ה-Checkbox החדשה --- */}
+                            <div className="mb-4 flex items-center gap-2 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                                <input 
+                                    type="checkbox" 
+                                    id="updateMode" 
+                                    checked={isUpdateMode} 
+                                    onChange={handleUpdateModeChange}
+                                    className="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
+                                />
+                                <label htmlFor="updateMode" className="text-sm font-bold text-gray-700 cursor-pointer select-none">
+                                    {t.export_update_mode || "I want to update data (import-compatible export)"}
+                                </label>
+                            </div>
+
+                            <div className="flex flex-col md:flex-row gap-6 flex-1 min-h-0">
+                                {/* Left: Available */}
+                                <div className="flex-1 border rounded-lg p-3 bg-white flex flex-col shadow-sm h-full max-h-[55vh]">
+                                    <h4 className="font-bold text-gray-700 mb-2 border-b pb-2 text-sm">{t.available_fields || "Available Fields"}</h4>
+                                    <div className="overflow-y-auto flex-1 space-y-1 pr-1">
+                                        {availableFields.map(f => (
+                                            <div key={f.id} onClick={() => moveToSelected(f)} className="p-2 bg-gray-50 border border-gray-100 rounded cursor-pointer hover:bg-purple-50 hover:border-purple-200 flex justify-between items-center group transition-all">
+                                                <span className="text-sm">{f.label}</span>
+                                                <Plus size={16} className="text-gray-400 group-hover:text-purple-600"/>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* חץ באמצע */}
-                            <div className="flex items-center justify-center text-gray-300 md:rotate-0 rotate-90">
-                                <ArrowRight size={30} />
-                            </div>
+                                {/* Arrow */}
+                                <div className="flex items-center justify-center text-gray-300 md:rotate-0 rotate-90">
+                                    <ArrowRight size={30} />
+                                </div>
 
-                            {/* צד ימין: שדות שנבחרו */}
-                            <div className="flex-1 border rounded-lg p-3 bg-white border-purple-200 flex flex-col shadow-md h-full max-h-[60vh]">
-                                <h4 className="font-bold text-purple-700 mb-2 border-b pb-2 text-sm">{t.fields_to_export || "Fields to Export"}</h4>
-                                <div className="overflow-y-auto flex-1 space-y-1 pr-1">
-                                    {selectedFields.map(f => (
-                                        <div key={f.id} onClick={() => moveToAvailable(f)} className="p-2 bg-purple-50 border border-purple-100 rounded cursor-pointer hover:bg-red-50 hover:border-red-200 flex justify-between items-center group transition-all">
-                                            <span className="text-sm font-medium">{f.label}</span>
-                                            <Trash2 size={16} className="text-purple-400 group-hover:text-red-500"/>
-                                        </div>
-                                    ))}
-                                    {selectedFields.length === 0 && <p className="text-gray-400 text-xs italic text-center mt-10">Select fields from the left list...</p>}
+                                {/* Right: Selected */}
+                                <div className="flex-1 border rounded-lg p-3 bg-white border-purple-200 flex flex-col shadow-md h-full max-h-[55vh]">
+                                    <h4 className="font-bold text-purple-700 mb-2 border-b pb-2 text-sm">{t.fields_to_export || "Fields to Export"}</h4>
+                                    <div className="overflow-y-auto flex-1 space-y-1 pr-1">
+                                        {selectedFields.map(f => (
+                                            <div key={f.id} onClick={() => moveToAvailable(f)} className="p-2 bg-purple-50 border border-purple-100 rounded cursor-pointer hover:bg-red-50 hover:border-red-200 flex justify-between items-center group transition-all">
+                                                <span className="text-sm font-medium">{f.label}</span>
+                                                <Trash2 size={16} className="text-purple-400 group-hover:text-red-500"/>
+                                            </div>
+                                        ))}
+                                        {selectedFields.length === 0 && <p className="text-gray-400 text-xs italic text-center mt-10">Select fields from the left list...</p>}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* --- ממשק ייבוא --- */}
+                    {/* --- IMPORT UI (נשאר אותו דבר) --- */}
                     {mode === 'import' && (
                         <div className="space-y-6 max-w-2xl mx-auto">
                             <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center bg-white hover:bg-gray-50 transition-colors">
@@ -170,7 +200,6 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
                                         </div>
                                     </div>
 
-                                    {/* טבלת תצוגה מקדימה */}
                                     <div className="bg-white rounded-lg border overflow-hidden mb-4 shadow-sm">
                                         <div className="bg-gray-100 px-4 py-2 border-b font-bold text-xs text-gray-600 uppercase">Preview (First 5 Rows)</div>
                                         <div className="overflow-x-auto">
@@ -197,7 +226,6 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
                                         </div>
                                     </div>
 
-                                    {/* רשימת שגיאות */}
                                     {testResult.errors.length > 0 && (
                                         <div className="bg-red-50 p-4 rounded-lg border border-red-100 text-sm text-red-700 max-h-40 overflow-y-auto shadow-inner">
                                             <strong className="block mb-2">Errors:</strong>
@@ -212,7 +240,6 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
                     )}
                 </div>
 
-                {/* Footer Actions */}
                 <div className="p-4 border-t bg-white flex justify-end gap-3 shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
                     <button onClick={onClose} className="px-6 py-2 border rounded-lg hover:bg-gray-50 font-medium text-gray-600">{t.cancel}</button>
                     

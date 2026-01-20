@@ -158,6 +158,7 @@ export const translations = {
     execute_import: "Import Data",
     select_fields_error: "Select at least one field",
     confirm_import: "Are you sure? This will update the database.",
+    export_update_mode: "I want to update data (import-compatible export)",
 
     // --- Profile Tab ---
     edit_profile_btn: "Edit Profile",
@@ -323,6 +324,7 @@ export const translations = {
     execute_import: "בצע ייבוא",
     select_fields_error: "יש לבחור לפחות שדה אחד",
     confirm_import: "האם אתה בטוח? הפעולה תעדכן את מסד הנתונים.",
+    export_update_mode: "אני רוצה לעדכן נתונים (ייצוא תואם ייבוא)",
 
     // --- Profile Tab ---
     edit_profile_btn: "ערוך פרופיל",
@@ -488,6 +490,7 @@ export const translations = {
     execute_import: "นำเข้าข้อมูล",
     select_fields_error: "เลือกอย่างน้อยหนึ่งฟิลด์",
     confirm_import: "คุณแน่ใจหรือไม่? นี่จะเป็นการอัปเดตฐานข้อมูล",
+    export_update_mode: "ฉันต้องการอัปเดตข้อมูล (ส่งออกที่เข้ากันได้กับการนำเข้า)",
 
     // --- Profile Tab ---
     edit_profile_btn: "แก้ไขโปรไฟล์",
