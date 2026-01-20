@@ -141,7 +141,7 @@ const authenticateToken = (req, res, next) => {
 
 // --- מסלולים (Routes) ---
 
-// Login
+// Login - (מעודכן: מחזיר גם טלפון)
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -150,15 +150,16 @@ app.post('/login', async (req, res) => {
     const user = result.rows[0];
     if (password !== user.password) return res.status(400).json({ error: "סיסמה שגויה" });
     const token = jwt.sign({ id: user.id, role: user.role, name: user.full_name }, SECRET_KEY, { expiresIn: '24h' });
-    res.json({ token, user: { id: user.id, name: user.full_name, role: user.role, email: user.email, profile_picture_url: user.profile_picture_url } });
+    // הוספתי את ה-phone לאובייקט שחוזר
+    res.json({ token, user: { id: user.id, name: user.full_name, role: user.role, email: user.email, phone: user.phone, profile_picture_url: user.profile_picture_url } });
   } catch (err) { res.status(500).json({ error: "שגיאת שרת" }); }
 });
 
-// עדכון פרופיל
+// עדכון פרופיל (מעודכן: מקבל ומעדכן טלפון)
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
         const userId = req.user.id;
-        const { full_name, email, password } = req.body;
+        const { full_name, email, password, phone } = req.body; // הוספתי phone
         let profilePictureUrl = req.body.existing_picture; 
         if (req.file) profilePictureUrl = `https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}`;
         
@@ -171,14 +172,15 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         if (full_name !== oldUser.full_name) changes.push(`שמך שונה ל: <strong>${full_name}</strong>`);
         if (email !== oldUser.email) changes.push(`כתובת האימייל שונתה ל: <strong>${email}</strong>`);
         if (password && password.trim() !== '') changes.push('הסיסמה שלך שונתה');
+        if (phone && phone !== oldUser.phone) changes.push('מספר הטלפון עודכן'); // לוג לשינוי טלפון
         if (req.file) changes.push('תמונת הפרופיל הוחלפה');
 
         if (password && password.trim() !== '') {
-            query = `UPDATE users SET full_name = $1, email = $2, password = $3, profile_picture_url = $4 WHERE id = $5 RETURNING *`;
-            params = [full_name, email, password, profilePictureUrl, userId];
+            query = `UPDATE users SET full_name = $1, email = $2, password = $3, profile_picture_url = $4, phone = $5 WHERE id = $6 RETURNING *`;
+            params = [full_name, email, password, profilePictureUrl, phone, userId];
         } else {
-            query = `UPDATE users SET full_name = $1, email = $2, profile_picture_url = $3 WHERE id = $4 RETURNING *`;
-            params = [full_name, email, profilePictureUrl, userId];
+            query = `UPDATE users SET full_name = $1, email = $2, profile_picture_url = $3, phone = $4 WHERE id = $5 RETURNING *`;
+            params = [full_name, email, profilePictureUrl, phone, userId];
         }
         const result = await pool.query(query, params);
         const updatedUser = result.rows[0];
@@ -191,11 +193,11 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
     } catch (err) { res.status(500).send("Update failed"); }
 });
 
-// ניהול משתמשים
+// ניהול משתמשים (מעודכן: שולף גם טלפון)
 app.get('/users', authenticateToken, async (req, res) => {
     try {
         let query = `
-            SELECT u.id, u.full_name, u.email, u.role, u.parent_manager_id, u.profile_picture_url, m.full_name as manager_name
+            SELECT u.id, u.full_name, u.email, u.phone, u.role, u.parent_manager_id, u.profile_picture_url, m.full_name as manager_name
             FROM users u
             LEFT JOIN users m ON u.parent_manager_id = m.id
         `;
@@ -213,17 +215,17 @@ app.get('/users', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Server Error'); }
 });
 
-// יצירת משתמש
+// יצירת משתמש (מעודכן: שומר טלפון)
 app.post('/users', authenticateToken, async (req, res) => {
-  const { full_name, email, password, role, parent_manager_id } = req.body;
+  const { full_name, email, password, role, parent_manager_id, phone } = req.body; // הוספתי phone
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "אימייל לא תקין" });
   if (req.user.role === 'EMPLOYEE') return res.status(403).json({ error: "אין הרשאה" });
 
   try {
     const newUser = await pool.query(
-      `INSERT INTO users (full_name, email, password, role, parent_manager_id)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id, full_name, email, role`,
-      [full_name, email, password, role, parent_manager_id]
+      `INSERT INTO users (full_name, email, password, role, parent_manager_id, phone)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, full_name, email, role`,
+      [full_name, email, password, role, parent_manager_id, phone]
     );
     let managerName = null;
     if (role === 'EMPLOYEE' && parent_manager_id) {
@@ -238,11 +240,11 @@ app.post('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// עריכת משתמש
+// עריכת משתמש (מעודכן: מעדכן טלפון)
 app.put('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     const { id } = req.params;
-    const { full_name, email, password, parent_manager_id } = req.body; 
+    const { full_name, email, password, parent_manager_id, phone } = req.body; // הוספתי phone
     
     try {
         const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
@@ -271,11 +273,11 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         }
 
         if (password && password.trim() !== "") {
-            query = 'UPDATE users SET full_name = $1, email = $2, password = $3, parent_manager_id = $4 WHERE id = $5 RETURNING *';
-            params = [full_name, email, password, parent_manager_id || null, id];
+            query = 'UPDATE users SET full_name = $1, email = $2, password = $3, parent_manager_id = $4, phone = $5 WHERE id = $6 RETURNING *';
+            params = [full_name, email, password, parent_manager_id || null, phone, id];
         } else {
-            query = 'UPDATE users SET full_name = $1, email = $2, parent_manager_id = $3 WHERE id = $4 RETURNING *';
-            params = [full_name, email, parent_manager_id || null, id];
+            query = 'UPDATE users SET full_name = $1, email = $2, parent_manager_id = $3, phone = $4 WHERE id = $5 RETURNING *';
+            params = [full_name, email, parent_manager_id || null, phone, id];
         }
         
         const result = await pool.query(query, params);
@@ -321,15 +323,57 @@ app.get('/managers', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).send('Server Error'); }
 });
 
-// --- LOCATIONS ---
+// --- LOCATIONS / CATEGORIES / ASSETS (מעודכן: בדיקות כפילות) ---
+
 app.get('/locations', authenticateToken, async (req, res) => {
   try {
     const r = await pool.query('SELECT locations.*, users.full_name as creator_name FROM locations LEFT JOIN users ON locations.created_by = users.id ORDER BY locations.name ASC');
     res.json(r.rows);
   } catch (err) { res.status(500).send('Error'); }
 });
+
 app.post('/locations', authenticateToken, async (req, res) => {
-  try { const r = await pool.query('INSERT INTO locations (name, created_by) VALUES ($1, $2) RETURNING *', [req.body.name, req.user.id]); res.json(r.rows[0]); } catch (e) { res.status(500).send('Error'); }
+  try { 
+      const { name } = req.body;
+      // בדיקת כפילות שם מיקום
+      const check = await pool.query('SELECT id FROM locations WHERE name = $1', [name]);
+      if (check.rows.length > 0) return res.status(400).json({ error: "Location name already exists" });
+
+      const r = await pool.query('INSERT INTO locations (name, created_by) VALUES ($1, $2) RETURNING *', [name, req.user.id]); 
+      res.json(r.rows[0]); 
+  } catch (e) { res.status(500).send('Error'); }
+});
+
+app.get('/categories', authenticateToken, async (req, res) => {
+    try { const result = await pool.query('SELECT * FROM categories ORDER BY name'); res.json(result.rows); } catch (err) { res.status(500).send('Error'); }
+});
+
+app.post('/categories', authenticateToken, async (req, res) => {
+    try { 
+        const { name } = req.body;
+        // בדיקת כפילות שם קטגוריה
+        const check = await pool.query('SELECT id FROM categories WHERE name = $1', [name]);
+        if (check.rows.length > 0) return res.status(400).json({ error: "Category name already exists" });
+
+        const result = await pool.query('INSERT INTO categories (name) VALUES ($1) RETURNING *', [name]); 
+        res.json(result.rows[0]); 
+    } catch (err) { res.status(500).send('Error'); }
+});
+
+app.get('/assets', authenticateToken, async (req, res) => {
+    try { const result = await pool.query('SELECT assets.*, categories.name as category_name FROM assets LEFT JOIN categories ON assets.category_id = categories.id ORDER BY assets.code'); res.json(result.rows); } catch (err) { res.status(500).send('Error'); }
+});
+
+app.post('/assets', authenticateToken, async (req, res) => {
+    try {
+        const { name, code, category_id } = req.body;
+        // בדיקת כפילות קוד נכס
+        const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
+        if (check.rows.length > 0) return res.status(400).json({ error: "Asset code already exists" });
+        
+        const result = await pool.query('INSERT INTO assets (name, code, category_id) VALUES ($1, $2, $3) RETURNING *', [name, code, category_id]);
+        res.json(result.rows[0]);
+    } catch (err) { res.status(500).send('Error'); }
 });
 
 // --- Edit Items (PUT) ---
@@ -360,10 +404,14 @@ app.put('/assets/:id', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send("Error updating asset"); }
 });
 
-app.delete('/locations/:id', authenticateToken, async (req, res) => {
-    if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
-    try { await pool.query('DELETE FROM tasks WHERE location_id = $1', [req.params.id]); await pool.query('DELETE FROM locations WHERE id = $1', [req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).send('Error'); }
-});
+// --- Delete Helpers ---
+const deleteItem = async (table, id, res) => {
+    try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); } 
+    catch (e) { res.status(400).json({ error: "Cannot delete: Item is in use." }); }
+};
+app.delete('/locations/:id', authenticateToken, (req, res) => deleteItem('locations', req.params.id, res));
+app.delete('/categories/:id', authenticateToken, (req, res) => deleteItem('categories', req.params.id, res));
+app.delete('/assets/:id', authenticateToken, (req, res) => deleteItem('assets', req.params.id, res));
 
 // --- TASKS ---
 app.get('/tasks', authenticateToken, async (req, res) => {
@@ -500,9 +548,8 @@ app.post('/tasks/:id/follow-up', authenticateToken, async (req, res) => {
     } catch (err) { console.error(err); res.status(500).send('Error'); }
 });
 
-// --- NEW: IMPORT / EXPORT / DELETE-ALL SECTIONS ---
+// --- IMPORT / EXPORT / DELETE-ALL ---
 
-// 1. Delete ALL Tasks (Clean Data)
 app.delete('/tasks/delete-all', authenticateToken, async (req, res) => {
     if (req.user.role !== 'BIG_BOSS') return res.status(403).send("Access denied");
     try {
@@ -511,7 +558,6 @@ app.delete('/tasks/delete-all', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send("Error deleting tasks"); }
 });
 
-// 2. Advanced Export with Filters
 app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     try {
         const { worker_id, start_date, end_date } = req.query;
@@ -547,7 +593,6 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     }
 });
 
-// 3. Smart Import (Validation + Update + Insert)
 app.post('/tasks/import-data', authenticateToken, async (req, res) => {
     const { tasks } = req.body;
     if (!tasks || !Array.isArray(tasks)) return res.status(400).send("Invalid data format");
@@ -555,12 +600,11 @@ app.post('/tasks/import-data', authenticateToken, async (req, res) => {
     const client = await pool.connect();
     
     try {
-        await client.query('BEGIN'); // Start Transaction
+        await client.query('BEGIN'); 
 
         let created = 0, updated = 0;
 
         for (const row of tasks) {
-            // A. Validate Employee Name
             let worker_id = null;
             if (row['Worker Name']) {
                 const userRes = await client.query('SELECT id FROM users WHERE full_name = $1', [row['Worker Name']]);
@@ -570,7 +614,6 @@ app.post('/tasks/import-data', authenticateToken, async (req, res) => {
                 worker_id = userRes.rows[0].id;
             }
 
-            // B. Identify Asset / Location
             let asset_id = null;
             let location_id = null;
             
@@ -592,12 +635,10 @@ app.post('/tasks/import-data', authenticateToken, async (req, res) => {
             const urgency = row['Urgency'] || 'Normal';
             const dueDate = row['Due Date'] ? new Date(row['Due Date']) : new Date();
 
-            // C. Update or Insert
             if (row['ID']) {
                 const check = await client.query('SELECT id FROM tasks WHERE id = $1', [row['ID']]);
                 
                 if (check.rows.length > 0) {
-                    // Update EVERYTHING
                     await client.query(
                         `UPDATE tasks 
                          SET title=$1, description=$2, urgency=$3, due_date=$4, worker_id=$5, asset_id=$6, location_id=$7
@@ -606,7 +647,6 @@ app.post('/tasks/import-data', authenticateToken, async (req, res) => {
                     );
                     updated++;
                 } else {
-                    // Insert new with specific ID (rare) or just insert
                     await client.query(
                         `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id)
                          VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7)`,
@@ -615,7 +655,6 @@ app.post('/tasks/import-data', authenticateToken, async (req, res) => {
                     created++;
                 }
             } else {
-                // New Task
                 await client.query(
                     `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id)
                      VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7)`,
@@ -637,39 +676,26 @@ app.post('/tasks/import-data', authenticateToken, async (req, res) => {
     }
 });
 
-// --- ASSETS / CATEGORIES MANAGEMENT (GET/POST) ---
-app.get('/categories', authenticateToken, async (req, res) => {
-    try { const result = await pool.query('SELECT * FROM categories ORDER BY name'); res.json(result.rows); } catch (err) { res.status(500).send('Error'); }
-});
-app.post('/categories', authenticateToken, async (req, res) => {
-    try { const result = await pool.query('INSERT INTO categories (name) VALUES ($1) RETURNING *', [req.body.name]); res.json(result.rows[0]); } catch (err) { res.status(500).send('Error'); }
-});
-app.get('/assets', authenticateToken, async (req, res) => {
-    try { const result = await pool.query('SELECT assets.*, categories.name as category_name FROM assets LEFT JOIN categories ON assets.category_id = categories.id ORDER BY assets.code'); res.json(result.rows); } catch (err) { res.status(500).send('Error'); }
-});
-app.post('/assets', authenticateToken, async (req, res) => {
-    try {
-        const { name, code, category_id } = req.body;
-        const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
-        if (check.rows.length > 0) return res.status(400).json({ error: "Asset code already exists" });
-        const result = await pool.query('INSERT INTO assets (name, code, category_id) VALUES ($1, $2, $3) RETURNING *', [name, code, category_id]);
-        res.json(result.rows[0]);
-    } catch (err) { res.status(500).send('Error'); }
-});
-
-// --- Generic Delete Helper ---
-const deleteItem = async (table, id, res) => {
-    try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); } 
-    catch (e) { res.status(400).json({ error: "Cannot delete: Item is in use." }); }
-};
-app.delete('/locations/:id', authenticateToken, (req, res) => deleteItem('locations', req.params.id, res));
-app.delete('/categories/:id', authenticateToken, (req, res) => deleteItem('categories', req.params.id, res));
-app.delete('/assets/:id', authenticateToken, (req, res) => deleteItem('assets', req.params.id, res));
-
-// --- Get Tasks for Specific User (Manager View) ---
+// --- 5. Get Tasks for Specific User (Manager View - התיקון הגדול!) ---
 app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
     try {
         const { userId } = req.params;
+        
+        // בדיקת תפקיד המשתמש הנצפה
+        const userCheck = await pool.query('SELECT role FROM users WHERE id = $1', [userId]);
+        if (userCheck.rows.length === 0) return res.status(404).send("User not found");
+        
+        const targetRole = userCheck.rows[0].role;
+        let whereClause = "";
+
+        if (targetRole === 'MANAGER' || targetRole === 'BIG_BOSS') {
+            // אם צופים במנהל -> רואים את המשימות שלו ושל כל העובדים שתחתיו (רקורסיבי)
+            whereClause = `WHERE t.worker_id = $1 OR t.worker_id IN (SELECT id FROM users WHERE parent_manager_id = $1)`;
+        } else {
+            // אם צופים בעובד -> רואים רק את המשימות שלו
+            whereClause = `WHERE t.worker_id = $1`;
+        }
+
         const query = `
             SELECT t.*, 
                    l.name as location_name,
@@ -681,7 +707,7 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN users u ON t.worker_id = u.id
             LEFT JOIN users creator ON u.parent_manager_id = creator.id
-            WHERE t.worker_id = $1
+            ${whereClause}
             ORDER BY t.due_date DESC
         `;
         const result = await pool.query(query, [userId]);

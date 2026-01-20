@@ -12,7 +12,7 @@ const ConfigurationTab = ({ token, t }) => {
   const [newLocation, setNewLocation] = useState(''); 
   const [newAsset, setNewAsset] = useState({ name: '', code: '', category_id: '' });
 
-  // מצבי עריכה (מחזיקים את ה-ID של מה שעורכים כרגע)
+  // מצבי עריכה
   const [editCategoryId, setEditCategoryId] = useState(null);
   const [editLocationId, setEditLocationId] = useState(null);
   const [editAssetId, setEditAssetId] = useState(null);
@@ -50,17 +50,32 @@ const ConfigurationTab = ({ token, t }) => {
     e.preventDefault();
     if (!newCategory) return;
     
+    // בדיקת כפילות שם (רק בהוספה חדשה)
+    if (!editCategoryId) {
+        const exists = categories.find(c => c.name.toLowerCase() === newCategory.trim().toLowerCase());
+        if (exists) {
+            alert(t.error_category_exists || "⚠️ Error: This Category name already exists. Please choose a different name.");
+            return;
+        }
+    }
+
     const method = editCategoryId ? 'PUT' : 'POST';
     const url = editCategoryId 
         ? `https://maintenance-app-h84v.onrender.com/categories/${editCategoryId}`
         : 'https://maintenance-app-h84v.onrender.com/categories';
 
     try {
-        await fetch(url, {
+        const res = await fetch(url, {
             method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ name: newCategory })
         });
-        setNewCategory(''); setEditCategoryId(null); fetchData();
+        
+        const data = await res.json();
+        if (res.ok) {
+            setNewCategory(''); setEditCategoryId(null); fetchData();
+        } else {
+            alert("Error: " + (data.error || "Failed"));
+        }
     } catch (e) { alert("Error"); }
   };
 
@@ -74,17 +89,32 @@ const ConfigurationTab = ({ token, t }) => {
     e.preventDefault();
     if (!newLocation) return;
 
+    // בדיקת כפילות שם (רק בהוספה חדשה)
+    if (!editLocationId) {
+        const exists = locations.find(l => l.name.toLowerCase() === newLocation.trim().toLowerCase());
+        if (exists) {
+            alert(t.error_location_exists || "⚠️ Error: This Location name already exists.");
+            return;
+        }
+    }
+
     const method = editLocationId ? 'PUT' : 'POST';
     const url = editLocationId 
         ? `https://maintenance-app-h84v.onrender.com/locations/${editLocationId}`
         : 'https://maintenance-app-h84v.onrender.com/locations';
 
     try {
-        await fetch(url, {
+        const res = await fetch(url, {
             method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ name: newLocation })
         });
-        setNewLocation(''); setEditLocationId(null); fetchData();
+        
+        const data = await res.json();
+        if (res.ok) {
+            setNewLocation(''); setEditLocationId(null); fetchData();
+        } else {
+            alert("Error: " + (data.error || "Failed"));
+        }
     } catch (e) { alert("Error"); }
   };
 
@@ -98,17 +128,32 @@ const ConfigurationTab = ({ token, t }) => {
     e.preventDefault();
     if (!newAsset.name || !newAsset.category_id) return alert(t.fill_all_fields || "Fill fields");
 
+    // בדיקת כפילות קוד (רק בהוספה חדשה)
+    if (!editAssetId && newAsset.code) {
+        const exists = assets.find(a => a.code === newAsset.code.trim());
+        if (exists) {
+            alert(t.error_code_exists || "⚠️ Error: This Asset Code already exists! Codes must be unique.");
+            return;
+        }
+    }
+
     const method = editAssetId ? 'PUT' : 'POST';
     const url = editAssetId 
         ? `https://maintenance-app-h84v.onrender.com/assets/${editAssetId}`
         : 'https://maintenance-app-h84v.onrender.com/assets';
 
     try {
-        await fetch(url, {
+        const res = await fetch(url, {
             method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(newAsset)
         });
-        setNewAsset({ name: '', code: '', category_id: '' }); setEditAssetId(null); fetchData();
+        
+        const data = await res.json();
+        if (res.ok) {
+            setNewAsset({ name: '', code: '', category_id: '' }); setEditAssetId(null); fetchData();
+        } else {
+            alert("Error: " + (data.error || "Failed"));
+        }
     } catch (e) { alert("Error"); }
   };
 

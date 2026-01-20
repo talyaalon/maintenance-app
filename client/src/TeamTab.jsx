@@ -36,7 +36,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         setSelectedMember(member);
         setIsLoadingTasks(true);
         try {
-            // שולפים את כל המשימות של העובד
+            // שולפים את כל המשימות של העובד (אם מנהל - השרת ידאג להביא את כל הצוות)
             const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/user/${member.id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -70,7 +70,12 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
 
     const openEditModal = (member) => {
         setEditMember(member);
-        setEditForm({ full_name: member.full_name, email: member.email, phone: member.phone || '' });
+        // טעינת הפרטים הקיימים כולל טלפון
+        setEditForm({ 
+            full_name: member.full_name, 
+            email: member.email, 
+            phone: member.phone || '' 
+        });
         setShowEditModal(true);
     };
 
@@ -204,15 +209,40 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                 </div>
             )}
 
-            {/* --- Edit User Modal (נשאר ללא שינוי) --- */}
+            {/* --- Edit User Modal (הוספתי כאן את שדה הטלפון) --- */}
             {showEditModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
                     <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
                         <h3 className="text-lg font-bold mb-4">Edit User</h3>
                         <form onSubmit={handleEditSubmit} className="space-y-3">
-                            <div><label className="text-sm font-bold text-gray-700">Name</label><input className="w-full p-2 border rounded" value={editForm.full_name} onChange={e => setEditForm({...editForm, full_name: e.target.value})} required/></div>
-                            <div><label className="text-sm font-bold text-gray-700">Email</label><input className="w-full p-2 border rounded" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} required/></div>
-                            <div><label className="text-sm font-bold text-gray-700">Phone</label><input className="w-full p-2 border rounded" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} /></div>
+                            <div>
+                                <label className="text-sm font-bold text-gray-700">Name</label>
+                                <input 
+                                    className="w-full p-2 border rounded" 
+                                    value={editForm.full_name} 
+                                    onChange={e => setEditForm({...editForm, full_name: e.target.value})} 
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-bold text-gray-700">Email</label>
+                                <input 
+                                    className="w-full p-2 border rounded" 
+                                    value={editForm.email} 
+                                    onChange={e => setEditForm({...editForm, email: e.target.value})} 
+                                    required
+                                />
+                            </div>
+                            {/* שדה טלפון חדש */}
+                            <div>
+                                <label className="text-sm font-bold text-gray-700">Phone</label>
+                                <input 
+                                    className="w-full p-2 border rounded" 
+                                    value={editForm.phone} 
+                                    onChange={e => setEditForm({...editForm, phone: e.target.value})} 
+                                    placeholder="050-0000000"
+                                />
+                            </div>
                             <div className="flex gap-2 mt-4">
                                 <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 py-2 border rounded">Cancel</button>
                                 <button type="submit" className="flex-1 py-2 bg-purple-600 text-white rounded font-bold">Save</button>
