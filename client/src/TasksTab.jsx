@@ -174,7 +174,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => {
     <div className="p-4 pb-24 min-h-screen bg-gray-50">
       <style>{calendarStyles}</style>
       <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-[#6A0DAD]">{t.task_management_title}</h2>
+          <h2 className="text-2xl font-bold text-black">{t.task_management_title}</h2>
           {(user.role === 'MANAGER' || user.role === 'BIG_BOSS') && (
             <button onClick={() => setShowExcel(!showExcel)} className="p-2 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition shadow-sm">
                 <FileSpreadsheet size={20} />

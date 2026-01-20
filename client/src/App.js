@@ -122,32 +122,38 @@ function App() {
   return (
     <div className={`min-h-screen bg-gray-50 font-sans`} dir={dir}>
       
-      {/* כותרת עליונה */}
-      <header className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-30">
-        {/* תרגום: שם האפליקציה */}
-        {/* לוגו וכותרת מחוברים */}
-          <div className="flex items-center gap-2">
+      {/* כותרת עליונה - מעודכנת */}
+      <header className="bg-white shadow-sm p-4 flex items-center justify-between sticky top-0 z-30 relative">
+          
+          {/* צד שמאל: לוגו בלבד */}
+          <div className="flex-shrink-0 z-10">
               <img 
                   src={logoImg} 
                   alt="App Logo" 
                   className="h-10 w-auto object-contain" 
               />
-              <h1 className="text-xl font-bold text-[#6A0DAD] hidden sm:block">
+          </div>
+
+          {/* מרכז: כותרת האפליקציה (ממורכזת אבסולוטית וצבועה בשחור) */}
+          <div className="absolute left-1/2 transform -translate-x-1/2">
+              <h1 className="text-xl font-bold text-black hidden sm:block">
                   {t.app_name}
               </h1>
           </div>
-        
-        {/* בחירת שפה */}
-        <select 
-            value={lang} 
-            onChange={(e) => setLang(e.target.value)} 
-            className="p-1 border rounded text-xs bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
-            dir="ltr"
-        >
-            <option value="en">🇺🇸 EN</option>
-            <option value="he">🇮🇱 HE</option>
-            <option value="th">🇹🇭 TH</option>
-        </select>
+
+          {/* צד ימין: בחירת שפה */}
+          <div className="z-10">
+              <select
+                  value={lang}
+                  onChange={(e) => setLang(e.target.value)}
+                  className="p-1 border rounded text-xs bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                  dir="ltr"
+              >
+                  <option value="en">🇺🇸 EN</option>
+                  <option value="he">🇮🇱 HE</option>
+                  <option value="th">🇹🇭 TH</option>
+              </select>
+          </div>
       </header>
 
       <main className="max-w-3xl mx-auto min-h-[80vh]">

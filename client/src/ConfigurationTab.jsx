@@ -119,7 +119,7 @@ const ConfigurationTab = ({ token, t }) => {
 
   return (
     <div className="p-4 pb-24">
-      <h2 className="text-2xl font-bold text-[#6A0DAD] mb-4">{t.config_title}</h2>
+      <h2 className="text-2xl font-bold text-black mb-4">{t.config_title}</h2>
       
       {/* Navigation */}
       <div className="flex gap-2 mb-6 bg-white p-1 rounded-lg shadow-sm border overflow-x-auto">
