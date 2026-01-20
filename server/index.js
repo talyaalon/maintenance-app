@@ -755,4 +755,30 @@ app.post('/locations', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send("Error"); }
 });
 
+// --- Get Tasks for Specific User (Manager View) ---
+app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const query = `
+            SELECT t.*, 
+                   l.name as location_name,
+                   a.name as asset_name, 
+                   u.full_name as worker_name,
+                   creator.full_name as manager_name
+            FROM tasks t
+            LEFT JOIN locations l ON t.location_id = l.id
+            LEFT JOIN assets a ON t.asset_id = a.id
+            LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN users creator ON u.parent_manager_id = creator.id
+            WHERE t.worker_id = $1
+            ORDER BY t.due_date DESC
+        `;
+        const result = await pool.query(query, [userId]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error fetching user tasks");
+    }
+});
+
 app.listen(port, () => { console.log(`Server running on ${port}`); });
