@@ -4,6 +4,7 @@ import Login from './Login';
 import CreateTaskForm from './CreateTaskForm';
 import AddUserForm from './AddUserForm';
 import { translations } from './translations'; 
+import logoImg from './app-logo.png';
 
 // ייבוא הטאבים
 import TasksTab from './TasksTab';
@@ -124,7 +125,17 @@ function App() {
       {/* כותרת עליונה */}
       <header className="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-30">
         {/* תרגום: שם האפליקציה */}
-        <h1 className="text-xl font-bold text-[#6A0DAD]">{t.app_name}</h1>
+        {/* לוגו וכותרת מחוברים */}
+          <div className="flex items-center gap-2">
+              <img 
+                  src={logoImg} 
+                  alt="App Logo" 
+                  className="h-10 w-auto object-contain" 
+              />
+              <h1 className="text-xl font-bold text-[#6A0DAD] hidden sm:block">
+                  {t.app_name}
+              </h1>
+          </div>
         
         {/* בחירת שפה */}
         <select 

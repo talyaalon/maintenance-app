@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import { format, isSameDay, parseISO, startOfWeek, endOfWeek, addDays, isBefore, startOfDay } from 'date-fns';
-import { CheckSquare, Clock, CheckCircle, Calendar as CalIcon, List, AlertCircle, Camera, ArrowRight, X, FileSpreadsheet } from 'lucide-react';
+import { format, isSameDay, parseISO, startOfWeek, addDays, isBefore, startOfDay } from 'date-fns';
+import { CheckCircle, Clock, AlertCircle, Camera, ArrowRight, X, FileSpreadsheet, Check } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 
 // --- Helper for Calendar Language ---
@@ -28,34 +28,25 @@ const calendarStyles = `
   .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.2); color: white; }
 `;
 
-const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => { // Added 'lang' prop
+const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => {
   const [mainTab, setMainTab] = useState('todo'); 
   const [viewMode, setViewMode] = useState('daily'); 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTask, setSelectedTask] = useState(null); 
-  const [showExcel, setShowExcel] = useState(false); // State for Excel toggle
+  const [showExcel, setShowExcel] = useState(false);
 
   // --- Filtering Logic ---
-  
-  // 1. Pending (To Do): Includes Today AND Overdue tasks
   const pendingTasks = tasks.filter(task => {
       if (task.status !== 'PENDING') return false;
       const taskDate = parseISO(task.due_date);
-      // Show if it is today OR in the past (overdue)
       return isSameDay(taskDate, new Date()) || isBefore(taskDate, startOfDay(new Date()));
   });
 
-  // 2. Waiting: Show ALL waiting tasks (No date filter - see entire history)
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
-
-  // 3. Completed: Show ALL completed tasks (No date filter - see entire history)
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
-
-  // Helper for Calendar View (Only tasks for the specific selected date)
   const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(parseISO(t.due_date), selectedDate));
 
   const renderTodoView = () => {
-      // Daily View
       if (viewMode === 'daily') {
           return (
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto">
@@ -84,14 +75,12 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => { // Added 'lan
               </div>
           );
       }
-      // Weekly View
       if (viewMode === 'weekly') {
           const start = startOfWeek(new Date(), { weekStartsOn: 0 }); 
           const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(start, i));
           return (
               <div className="space-y-4 animate-fade-in h-[65vh] overflow-y-auto max-w-2xl mx-auto pr-1">
                   {weekDays.map(day => {
-                      // Show tasks for this specific day (Future tasks included)
                       const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(parseISO(t.due_date), day));
                       const isToday = isSameDay(day, new Date());
                       return (
@@ -116,14 +105,13 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => { // Added 'lan
               </div>
           );
       }
-      // Calendar View
       if (viewMode === 'calendar') {
           return (
               <div className="animate-fade-in flex flex-col items-center">
                   <Calendar 
                     onChange={setSelectedDate} 
                     value={selectedDate} 
-                    locale={getLocale(lang)} // Fixed: Dynamic Language
+                    locale={getLocale(lang)} 
                     tileContent={({ date, view }) => {
                         if (view === 'month') {
                             const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(parseISO(t.due_date), date));
@@ -153,7 +141,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => { // Added 'lan
       }
   };
 
-  // Approval View
   const renderApprovalView = () => {
       const grouped = waitingTasks.reduce((acc, task) => {
           const name = task.worker_name || 'Unknown';
@@ -174,7 +161,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => { // Added 'lan
       );
   };
 
-  // History View
   const renderCompletedView = () => {
       return (
           <div className="space-y-3 animate-fade-in max-w-3xl mx-auto">
@@ -189,8 +175,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => { // Added 'lan
       <style>{calendarStyles}</style>
       <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-[#6A0DAD]">{t.task_management_title}</h2>
-          
-          {/* Excel Button (Visible for Managers) */}
           {(user.role === 'MANAGER' || user.role === 'BIG_BOSS') && (
             <button onClick={() => setShowExcel(!showExcel)} className="p-2 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition shadow-sm">
                 <FileSpreadsheet size={20} />
@@ -198,15 +182,14 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => { // Added 'lan
           )}
       </div>
       
-      {/* Excel Modal */}
-        {showExcel && (
-            <AdvancedExcel 
-                token={token} 
-                t={t} 
-                onRefresh={onRefresh} 
-                onClose={() => setShowExcel(false)} // הוספנו כפתור סגירה
-            />
-        )}  
+      {showExcel && (
+           <AdvancedExcel 
+               token={token} 
+               t={t} 
+               onRefresh={onRefresh} 
+               onClose={() => setShowExcel(false)} 
+           />
+       )}  
 
       <div className="flex bg-white p-1.5 rounded-2xl shadow-sm mb-8 mx-auto max-w-3xl">
           <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={pendingTasks.length} />
@@ -231,7 +214,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => { // Added 'lan
   );
 };
 
-// --- Components ---
+// --- Helper Components ---
 const TabButton = ({ active, onClick, label, icon, count, color = 'purple' }) => (
     <button onClick={onClick} className={`flex-1 flex flex-col items-center py-3 rounded-xl transition-all ${active ? `bg-${color}-50 text-${color}-700 shadow-inner` : 'text-gray-400 hover:bg-gray-50'}`}>
         <div className={`flex items-center gap-2 mb-1 ${active ? 'font-bold' : ''}`}>{icon}<span className="text-sm">{label}</span></div>
@@ -259,29 +242,51 @@ const getDayName = (date, t) => {
     return days[date.getDay()];
 };
 
-// --- Modal ---
+// --- Modal (המתוקן) ---
 const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
     const [followUpDate, setFollowUpDate] = useState('');
     const [mode, setMode] = useState('view'); 
+    
+    // --- New: Success State for Custom Alert ---
+    const [showSuccess, setShowSuccess] = useState(false);
+
     const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS') && task.status === 'WAITING_APPROVAL';
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
 
     const handleComplete = async () => {
         if (!note && !file) return alert(t.alert_required || "Required field");
+        
         const formData = new FormData();
         formData.append('completion_note', note);
         if (file) formData.append('completion_image', file);
-        await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/complete`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
-        alert(t.alert_sent || "Sent successfully!"); 
-        onRefresh(); onClose();
+        
+        try {
+            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/complete`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+            if(res.ok) {
+                // Show custom green success message instead of browser alert
+                setShowSuccess(true);
+                setTimeout(() => {
+                    setShowSuccess(false);
+                    onRefresh();
+                    onClose();
+                }, 1500);
+            }
+        } catch(e) { alert("Error"); }
     };
+
     const handleApprove = async () => {
         await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/approve`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
-        alert(t.alert_approved || "Approved successfully!"); 
-        onRefresh(); onClose();
+        // Show custom success for approve too
+        setShowSuccess(true);
+        setTimeout(() => {
+            setShowSuccess(false);
+            onRefresh();
+            onClose();
+        }, 1500);
     };
+
     const handleFollowUp = async () => {
         if (!followUpDate) return alert(t.alert_required || "Date required");
         await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/follow-up`, {
@@ -292,23 +297,41 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
         onRefresh(); onClose();
     };
 
+    if(showSuccess) {
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 backdrop-blur-sm">
+                <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center animate-scale-in">
+                    <div className="bg-green-100 p-4 rounded-full mb-4">
+                        <Check size={40} className="text-green-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-800">{t.alert_sent || "Sent Successfully!"}</h2>
+                    <p className="text-gray-500 mt-2">Good job!</p>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-50 backdrop-blur-sm">
             <div className="bg-white w-full sm:w-[90%] max-w-lg rounded-t-2xl sm:rounded-2xl p-6 max-h-[90vh] overflow-y-auto animate-slide-up shadow-2xl relative">
                 <button onClick={onClose} className="absolute top-4 left-4 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition"><X size={20}/></button>
+                
                 <div className="mt-2 text-center">
                     <h2 className="text-2xl font-bold text-gray-800">{task.title}</h2>
                     <p className={`text-sm font-bold mt-1 inline-block px-3 py-1 rounded-full ${task.urgency === 'High' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                         {task.urgency === 'High' ? t.urgent_label : t.normal_label}
                     </p>
                 </div>
+
                 <div className="mt-6 bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3 text-sm text-gray-700">
                     <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{t.date_label}:</span><span className="font-bold">{format(parseISO(task.due_date), 'dd/MM/yyyy')}</span></div>
                     <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{t.location}:</span><span className="font-bold">{task.location_name}</span></div>
                     <div className="flex justify-between border-b pb-2"><span className="text-gray-500">{t.assigned_to}:</span><span className="font-bold">{task.worker_name}</span></div>
                     {task.description && <div className="pt-2"><span className="text-gray-500 block mb-1">{t.manager_notes}:</span><p className="bg-white p-2 rounded border text-gray-600">{task.description}</p></div>}
                 </div>
+
                 {task.creation_image_url && <div className="mt-4"><p className="font-bold text-xs mb-2 text-gray-500">{t.has_image}:</p><img src={task.creation_image_url} className="w-full h-48 object-cover rounded-xl border" /></div>}
+
                 <div className="mt-6">
                     {canComplete && mode === 'view' && (
                         <div className="grid grid-cols-2 gap-4">
@@ -316,6 +339,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                             <button onClick={() => setMode('followup')} className="bg-blue-600 text-white py-3.5 rounded-xl font-bold shadow-lg">{t.followup_task_btn}</button>
                         </div>
                     )}
+
                     {mode === 'complete' && (
                         <div className="space-y-4 bg-green-50 p-4 rounded-xl">
                             <h4 className="font-bold text-green-800">{t.report_execution}</h4>
@@ -324,6 +348,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                             <div className="flex gap-2"><button onClick={() => setMode('view')} className="flex-1 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg">{t.cancel}</button><button onClick={handleComplete} className="flex-1 py-2 bg-green-600 text-white rounded-lg font-bold">{t.send_for_approval}</button></div>
                         </div>
                     )}
+
                     {mode === 'followup' && (
                         <div className="space-y-4 bg-blue-50 p-4 rounded-xl">
                             <h4 className="font-bold text-blue-800">{t.followup_task_btn}</h4>
@@ -332,6 +357,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                             <div className="flex gap-2"><button onClick={() => setMode('view')} className="flex-1 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg">{t.cancel}</button><button onClick={handleFollowUp} className="flex-1 py-2 bg-blue-600 text-white rounded-lg font-bold">{t.save}</button></div>
                         </div>
                     )}
+
                     {canApprove && (
                         <div className="bg-orange-50 p-4 rounded-xl border border-orange-200">
                             <h4 className="font-bold mb-3 text-orange-800">{t.approve_close_btn}</h4>
