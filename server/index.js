@@ -352,28 +352,41 @@ app.delete('/locations/:id', authenticateToken, async (req, res) => {
 
 // --- TASKS (המדורג!) ---
 
-// 1. שליפת משימות (כולל סטטוסים ותמונות)
 app.get('/tasks', authenticateToken, async (req, res) => {
-  try {
-    const { role, id } = req.user;
-    let query = `
-        SELECT tasks.*, users.full_name as worker_name, locations.name as location_name, users.parent_manager_id
-        FROM tasks 
-        LEFT JOIN users ON tasks.worker_id = users.id 
-        LEFT JOIN locations ON tasks.location_id = locations.id
-    `;
-    let params = [];
-    if (role === 'EMPLOYEE') {
-        query += ' WHERE worker_id = $1';
-        params.push(id);
-    } else if (role === 'MANAGER') {
-        query += ` WHERE worker_id = $1 OR worker_id IN (SELECT id FROM users WHERE parent_manager_id = $1)`;
-        params.push(id);
-    }
-    query += ' ORDER BY due_date ASC';
-    const result = await pool.query(query, params);
-    res.json(result.rows);
-  } catch (err) { res.status(500).send('Server Error'); }
+    try {
+        const { role, id } = req.user;
+        let query = `
+            SELECT t.*, 
+                   u.full_name as worker_name, 
+                   l.name as location_name,
+                   a.name as asset_name, 
+                   a.code as asset_code,
+                   c.name as category_name
+            FROM tasks t
+            LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN locations l ON t.location_id = l.id
+            LEFT JOIN assets a ON t.asset_id = a.id
+            LEFT JOIN categories c ON a.category_id = c.id
+        `;
+        
+        // ... (המשך הסינונים לפי תפקיד נשאר אותו דבר) ...
+        // רק לוודא שהשאילתה למעלה הוחלפה כדי לכלול את הטבלאות assets ו-categories
+        
+        if (role === 'EMPLOYEE') {
+            query += ` WHERE t.worker_id = $1`;
+            const result = await pool.query(query + ` ORDER BY t.due_date ASC`, [id]);
+            return res.json(result.rows);
+        } 
+        
+        if (role === 'MANAGER') {
+            query += ` WHERE t.worker_id = $1 OR t.worker_id IN (SELECT id FROM users WHERE parent_manager_id = $1)`;
+            const result = await pool.query(query + ` ORDER BY t.due_date ASC`, [id]);
+            return res.json(result.rows);
+        }
+
+        const result = await pool.query(query + ` ORDER BY t.due_date ASC`);
+        res.json(result.rows);
+    } catch (err) { console.error(err); res.sendStatus(500); }
 });
 
 // 2. יצירת משימה (תמיכה בתמונות ומחזוריות)
@@ -570,46 +583,47 @@ app.post('/assets', authenticateToken, async (req, res) => {
 // --- 1. ייצוא מתקדם (עם בחירת שדות) ---
 app.post('/tasks/export-advanced', authenticateToken, async (req, res) => {
     try {
-        const { selectedFields } = req.body; // רשימת השדות שהמשתמש בחר
+        const { selectedFields } = req.body;
         
-        // שליפת כל הנתונים
+        // עדכון השאילתה כדי לכלול מנהל ותמונה
         let query = `
             SELECT t.id, t.title, t.description, t.urgency, t.due_date, t.status, 
-                   u.full_name as worker_name, l.name as location_name
+                   t.creation_image_url, 
+                   u.full_name as worker_name, 
+                   m.full_name as manager_name,
+                   l.name as location_name,
+                   a.name as asset_name,
+                   c.name as category_name
             FROM tasks t
             LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN users m ON u.parent_manager_id = m.id -- חיבור למנהל של העובד
             LEFT JOIN locations l ON t.location_id = l.id
+            LEFT JOIN assets a ON t.asset_id = a.id
+            LEFT JOIN categories c ON a.category_id = c.id
             ORDER BY t.due_date DESC
         `;
         
         const result = await pool.query(query);
         let data = result.rows;
 
-        // סינון: משאירים רק את השדות שנבחרו
+        // אותו קוד סינון כמו קודם...
         if (selectedFields && selectedFields.length > 0) {
             data = data.map(row => {
                 const filteredRow = {};
                 selectedFields.forEach(field => {
-                    // אם השדה קיים בתוצאה, נוסיף אותו
                     if(row[field] !== undefined) filteredRow[field] = row[field];
                 });
                 return filteredRow;
             });
         }
         
-        // יצירת קובץ אקסל
         const wb = xlsx.utils.book_new();
         const ws = xlsx.utils.json_to_sheet(data);
         xlsx.utils.book_append_sheet(wb, ws, "Tasks");
-        
         const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buf);
-        
-    } catch (err) {
-        console.error(err);
-        res.status(500).send("Export error");
-    }
+    } catch (err) { console.error(err); res.status(500).send("Export error"); }
 });
 
 // --- 2. בדיקת ייבוא (Test Import) - לא שומר, רק בודק ---
@@ -686,6 +700,32 @@ app.post('/tasks/import/execute', authenticateToken, upload.single('file'), asyn
     } catch (err) {
         res.status(500).json({ error: "Import failed" });
     }
+});
+
+// --- Delete & Edit Helpers ---
+
+// Delete Item (Generic)
+const deleteItem = async (table, id, res) => {
+    try {
+        await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+        res.json({ success: true });
+    } catch (e) {
+        // שגיאה נפוצה: אי אפשר למחוק כי זה בשימוש (למשל קטגוריה שיש לה נכסים)
+        res.status(400).json({ error: "Cannot delete: Item is in use." });
+    }
+};
+
+app.delete('/locations/:id', authenticateToken, (req, res) => deleteItem('locations', req.params.id, res));
+app.delete('/categories/:id', authenticateToken, (req, res) => deleteItem('categories', req.params.id, res));
+app.delete('/assets/:id', authenticateToken, (req, res) => deleteItem('assets', req.params.id, res));
+
+// הוספת מיקום (היה חסר)
+app.post('/locations', authenticateToken, async (req, res) => {
+    try {
+        const { name } = req.body;
+        await pool.query('INSERT INTO locations (name) VALUES ($1)', [name]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).send("Error"); }
 });
 
 app.listen(port, () => { console.log(`Server running on ${port}`); });

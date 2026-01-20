@@ -6,14 +6,18 @@ const AdvancedExcel = ({ token, t, onClose, onRefresh }) => {
     
     // --- Export State ---
     const allFields = [
-        { id: 'id', label: 'ID (Database ID)' },
+        { id: 'id', label: 'ID (For Update)' },
         { id: 'title', label: t.task_title_label || 'Title' },
         { id: 'description', label: t.description_label || 'Description' },
         { id: 'urgency', label: t.urgency_label || 'Urgency' },
         { id: 'status', label: t.status_label || 'Status' },
         { id: 'due_date', label: t.date_label || 'Due Date' },
         { id: 'worker_name', label: t.assigned_to || 'Worker Name' },
-        { id: 'location_name', label: t.location || 'Location' }
+        { id: 'manager_name', label: t.manager_label || 'Worker Manager' }, // חדש
+        { id: 'location_name', label: t.location || 'Location' },
+        { id: 'asset_name', label: t.asset_name || 'Asset Name' }, // חדש
+        { id: 'category_name', label: t.category_label || 'Category' }, // חדש
+        { id: 'creation_image_url', label: t.image_url_label || 'Image URL' } // חדש
     ];
     
     const [availableFields, setAvailableFields] = useState(allFields);

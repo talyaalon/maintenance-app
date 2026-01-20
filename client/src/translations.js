@@ -160,6 +160,16 @@ export const translations = {
     confirm_import: "Are you sure? This will update the database.",
     export_update_mode: "I want to update data (import-compatible export)",
 
+    // --- update location tab ---
+    manager_label: "Worker's Manager",
+    image_url_label: "Image URL",
+    confirm_delete: "Are you sure you want to delete?",
+    error_delete_in_use: "Cannot delete: Item is in use by existing tasks.",
+    location_placeholder: "New Location Name",
+    asset_name: "Asset Name",
+    general_task: "General Task",
+    no_location: "No Location",
+
     // --- Profile Tab ---
     edit_profile_btn: "Edit Profile",
     password_security_note: "Old password hidden for security"
@@ -326,6 +336,16 @@ export const translations = {
     confirm_import: "האם אתה בטוח? הפעולה תעדכן את מסד הנתונים.",
     export_update_mode: "אני רוצה לעדכן נתונים (ייצוא תואם ייבוא)",
 
+    // --- update location tab ---
+    manager_label: "המנהל הישיר",
+    image_url_label: "קישור לתמונה",
+    confirm_delete: "האם למחוק פריט זה?",
+    error_delete_in_use: "לא ניתן למחוק: הפריט משויך למשימות קיימות.",
+    location_placeholder: "שם מיקום חדש",
+    asset_name: "שם הנכס",
+    general_task: "משימה כללית",
+    no_location: "ללא מיקום",
+
     // --- Profile Tab ---
     edit_profile_btn: "ערוך פרופיל",
     password_security_note: "הסיסמה הישנה מוסתרת מטעמי אבטחה"
@@ -491,6 +511,16 @@ export const translations = {
     select_fields_error: "เลือกอย่างน้อยหนึ่งฟิลด์",
     confirm_import: "คุณแน่ใจหรือไม่? นี่จะเป็นการอัปเดตฐานข้อมูล",
     export_update_mode: "ฉันต้องการอัปเดตข้อมูล (ส่งออกที่เข้ากันได้กับการนำเข้า)",
+
+    // --- update location tab ---
+    manager_label: "ผู้จัดการของผู้ปฏิบัติงาน",
+    image_url_label: "ลิงก์รูปภาพ",
+    confirm_delete: "คุณแน่ใจหรือไม่ว่าต้องการลบ?",
+    error_delete_in_use: "ไม่สามารถลบได้: รายการนี้ถูกใช้งานอยู่",
+    location_placeholder: "ชื่อสถานที่ใหม่",
+    asset_name: "ชื่อทรัพย์สิน",
+    general_task: "งานทั่วไป",
+    no_location: "ไม่มีสถานที่",
 
     // --- Profile Tab ---
     edit_profile_btn: "แก้ไขโปรไฟล์",
