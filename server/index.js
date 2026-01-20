@@ -5,23 +5,19 @@ const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const nodemailer = require('nodemailer');
-
-// --- ספריות לאקסל והעלאת קבצים ---
 const xlsx = require('xlsx');
 const multer = require('multer');
-const fs = require('fs'); // הגדרה אחת בלבד של fs
+const fs = require('fs');
 
 const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
-
-// --- הגדרת המייל (תיקון ל-Render: שימוש בפורט 587) ---
+// --- הגדרת המייל (Brevo SMTP) ---
 console.log("📧 Configuring Email using Brevo SMTP...");
-
 const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
-  port: 2525, // הפורט שעוקף חסימות
+  port: 2525, 
   secure: false,
   auth: {
     user: process.env.EMAIL_USER,
@@ -29,7 +25,6 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// בדיקת חיבור
 transporter.verify((error, success) => {
   if (error) {
     console.error('🔴 Still failing to connect:', error);
@@ -38,13 +33,11 @@ transporter.verify((error, success) => {
   }
 });
 
-// --- פונקציה: שליחת מייל עדכון פרטים ---
+// --- פונקציות עזר למייל ---
 const sendUpdateEmail = async (email, fullName, changes) => {
     const appLink = "https://maintenance-management-app.netlify.app";
     let changesHtml = '<ul style="padding-left: 20px; color: #333;">';
-    changes.forEach(change => {
-        changesHtml += `<li style="margin-bottom: 5px;">${change}</li>`;
-    });
+    changes.forEach(change => { changesHtml += `<li style="margin-bottom: 5px;">${change}</li>`; });
     changesHtml += '</ul>';
 
     const mailOptions = {
@@ -72,11 +65,9 @@ const sendUpdateEmail = async (email, fullName, changes) => {
     catch (error) { console.error('Error sending update email:', error); }
 };
 
-// --- פונקציה: שליחת מייל ברוכים הבאים ---
 const sendWelcomeEmail = async (email, fullName, password, role, managerName) => {
     const appLink = "https://maintenance-management-app.netlify.app";
     let titleText = 'Welcome to the team! 🛠️', descriptionText = 'Your account has been created.';
-
     if (role === 'MANAGER' || role === 'BIG_BOSS') {
         titleText = `Welcome to the Management Team! 💼`;
         descriptionText = `A manager account has been created for you with extended permissions.`;
@@ -126,9 +117,8 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// שינוי הגדרות הדאטה-בייס לעבודה בענן
+// DB Connection
 const isProduction = process.env.NODE_ENV === 'production';
-
 const connectionString = process.env.DATABASE_URL 
   ? process.env.DATABASE_URL 
   : `postgresql://postgres:1234@127.0.0.1:5432/maintenance_management_app`;
@@ -164,7 +154,7 @@ app.post('/login', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "שגיאת שרת" }); }
 });
 
-// עדכון פרופיל אישי + מייל עדכון
+// עדכון פרופיל
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
         const userId = req.user.id;
@@ -201,7 +191,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
     } catch (err) { res.status(500).send("Update failed"); }
 });
 
-// --- ניהול משתמשים (כולל הרשאות צפייה) ---
+// ניהול משתמשים
 app.get('/users', authenticateToken, async (req, res) => {
     try {
         let query = `
@@ -223,7 +213,7 @@ app.get('/users', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Server Error'); }
 });
 
-// יצירת משתמש חדש
+// יצירת משתמש
 app.post('/users', authenticateToken, async (req, res) => {
   const { full_name, email, password, role, parent_manager_id } = req.body;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "אימייל לא תקין" });
@@ -248,7 +238,7 @@ app.post('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// עריכת משתמש ע"י מנהל + מייל מפורט
+// עריכת משתמש
 app.put('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     const { id } = req.params;
@@ -302,7 +292,7 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// מחיקת משתמש (בטוחה)
+// מחיקת משתמש
 app.delete('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     try {
@@ -341,9 +331,8 @@ app.get('/locations', authenticateToken, async (req, res) => {
 app.post('/locations', authenticateToken, async (req, res) => {
   try { const r = await pool.query('INSERT INTO locations (name, created_by) VALUES ($1, $2) RETURNING *', [req.body.name, req.user.id]); res.json(r.rows[0]); } catch (e) { res.status(500).send('Error'); }
 });
-// --- Edit Items (PUT) ---
 
-// עריכת מיקום
+// --- Edit Items (PUT) ---
 app.put('/locations/:id', authenticateToken, async (req, res) => {
     try {
         const { name } = req.body;
@@ -352,7 +341,6 @@ app.put('/locations/:id', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send("Error updating location"); }
 });
 
-// עריכת קטגוריה
 app.put('/categories/:id', authenticateToken, async (req, res) => {
     try {
         const { name } = req.body;
@@ -361,7 +349,6 @@ app.put('/categories/:id', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send("Error updating category"); }
 });
 
-// עריכת נכס
 app.put('/assets/:id', authenticateToken, async (req, res) => {
     try {
         const { name, code, category_id } = req.body;
@@ -372,13 +359,13 @@ app.put('/assets/:id', authenticateToken, async (req, res) => {
         res.json({ success: true });
     } catch (e) { res.status(500).send("Error updating asset"); }
 });
+
 app.delete('/locations/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     try { await pool.query('DELETE FROM tasks WHERE location_id = $1', [req.params.id]); await pool.query('DELETE FROM locations WHERE id = $1', [req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).send('Error'); }
 });
 
-// --- TASKS (המדורג!) ---
-
+// --- TASKS ---
 app.get('/tasks', authenticateToken, async (req, res) => {
     try {
         const { role, id } = req.user;
@@ -395,9 +382,6 @@ app.get('/tasks', authenticateToken, async (req, res) => {
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN categories c ON a.category_id = c.id
         `;
-        
-        // ... (המשך הסינונים לפי תפקיד נשאר אותו דבר) ...
-        // רק לוודא שהשאילתה למעלה הוחלפה כדי לכלול את הטבלאות assets ו-categories
         
         if (role === 'EMPLOYEE') {
             query += ` WHERE t.worker_id = $1`;
@@ -416,14 +400,12 @@ app.get('/tasks', authenticateToken, async (req, res) => {
     } catch (err) { console.error(err); res.sendStatus(500); }
 });
 
-// 2. יצירת משימה (תמיכה בתמונות ומחזוריות)
 app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, res) => {
   try {
     const creationImageUrl = req.file ? `https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}` : null;
     const { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date } = req.body;
     
     const worker_id = assigned_worker_id || req.user.id;
-    
     const isRecurring = is_recurring === 'true';
     const selDays = selected_days ? JSON.parse(selected_days) : [];
 
@@ -433,7 +415,7 @@ app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, r
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING')`,
             [title, location_id, worker_id, urgency, due_date, description, creationImageUrl]
         );
-        return res.json({ message: "משימה נוצרה" });
+        return res.json({ message: "Task created" });
     }
 
     // משימות מחזוריות
@@ -449,6 +431,11 @@ app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, r
             if (selDays.includes(currentDate.getDay())) shouldInsert = true;
         } else if (recurring_type === 'monthly') {
             if (currentDate.getDate() === parseInt(recurring_date)) shouldInsert = true;
+        } else if (recurring_type === 'yearly') {
+             // בדיקה לשנתי (נוסף)
+             const startMonth = startDate.getMonth();
+             const startDay = startDate.getDate();
+             if (currentDate.getMonth() === startMonth && currentDate.getDate() === startDay) shouldInsert = true;
         }
         if (shouldInsert) tasksToInsert.push(new Date(currentDate));
         currentDate.setDate(currentDate.getDate() + 1);
@@ -458,22 +445,21 @@ app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, r
         await pool.query(
             `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING')`,
-            [title + ' (מחזורי)', location_id, worker_id, urgency, date, description, creationImageUrl]
+            [title + ' (Recurring)', location_id, worker_id, urgency, date, description, creationImageUrl]
         );
     }
-    res.json({ message: `נוצרו ${tasksToInsert.length} משימות מחזוריות` });
+    res.json({ message: `Created ${tasksToInsert.length} recurring tasks` });
 
   } catch (err) { console.error(err); res.status(500).send('Server Error'); }
 });
 
-// 3. דיווח ביצוע ע"י עובד
 app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_image'), async (req, res) => {
     try {
         const { id } = req.params;
         const { completion_note } = req.body;
         
         if (!req.file && !completion_note) {
-            return res.status(400).json({ error: "חובה להעלות תמונה או לכתוב הערה לסיום משימה" });
+            return res.status(400).json({ error: "Required image or note" });
         }
 
         const completionImageUrl = req.file ? `https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}` : null;
@@ -486,7 +472,6 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
     } catch (err) { res.status(500).send('Error'); }
 });
 
-// 4. אישור משימה ע"י מנהל
 app.put('/tasks/:id/approve', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     try {
@@ -495,7 +480,6 @@ app.put('/tasks/:id/approve', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error'); }
 });
 
-// 5. משימת המשך (Follow-up)
 app.post('/tasks/:id/follow-up', authenticateToken, async (req, res) => {
     try {
         const parentId = req.params.id;
@@ -507,253 +491,180 @@ app.post('/tasks/:id/follow-up', authenticateToken, async (req, res) => {
         await pool.query(
             `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, parent_task_id) 
              VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7)`,
-            [`המשך ל: ${pt.title}`, pt.location_id, pt.worker_id, 'High', due_date, description, parentId]
+            [`Follow up: ${pt.title}`, pt.location_id, pt.worker_id, 'High', due_date, description, parentId]
         );
         
-        await pool.query(`UPDATE tasks SET status = 'COMPLETED', completion_note = 'נפתחה משימת המשך לתאריך ${due_date}' WHERE id = $1`, [parentId]);
+        await pool.query(`UPDATE tasks SET status = 'COMPLETED', completion_note = 'Follow up created for ${due_date}' WHERE id = $1`, [parentId]);
 
         res.json({ success: true });
     } catch (err) { console.error(err); res.status(500).send('Error'); }
 });
 
-// 6. ייבוא חכם
-app.post('/tasks/import-smart', authenticateToken, async (req, res) => {
-    const { tasks } = req.body; 
-    if (!tasks || !Array.isArray(tasks)) return res.status(400).send("Invalid data");
+// --- NEW: IMPORT / EXPORT / DELETE-ALL SECTIONS ---
 
-    let created = 0;
-    let updated = 0;
-
+// 1. Delete ALL Tasks (Clean Data)
+app.delete('/tasks/delete-all', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).send("Access denied");
     try {
-        for (const task of tasks) {
-            const urgency = task.urgency || 'Normal';
-            if (task.id) {
-                const check = await pool.query('SELECT id FROM tasks WHERE id = $1', [task.id]);
+        await pool.query('DELETE FROM tasks');
+        res.json({ message: "All tasks deleted successfully" });
+    } catch (e) { res.status(500).send("Error deleting tasks"); }
+});
+
+// 2. Advanced Export with Filters
+app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
+    try {
+        const { worker_id, start_date, end_date } = req.query;
+        
+        let query = `
+            SELECT t.id, t.title, t.description, t.urgency, t.status, t.due_date,
+                   u.full_name as worker_name,
+                   l.name as location_name,
+                   a.name as asset_name, a.code as asset_code,
+                   c.name as category_name
+            FROM tasks t
+            LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN locations l ON t.location_id = l.id
+            LEFT JOIN assets a ON t.asset_id = a.id
+            LEFT JOIN categories c ON a.category_id = c.id
+            WHERE 1=1
+        `;
+        
+        const params = [];
+        let pIndex = 1;
+
+        if (worker_id) { query += ` AND t.worker_id = $${pIndex++}`; params.push(worker_id); }
+        if (start_date) { query += ` AND t.due_date >= $${pIndex++}`; params.push(start_date); }
+        if (end_date) { query += ` AND t.due_date <= $${pIndex++}`; params.push(end_date); }
+
+        query += ` ORDER BY t.due_date DESC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Export error");
+    }
+});
+
+// 3. Smart Import (Validation + Update + Insert)
+app.post('/tasks/import-data', authenticateToken, async (req, res) => {
+    const { tasks } = req.body;
+    if (!tasks || !Array.isArray(tasks)) return res.status(400).send("Invalid data format");
+
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN'); // Start Transaction
+
+        let created = 0, updated = 0;
+
+        for (const row of tasks) {
+            // A. Validate Employee Name
+            let worker_id = null;
+            if (row['Worker Name']) {
+                const userRes = await client.query('SELECT id FROM users WHERE full_name = $1', [row['Worker Name']]);
+                if (userRes.rows.length === 0) {
+                    throw new Error(`Employee not found: "${row['Worker Name']}"`);
+                }
+                worker_id = userRes.rows[0].id;
+            }
+
+            // B. Identify Asset / Location
+            let asset_id = null;
+            let location_id = null;
+            
+            if (row['Asset Code']) {
+                const assetRes = await client.query('SELECT id, location_id FROM assets WHERE code = $1', [row['Asset Code']]);
+                if (assetRes.rows.length > 0) {
+                    asset_id = assetRes.rows[0].id;
+                    location_id = assetRes.rows[0].location_id;
+                }
+            }
+            
+            if (!location_id && row['Location Name']) {
+                const locRes = await client.query('SELECT id FROM locations WHERE name = $1', [row['Location Name']]);
+                if (locRes.rows.length > 0) location_id = locRes.rows[0].id;
+            }
+
+            const title = row['Title'] || 'Imported Task';
+            const desc = row['Description'] || '';
+            const urgency = row['Urgency'] || 'Normal';
+            const dueDate = row['Due Date'] ? new Date(row['Due Date']) : new Date();
+
+            // C. Update or Insert
+            if (row['ID']) {
+                const check = await client.query('SELECT id FROM tasks WHERE id = $1', [row['ID']]);
+                
                 if (check.rows.length > 0) {
-                    await pool.query(
-                        `UPDATE tasks SET title=$1, urgency=$2, location_id=$3, worker_id=$4, due_date=$5 WHERE id=$6`,
-                        [task.title, urgency, task.location_id, task.worker_id, task.due_date, task.id]
+                    // Update EVERYTHING
+                    await client.query(
+                        `UPDATE tasks 
+                         SET title=$1, description=$2, urgency=$3, due_date=$4, worker_id=$5, asset_id=$6, location_id=$7
+                         WHERE id=$8`,
+                        [title, desc, urgency, dueDate, worker_id, asset_id, location_id, row['ID']]
                     );
                     updated++;
                 } else {
-                    await pool.query(
-                        `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date) VALUES ($1, $2, $3, $4, $5)`,
-                        [task.title, task.location_id, task.worker_id, urgency, task.due_date]
+                    // Insert new with specific ID (rare) or just insert
+                    await client.query(
+                        `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id)
+                         VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7)`,
+                        [title, desc, urgency, dueDate, worker_id, asset_id, location_id]
                     );
                     created++;
                 }
             } else {
-                await pool.query(
-                    `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date) VALUES ($1, $2, $3, $4, $5)`,
-                    [task.title, task.location_id, task.worker_id, urgency, task.due_date]
+                // New Task
+                await client.query(
+                    `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id)
+                     VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7)`,
+                    [title, desc, urgency, dueDate, worker_id, asset_id, location_id]
                 );
                 created++;
             }
         }
-        res.json({ message: 'Import completed', stats: { created, updated } });
-    } catch (e) { res.status(500).send('Error importing'); }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: `Process complete: ${created} created, ${updated} updated.` });
+
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error("Import Error:", e.message);
+        res.status(400).json({ error: e.message }); 
+    } finally {
+        client.release();
+    }
 });
 
-
-// --- CONFIGURATION / ASSETS MANAGEMENT ---
-
-// קבלת כל הקטגוריות
+// --- ASSETS / CATEGORIES MANAGEMENT (GET/POST) ---
 app.get('/categories', authenticateToken, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM categories ORDER BY name');
-        res.json(result.rows);
-    } catch (err) { console.error(err); res.status(500).send('Error fetching categories'); }
+    try { const result = await pool.query('SELECT * FROM categories ORDER BY name'); res.json(result.rows); } catch (err) { res.status(500).send('Error'); }
 });
-
-// יצירת קטגוריה חדשה
 app.post('/categories', authenticateToken, async (req, res) => {
-    try {
-        const { name } = req.body;
-        const result = await pool.query('INSERT INTO categories (name) VALUES ($1) RETURNING *', [name]);
-        res.json(result.rows[0]);
-    } catch (err) { console.error(err); res.status(500).send('Error creating category'); }
+    try { const result = await pool.query('INSERT INTO categories (name) VALUES ($1) RETURNING *', [req.body.name]); res.json(result.rows[0]); } catch (err) { res.status(500).send('Error'); }
 });
-
-// קבלת כל הנכסים
 app.get('/assets', authenticateToken, async (req, res) => {
-    try {
-        const query = `
-            SELECT assets.*, categories.name as category_name 
-            FROM assets 
-            LEFT JOIN categories ON assets.category_id = categories.id 
-            ORDER BY assets.code
-        `;
-        const result = await pool.query(query);
-        res.json(result.rows);
-    } catch (err) { console.error(err); res.status(500).send('Error fetching assets'); }
+    try { const result = await pool.query('SELECT assets.*, categories.name as category_name FROM assets LEFT JOIN categories ON assets.category_id = categories.id ORDER BY assets.code'); res.json(result.rows); } catch (err) { res.status(500).send('Error'); }
 });
-
-// יצירת נכס חדש
 app.post('/assets', authenticateToken, async (req, res) => {
     try {
         const { name, code, category_id } = req.body;
-        
-        // בדיקה אם הקוד כבר קיים
         const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
-        if (check.rows.length > 0) {
-            return res.status(400).json({ error: "Asset code already exists" });
-        }
-
-        const result = await pool.query(
-            'INSERT INTO assets (name, code, category_id) VALUES ($1, $2, $3) RETURNING *',
-            [name, code, category_id]
-        );
+        if (check.rows.length > 0) return res.status(400).json({ error: "Asset code already exists" });
+        const result = await pool.query('INSERT INTO assets (name, code, category_id) VALUES ($1, $2, $3) RETURNING *', [name, code, category_id]);
         res.json(result.rows[0]);
-    } catch (err) { console.error(err); res.status(500).send('Error creating asset'); }
+    } catch (err) { res.status(500).send('Error'); }
 });
 
-// --- 1. ייצוא מתקדם (עם בחירת שדות) ---
-app.post('/tasks/export-advanced', authenticateToken, async (req, res) => {
-    try {
-        const { selectedFields } = req.body;
-        
-        // עדכון השאילתה כדי לכלול מנהל ותמונה
-        let query = `
-            SELECT t.id, t.title, t.description, t.urgency, t.due_date, t.status, 
-                   t.creation_image_url, 
-                   u.full_name as worker_name, 
-                   m.full_name as manager_name,
-                   l.name as location_name,
-                   a.name as asset_name,
-                   c.name as category_name
-            FROM tasks t
-            LEFT JOIN users u ON t.worker_id = u.id
-            LEFT JOIN users m ON u.parent_manager_id = m.id -- חיבור למנהל של העובד
-            LEFT JOIN locations l ON t.location_id = l.id
-            LEFT JOIN assets a ON t.asset_id = a.id
-            LEFT JOIN categories c ON a.category_id = c.id
-            ORDER BY t.due_date DESC
-        `;
-        
-        const result = await pool.query(query);
-        let data = result.rows;
-
-        // אותו קוד סינון כמו קודם...
-        if (selectedFields && selectedFields.length > 0) {
-            data = data.map(row => {
-                const filteredRow = {};
-                selectedFields.forEach(field => {
-                    if(row[field] !== undefined) filteredRow[field] = row[field];
-                });
-                return filteredRow;
-            });
-        }
-        
-        const wb = xlsx.utils.book_new();
-        const ws = xlsx.utils.json_to_sheet(data);
-        xlsx.utils.book_append_sheet(wb, ws, "Tasks");
-        const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.send(buf);
-    } catch (err) { console.error(err); res.status(500).send("Export error"); }
-});
-
-// --- 2. בדיקת ייבוא (Test Import) - לא שומר, רק בודק ---
-app.post('/tasks/import/test', authenticateToken, upload.single('file'), async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "No file" });
-    
-    try {
-        const workbook = xlsx.readFile(req.file.path);
-        const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-        
-        const errors = [];
-        const preview = [];
-
-        rawData.forEach((row, index) => {
-            const rowErrors = [];
-            // בדיקות תקינות (אפשר להוסיף עוד)
-            if (!row.title) rowErrors.push("Missing Title");
-            
-            // זיהוי אם זה עדכון או יצירה
-            const type = row.id ? "Update" : "Create New";
-            
-            if (rowErrors.length > 0) {
-                errors.push({ row: index + 2, error: rowErrors.join(", ") });
-            }
-            
-            // שולחים 5 שורות ראשונות לתצוגה מקדימה
-            if (index < 5) preview.push({ ...row, _action: type });
-        });
-
-        // מחיקת הקובץ הזמני
-        fs.unlinkSync(req.file.path);
-
-        res.json({ 
-            isValid: errors.length === 0, 
-            totalRows: rawData.length,
-            errors,
-            preview
-        });
-
-    } catch (err) {
-        res.status(500).json({ error: "Test failed" });
-    }
-});
-
-// --- 3. ביצוע ייבוא (Execute Import) - שומר באמת ---
-app.post('/tasks/import/execute', authenticateToken, upload.single('file'), async (req, res) => {
-     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-    
-    try {
-        const workbook = xlsx.readFile(req.file.path);
-        const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-        
-        let updated = 0; let created = 0;
-
-        for (const row of rawData) {
-            if (row.id) {
-                // עדכון משימה קיימת
-                await pool.query(
-                    `UPDATE tasks SET title=$1, description=$2, urgency=$3, status=$4 WHERE id=$5`,
-                    [row.title, row.description, row.urgency, row.status, row.id]
-                );
-                updated++;
-            } else {
-                // יצירת משימה חדשה
-                await pool.query(
-                    `INSERT INTO tasks (title, description, urgency, due_date, status, worker_id) VALUES ($1, $2, $3, $4, 'PENDING', $5)`,
-                    [row.title, row.description || '', row.urgency || 'Normal', new Date(), req.user.id]
-                );
-                created++;
-            }
-        }
-        fs.unlinkSync(req.file.path);
-        res.json({ message: "Success", created, updated });
-    } catch (err) {
-        res.status(500).json({ error: "Import failed" });
-    }
-});
-
-// --- Delete & Edit Helpers ---
-
-// Delete Item (Generic)
+// --- Generic Delete Helper ---
 const deleteItem = async (table, id, res) => {
-    try {
-        await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
-        res.json({ success: true });
-    } catch (e) {
-        // שגיאה נפוצה: אי אפשר למחוק כי זה בשימוש (למשל קטגוריה שיש לה נכסים)
-        res.status(400).json({ error: "Cannot delete: Item is in use." });
-    }
+    try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); } 
+    catch (e) { res.status(400).json({ error: "Cannot delete: Item is in use." }); }
 };
-
 app.delete('/locations/:id', authenticateToken, (req, res) => deleteItem('locations', req.params.id, res));
 app.delete('/categories/:id', authenticateToken, (req, res) => deleteItem('categories', req.params.id, res));
 app.delete('/assets/:id', authenticateToken, (req, res) => deleteItem('assets', req.params.id, res));
-
-// הוספת מיקום (היה חסר)
-app.post('/locations', authenticateToken, async (req, res) => {
-    try {
-        const { name } = req.body;
-        await pool.query('INSERT INTO locations (name) VALUES ($1)', [name]);
-        res.json({ success: true });
-    } catch (e) { res.status(500).send("Error"); }
-});
 
 // --- Get Tasks for Specific User (Manager View) ---
 app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
