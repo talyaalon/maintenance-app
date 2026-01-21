@@ -602,86 +602,145 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/tasks/import-data', authenticateToken, async (req, res) => {
-    const { tasks } = req.body;
-    if (!tasks || !Array.isArray(tasks)) return res.status(400).send("Invalid data format");
-
+// --- IMPORT & VALIDATION ENDPOINT (החכם החדש) ---
+app.post('/tasks/import-process', authenticateToken, async (req, res) => {
+    const { tasks, isDryRun } = req.body; // isDryRun = true (Test Mode), false (Save Mode)
     const client = await pool.connect();
     
     try {
-        await client.query('BEGIN'); 
+        await client.query('BEGIN');
+        
+        const errors = []; // רשימת שגיאות שתחזור למשתמש
+        const validTasks = [];
 
-        let created = 0, updated = 0;
+        // 1. טעינת נתוני עזר לבדיקה
+        const usersRes = await client.query('SELECT id, full_name FROM users');
+        const locationsRes = await client.query('SELECT id, name FROM locations');
+        const assetsRes = await client.query('SELECT id, name, code, category_id, location_id FROM assets');
+        const categoriesRes = await client.query('SELECT id, name FROM categories');
 
-        for (const row of tasks) {
-            // התיקון: תמיכה בייבוא לעובד ספציפי (אם נשלח ב-URL)
-            let worker_id = req.query.target_worker_id || null;
+        const usersMap = new Map(usersRes.rows.map(u => [u.full_name.trim().toLowerCase(), u.id]));
+        const locMap = new Map(locationsRes.rows.map(l => [l.name.trim().toLowerCase(), l.id]));
+        const catMap = new Map(categoriesRes.rows.map(c => [c.name.trim().toLowerCase(), c.id]));
+        // מיפוי נכסים גם לפי שם וגם לפי קוד
+        const assetCodeMap = new Map(assetsRes.rows.map(a => [a.code.trim().toLowerCase(), a]));
+        const assetNameMap = new Map(assetsRes.rows.map(a => [a.name.trim().toLowerCase(), a]));
 
-            if (row['Worker Name']) {
-                const userRes = await client.query('SELECT id FROM users WHERE full_name = $1', [row['Worker Name']]);
-                if (userRes.rows.length === 0) {
-                    throw new Error(`Employee not found: "${row['Worker Name']}"`);
-                }
-                worker_id = userRes.rows[0].id;
-            }
-
-            let asset_id = null;
+        // 2. מעבר על השורות ובדיקה
+        for (let i = 0; i < tasks.length; i++) {
+            const row = tasks[i];
+            const rowErrors = [];
+            let worker_id = null;
             let location_id = null;
-            
-            if (row['Asset Code']) {
-                const assetRes = await client.query('SELECT id, location_id FROM assets WHERE code = $1', [row['Asset Code']]);
-                if (assetRes.rows.length > 0) {
-                    asset_id = assetRes.rows[0].id;
-                    location_id = assetRes.rows[0].location_id;
-                }
-            }
-            
-            if (!location_id && row['Location Name']) {
-                const locRes = await client.query('SELECT id FROM locations WHERE name = $1', [row['Location Name']]);
-                if (locRes.rows.length > 0) location_id = locRes.rows[0].id;
+            let asset_id = null;
+
+            // בדיקת כותרת (חובה)
+            if (!row['Title']) {
+                rowErrors.push(`Row ${i + 1}: Missing 'Title'`);
             }
 
-            const title = row['Title'] || 'Imported Task';
-            const desc = row['Description'] || '';
-            const urgency = row['Urgency'] || 'Normal';
-            const dueDate = row['Due Date'] ? new Date(row['Due Date']) : new Date();
-
-            if (row['ID']) {
-                const check = await client.query('SELECT id FROM tasks WHERE id = $1', [row['ID']]);
-                
-                if (check.rows.length > 0) {
-                    await client.query(
-                        `UPDATE tasks 
-                         SET title=$1, description=$2, urgency=$3, due_date=$4, worker_id=$5, asset_id=$6, location_id=$7
-                         WHERE id=$8`,
-                        [title, desc, urgency, dueDate, worker_id, asset_id, location_id, row['ID']]
-                    );
-                    updated++;
+            // בדיקת עובד
+            if (row['Worker Name']) {
+                const wName = row['Worker Name'].toString().trim().toLowerCase();
+                if (usersMap.has(wName)) {
+                    worker_id = usersMap.get(wName);
                 } else {
-                    await client.query(
-                        `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id)
-                         VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7)`,
-                        [title, desc, urgency, dueDate, worker_id, asset_id, location_id]
-                    );
-                    created++;
+                    rowErrors.push(`Row ${i + 1}: Worker '${row['Worker Name']}' not found in team.`);
                 }
             } else {
-                await client.query(
-                    `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id)
-                     VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7)`,
-                    [title, desc, urgency, dueDate, worker_id, asset_id, location_id]
-                );
-                created++;
+                // אם לא צוין עובד, זה בסדר (ללא שיוך) או ברירת מחדל
+                worker_id = req.user.id; 
+            }
+
+            // בדיקת נכס וקטגוריה
+            if (row['Asset Code']) {
+                const aCode = row['Asset Code'].toString().trim().toLowerCase();
+                if (assetCodeMap.has(aCode)) {
+                    const asset = assetCodeMap.get(aCode);
+                    asset_id = asset.id;
+                    
+                    // ולידציה: האם שם הנכס תואם (אם הוזן)?
+                    if (row['Asset Name'] && asset.name.toLowerCase() !== row['Asset Name'].toString().trim().toLowerCase()) {
+                        rowErrors.push(`Row ${i + 1}: Asset Code '${row['Asset Code']}' matches, but name is different.`);
+                    }
+                    
+                    // אם לנכס יש מיקום, נשתמש בו
+                    if (asset.location_id) location_id = asset.location_id;
+
+                } else {
+                    rowErrors.push(`Row ${i + 1}: Asset Code '${row['Asset Code']}' not found.`);
+                }
+            } else if (row['Asset Name']) {
+                // חיפוש לפי שם אם אין קוד
+                const aName = row['Asset Name'].toString().trim().toLowerCase();
+                if (assetNameMap.has(aName)) {
+                    const asset = assetNameMap.get(aName);
+                    asset_id = asset.id;
+                    if (asset.location_id) location_id = asset.location_id;
+                } else {
+                    rowErrors.push(`Row ${i + 1}: Asset Name '${row['Asset Name']}' not found.`);
+                }
+            }
+
+            // בדיקת מיקום (אם לא הגיע מהנכס)
+            if (!location_id && row['Location Name']) {
+                const lName = row['Location Name'].toString().trim().toLowerCase();
+                if (locMap.has(lName)) {
+                    location_id = locMap.get(lName);
+                } else {
+                    rowErrors.push(`Row ${i + 1}: Location '${row['Location Name']}' not found.`);
+                }
+            }
+
+            // אם יש שגיאות, נוסיף לרשימה הראשית
+            if (rowErrors.length > 0) {
+                errors.push(...rowErrors);
+            } else {
+                // הכנת הנתונים להכנסה
+                validTasks.push({
+                    title: row['Title'],
+                    description: row['Description'] || '',
+                    urgency: ['Normal', 'High'].includes(row['Urgency']) ? row['Urgency'] : 'Normal',
+                    due_date: row['Due Date'] ? new Date(row['Due Date']) : new Date(),
+                    worker_id,
+                    location_id,
+                    asset_id
+                });
             }
         }
 
-        await client.query('COMMIT');
-        res.json({ success: true, message: `Process complete: ${created} created, ${updated} updated.` });
+        // 3. החלטה: Test או Import
+        if (isDryRun) {
+            // במצב Test רק מחזירים את התוצאות
+            await client.query('ROLLBACK'); // לא שומרים כלום
+            if (errors.length > 0) {
+                return res.json({ success: false, errors, message: "Found blocking errors." });
+            } else {
+                return res.json({ success: true, message: "Everything seems valid." });
+            }
+        } else {
+            // במצב אמת - אם יש שגיאות עוצרים
+            if (errors.length > 0) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: "Please fix errors before importing.", details: errors });
+            }
+
+            // שמירה בפועל
+            for (const t of validTasks) {
+                await client.query(
+                    `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id) 
+                     VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7)`,
+                    [t.title, t.description, t.urgency, t.due_date, t.worker_id, t.asset_id, t.location_id]
+                );
+            }
+            await client.query('COMMIT');
+            res.json({ success: true, message: `Successfully imported ${validTasks.length} tasks.` });
+        }
 
     } catch (e) {
         await client.query('ROLLBACK');
-        console.error("Import Error:", e.message);
-        res.status(400).json({ error: e.message }); 
+        console.error(e);
+        res.status(500).json({ error: e.message });
     } finally {
         client.release();
     }

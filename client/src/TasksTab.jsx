@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, parseISO, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, Camera, ArrowRight, X, FileSpreadsheet, Check, Plus, User, MapPin, Tag, AlertTriangle } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, Camera, ArrowRight, X, FileSpreadsheet, Check, Plus, User, MapPin, Tag, AlertTriangle, Box, Hash } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
 
@@ -188,7 +188,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => {
           <CreateTaskForm 
               token={token} 
               t={t} 
-              user={user} // אם אנחנו בסימולציה, זה המשתמש הנבחר!
+              user={user} 
               onRefresh={onRefresh} 
               onClose={() => setShowCreateModal(false)} 
           />
@@ -233,6 +233,7 @@ const ViewBtn = ({ active, onClick, label }) => (
 
 // --- כרטיס משימה מעוצב ---
 const TaskCard = ({ task, onClick, t, statusColor = 'border-purple-500', compact = false }) => {
+    // אם יש שם נכס, נשתמש בו כשם הראשי. אחרת שם המשימה.
     const displayName = task.asset_name || task.title;
     return (
         <div onClick={onClick} className={`bg-white p-3 rounded-xl shadow-sm border-r-4 ${statusColor} cursor-pointer hover:shadow-md transition-all flex flex-col gap-1 relative overflow-hidden`}>
@@ -301,19 +302,44 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
         alert(t.alert_created || "Created successfully!"); onRefresh(); onClose();
     };
 
-    if(showSuccess) return <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50"><div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center"><Check size={40} className="text-green-600 mb-2"/><h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2></div></div>;
+    if(showSuccess) return <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]"><div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center"><Check size={40} className="text-green-600 mb-2"/><h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2></div></div>;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-50 backdrop-blur-sm p-4">
+        // שינוי 1: z-[100] כדי לעלות מעל הפוטר
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-[100] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
+                {/* Header */}
                 <div className="bg-gray-50 p-4 border-b flex justify-between items-start sticky top-0 bg-white z-10">
                     <div>
-                        <h2 className="text-xl font-bold text-gray-900">{task.asset_name || task.title}</h2>
-                        {task.asset_code && <span className="text-xs text-gray-500 font-mono bg-gray-100 px-1 rounded">#{task.asset_code}</span>}
+                        <h2 className="text-xl font-bold text-gray-900">{task.title}</h2>
                     </div>
                     <button onClick={onClose} className="bg-gray-100 p-2 rounded-full hover:bg-gray-200"><X size={20}/></button>
                 </div>
-                <div className="p-6 space-y-6">
+                
+                {/* שינוי 2: pb-32 כדי לאפשר גלילה עד הסוף */}
+                <div className="p-6 space-y-6 pb-32">
+                    
+                    {/* שינוי 3: בלוק חדש וברור לפרטי הנכס */}
+                    {(task.asset_name || task.asset_code) && (
+                        <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 shadow-sm">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Box size={18} className="text-purple-600" />
+                                <span className="text-sm font-bold text-purple-900 uppercase">{t.assets_title || "Asset Info"}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h3 className="font-bold text-gray-800 text-lg">{task.asset_name || "N/A"}</h3>
+                                    {task.category_name && <span className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded border">{task.category_name}</span>}
+                                </div>
+                                {task.asset_code && (
+                                    <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-purple-200 text-purple-700 font-mono font-bold text-sm">
+                                        <Hash size={14} /> {task.asset_code}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.date_label}</span><span className="font-medium">{format(parseISO(task.due_date), 'dd/MM/yyyy')}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.urgency_label || "Urgency"}</span><span className={`px-2 py-0.5 rounded text-xs font-bold ${task.urgency === 'High' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{task.urgency}</span></div>
