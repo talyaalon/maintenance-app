@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { Camera, Save, X, LogOut, Eye, EyeOff, Phone } from 'lucide-react'; // הוספתי Phone
+import { Camera, Save, X, LogOut, Eye, EyeOff } from 'lucide-react'; // הסרתי את Phone מהייבוא כי מחקנו אותו
 
-const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => { // הוספתי את lang
+const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
   const [formData, setFormData] = useState({
     full_name: user.name || '',
     email: user.email || '', 
-    phone: user.phone || '', // שדה חדש לטלפון
+    phone: user.phone || '',
     password: '', 
   });
 
@@ -29,7 +29,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => { // ה
     const dataToSend = new FormData();
     dataToSend.append('full_name', formData.full_name);
     dataToSend.append('email', formData.email);
-    dataToSend.append('phone', formData.phone); // שליחת הטלפון לשרת
+    dataToSend.append('phone', formData.phone);
     
     if (formData.password) {
         dataToSend.append('password', formData.password);
@@ -70,7 +70,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => { // ה
     <div className="p-4 flex flex-col items-center pb-24 max-w-lg mx-auto">
       <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t.nav_profile}</h2>
 
-      {/* אזור תמונת הפרופיל - הבלוק החדש */}
+      {/* אזור תמונת הפרופיל */}
       <div className="relative mb-6 group flex flex-col items-center">
         <div className="relative">
             {/* עיגול התמונה */}
@@ -124,36 +124,35 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => { // ה
             />
         </div>
 
-        {/* שדה טלפון עם הכיתוב אופציונלי */}
+        {/* --- שדה טלפון (נקי) --- */}
         <div>
-            <label className="block text-sm font-medium text-gray-500 mb-1 flex items-center gap-2">
-                <Phone size={16} className="text-gray-400"/> {t.phone_label || "Phone Number"} 
-                <span className="text-xs text-gray-400">({t.optional || "Optional"})</span>
+            <label className="block text-sm font-medium text-gray-500 mb-1">
+                {t.phone_label || "Phone Number"}
             </label>
             <input 
                 type="tel" 
-                className="w-full p-3 bg-gray-50 rounded-lg border outline-none disabled:text-gray-400"
+                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none disabled:bg-gray-100 disabled:text-gray-400"
                 value={formData.phone}
                 onChange={e => setFormData({...formData, phone: e.target.value})}
                 disabled={!isEditing}
-                dir="ltr" // מספרים תמיד משמאל לימין
+                dir="ltr"
                 placeholder="050-0000000"
             />
         </div>
 
         {isEditing && (
             <div className="animate-fade-in relative">
-                <label className="block text-sm font-medium text-gray-500 mb-1">{t.password_placeholder_edit}</label>
+                {/* --- סיסמה (נקיה) --- */}
+                <label className="block text-sm font-medium text-gray-500 mb-1">{t.password_placeholder || "New Password"}</label>
                 <div className="relative">
                     <input 
                         type={showPassword ? "text" : "password"} 
                         className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none pr-10" 
                         value={formData.password}
                         onChange={e => setFormData({...formData, password: e.target.value})}
-                        placeholder={t.password_placeholder_edit}
+                        placeholder="********"
                         autoComplete="new-password"
                     />
-                    {/* --- תיקון מיקום העין --- */}
                     <button 
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, Camera, FileText, Box, RefreshCw } from 'lucide-react';
 
-const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
+const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh }) => {
   // --- סטייט לניהול התדירות והטופס ---
   const [frequency, setFrequency] = useState('Once'); // Once, Weekly, Monthly, Yearly
   
+  // שימוש ב-user שהתקבל כ-currentUser (כדי למנוע בלבול שמות)
+  const currentUser = user;
+
   const [formData, setFormData] = useState({
     title: '', 
     urgency: 'Normal', 
@@ -13,9 +16,9 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
     asset_id: '', 
     assigned_worker_id: currentUser?.role === 'EMPLOYEE' ? currentUser.id : '',
     description: '', 
-    selected_days: [], // לימים בשבוע
-    recurring_date: 1, // ליום בחודש
-    recurring_month: 0 // לחודש בשנה
+    selected_days: [], // לימים בשבוע (0-6)
+    recurring_date: 1, // ליום בחודש (1-31)
+    recurring_month: 0 // לחודש בשנה (0-11)
   });
 
   const [file, setFile] = useState(null); 
@@ -30,7 +33,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
   // רשימות עזר
   const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  // --- טעינת נתונים (אותו קוד כמו קודם) ---
+  // --- טעינת נתונים ---
   useEffect(() => {
     const headers = { 'Authorization': `Bearer ${token}` };
 
@@ -45,7 +48,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
     fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
         .then(res => res.json()).then(setAssets).catch(err => console.error("Error assets", err));
 
-    // 3. עובדים (רק למנהלים)
+    // 3. עובדים (רק למנהלים) - מביא את כל המשתמשים כדי שנוכל לבחור
     if (currentUser?.role !== 'EMPLOYEE') {
         fetch('https://maintenance-app-h84v.onrender.com/users', { headers })
         .then(res => res.json()).then(setTeamMembers).catch(err => console.error("Error users", err));
@@ -90,7 +93,11 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
         data.append('is_recurring', 'true');
         data.append('recurring_type', frequency.toLowerCase()); // weekly, monthly, yearly
         
+        // כאן התיקון החשוב: שליחת תאריך התחלה תקין גם למשימות מחזוריות
+        data.append('due_date', formData.due_date); 
+
         if (frequency === 'Weekly') {
+            // השרת מצפה למערך ימים (כסטרינג של JSON)
             data.append('selected_days', JSON.stringify(formData.selected_days));
         } else if (frequency === 'Monthly') {
             data.append('recurring_date', formData.recurring_date);
@@ -99,7 +106,6 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
             const dateObj = new Date(formData.due_date);
             data.append('recurring_month', dateObj.getMonth()); // 0-11
             data.append('recurring_date', dateObj.getDate());   // 1-31
-            data.append('due_date', formData.due_date); // תאריך התחלה
         }
     }
 
@@ -114,16 +120,27 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
         body: data
       });
 
+      const responseData = await res.json(); // קריאת התגובה מהשרת
+
       if (res.ok) { 
-          // במקום Alert רגיל, נקרא לפונקציה של ההורים (אם רוצים) או פשוט נסגור
           alert((t.save || "Saved") + '!'); 
-          onTaskCreated(); 
+          if (onRefresh) onRefresh(); // רענון הרשימה בחוץ
+          if (onTaskCreated) onTaskCreated(); // תמיכה לאחור
+          if (onClose) onClose(); // סגירת המודל
       } else { 
-          alert(t.error_create_task || 'Error creating task'); 
+          // הצגת שגיאה מפורטת מהשרת אם יש
+          alert(responseData.error || t.error_create_task || 'Error creating task'); 
       }
     } catch (err) { 
+        console.error(err);
         alert(t.server_error || 'Server Error'); 
     }
+  };
+
+  // פונקציית עזר לסגירה (תומכת גם ב-onCancel וגם ב-onClose)
+  const handleClose = () => {
+      if (onClose) onClose();
+      else if (onTaskCreated) onTaskCreated(); // במקרה הישן
   };
 
   return (
@@ -134,7 +151,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
         {/* --- Header (קבוע למעלה) --- */}
         <div className="flex justify-between items-center p-4 border-b bg-gray-50 shrink-0">
             <h2 className="text-xl font-bold text-[#6A0DAD]">{t.create_new_task || "Create Task"}</h2>
-            <button onClick={onCancel} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={20}/></button>
+            <button onClick={handleClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={20}/></button>
         </div>
 
         {/* --- Scrollable Content (האמצע נגלל) --- */}
@@ -161,21 +178,19 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
                 {/* התוכן משתנה לפי הבחירה */}
                 <div className="bg-white p-3 rounded-lg border animate-fade-in">
                     
-                    {/* חד פעמי או שנתי (לוח שנה) */}
-                    {(frequency === 'Once' || frequency === 'Yearly') && (
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 mb-1 block">
-                                {frequency === 'Yearly' ? (t.pick_yearly_date || "Pick Date (Repeats every year)") : (t.pick_date || "Pick Date")}
-                            </label>
-                            <input type="date" className="w-full p-2 border rounded-lg outline-none focus:border-purple-500" 
-                                value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
-                            />
-                        </div>
-                    )}
+                    {/* בחירת תאריך התחלה (רלוונטי לכולם) */}
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 mb-1 block">
+                            {frequency === 'Once' ? (t.pick_date || "Pick Date") : (t.start_date || "Start Date")}
+                        </label>
+                        <input type="date" className="w-full p-2 border rounded-lg outline-none focus:border-purple-500" 
+                            value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
+                        />
+                    </div>
 
                     {/* שבועי (כפתורי ימים) */}
                     {frequency === 'Weekly' && (
-                        <div>
+                        <div className="mt-3">
                             <label className="text-xs font-bold text-gray-500 mb-2 block">{t.pick_days || "Select Days"}</label>
                             <div className="flex justify-between gap-1">
                                 {daysShort.map((day, index) => (
@@ -194,7 +209,7 @@ const CreateTaskForm = ({ onTaskCreated, onCancel, currentUser, token, t }) => {
 
                     {/* חודשי (רשימת ימים 1-31) */}
                     {frequency === 'Monthly' && (
-                        <div>
+                        <div className="mt-3">
                             <label className="text-xs font-bold text-gray-500 mb-1 block">{t.pick_day_of_month || "Day of Month"}</label>
                             <select className="w-full p-2 border rounded-lg outline-none"
                                 value={formData.recurring_date} onChange={e => setFormData({...formData, recurring_date: parseInt(e.target.value)})}
