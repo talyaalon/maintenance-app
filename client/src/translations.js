@@ -224,6 +224,11 @@ export const translations = {
     nav_locations: "Locations",
     // ...
 
+    // בתוך en:
+    new_password: "New Password",
+    error_email_exists: "This email is already registered",
+    error_missing_fields: "Please fill in all required fields",
+
     // --- Profile Tab ---
     edit_profile_btn: "Edit Profile",
     password_security_note: "Old password hidden for security"
@@ -453,6 +458,11 @@ export const translations = {
     normal: "רגיל",
     nav_locations: "מיקומים", // התיקון שביקשת
     // ...
+
+    // בתוך he:
+    new_password: "סיסמה חדשה",
+    error_email_exists: "כתובת האימייל הזו כבר רשומה במערכת",
+    error_missing_fields: "נא למלא את כל שדות החובה",
 
     // --- Profile Tab ---
     edit_profile_btn: "ערוך פרופיל",
@@ -721,6 +731,11 @@ export const translations = {
     alert_sent: "ส่งสำเร็จ!",
     manager_notes: "บันทึกจากผู้จัดการ",
     worker_report: "รายงานจากพนักงาน",
+
+    // בתוך th:
+    new_password: "รหัสผ่านใหม่",
+    error_email_exists: "อีเมลนี้ถูกลงทะเบียนแล้ว",
+    error_missing_fields: "กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน",
 
     // --- Profile Tab ---
     edit_profile_btn: "แก้ไขโปรไฟล์",

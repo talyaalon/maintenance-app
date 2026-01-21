@@ -215,82 +215,78 @@ app.get('/users', authenticateToken, async (req, res) => {
 });
 
 // יצירת משתמש
+// --- יצירת משתמש חדש (Create User) ---
 app.post('/users', authenticateToken, async (req, res) => {
-  const { full_name, email, password, role, parent_manager_id, phone } = req.body;
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "אימייל לא תקין" });
-  if (req.user.role === 'EMPLOYEE') return res.status(403).json({ error: "אין הרשאה" });
-
   try {
-    const newUser = await pool.query(
-      `INSERT INTO users (full_name, email, password, role, parent_manager_id, phone)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, full_name, email, role`,
-      [full_name, email, password, role, parent_manager_id, phone]
-    );
-    let managerName = null;
-    if (role === 'EMPLOYEE' && parent_manager_id) {
-        const mRes = await pool.query('SELECT full_name FROM users WHERE id = $1', [parent_manager_id]);
-        if (mRes.rows.length > 0) managerName = mRes.rows[0].full_name;
+    const { full_name, email, password, role, phone, manager_id } = req.body;
+    
+    // ולידציה בסיסית
+    if (!full_name || !email || !password || !role) {
+        return res.status(400).json({ error: "Missing required fields" });
     }
-    sendWelcomeEmail(email, full_name, password, role, managerName);
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // קביעת מנהל: אם נשלח manager_id נשתמש בו, אחרת אם המבקש הוא מנהל, הוא המנהל
+    let assignedManager = manager_id;
+    if (!assignedManager && req.user.role === 'MANAGER') {
+        assignedManager = req.user.id;
+    }
+
+    const newUser = await pool.query(
+      `INSERT INTO users (full_name, email, password_hash, role, phone, manager_id) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, full_name, email, role, phone`,
+      [full_name, email, hashedPassword, role, phone, assignedManager]
+    );
+    
     res.json(newUser.rows[0]);
+
   } catch (err) {
-    if (err.code === '23505') return res.status(400).json({ error: "המייל קיים" });
-    res.status(500).json({ error: "שגיאה" });
+    console.error(err);
+    // בדיקה האם זו שגיאת "אימייל כפול" (קוד 23505 ב-Postgres)
+    if (err.code === '23505') {
+        return res.status(400).json({ error: "Email already exists" });
+    }
+    res.status(500).send('Server Error');
   }
 });
 
-// עריכת משתמש
+// --- עדכון משתמש קיים (Update User) - תיקון המחיקה והסיסמה ---
 app.put('/users/:id', authenticateToken, async (req, res) => {
-    if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
+  try {
     const { id } = req.params;
-    const { full_name, email, password, parent_manager_id, phone } = req.body; 
-    
-    try {
-        const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-        const oldUser = oldUserRes.rows[0];
-        if (!oldUser) return res.status(404).send("User not found");
+    // מוציאים רק את השדות שאנחנו רוצים לעדכן
+    const { full_name, email, phone, role, password } = req.body;
 
-        let query, params;
-        let changes = [];
+    // בונים את השאילתה דינמית כדי לא לדרוס שדות שלא נשלחו (כמו manager_id)
+    let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4';
+    let params = [full_name, email, phone, role];
+    let paramCount = 5;
 
-        if (full_name !== oldUser.full_name) changes.push(`השם שלך שונה ל: <strong>${full_name}</strong>`);
-        if (email !== oldUser.email) changes.push(`כתובת האימייל שונתה ל: <strong>${email}</strong>`);
-        if (password && password.trim() !== "") changes.push('הסיסמה שלך שונתה');
-
-        const oldManagerId = oldUser.parent_manager_id;
-        const newManagerId = parent_manager_id || null; 
-
-        if (oldManagerId !== newManagerId) {
-            if (newManagerId) {
-                const mRes = await pool.query('SELECT full_name FROM users WHERE id = $1', [newManagerId]);
-                if (mRes.rows.length > 0) {
-                    changes.push(`הועברת למנהל חדש: <strong>${mRes.rows[0].full_name}</strong>`);
-                }
-            } else {
-                changes.push('הוסרת משיוך למנהל (כעת אין לך מנהל ישיר)');
-            }
-        }
-
-        if (password && password.trim() !== "") {
-            query = 'UPDATE users SET full_name = $1, email = $2, password = $3, parent_manager_id = $4, phone = $5 WHERE id = $6 RETURNING *';
-            params = [full_name, email, password, parent_manager_id || null, phone, id];
-        } else {
-            query = 'UPDATE users SET full_name = $1, email = $2, parent_manager_id = $3, phone = $4 WHERE id = $5 RETURNING *';
-            params = [full_name, email, parent_manager_id || null, phone, id];
-        }
-        
-        const result = await pool.query(query, params);
-        const updatedUser = result.rows[0];
-
-        if (changes.length > 0) {
-            sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes);
-        }
-
-        res.json(updatedUser);
-    } catch (err) {
-        console.error("Error updating user:", err);
-        res.status(500).send("Error updating user");
+    // אם נשלחה סיסמה חדשה - נעדכן גם אותה
+    if (password && password.trim() !== '') {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        query += `, password_hash=$${paramCount}`;
+        params.push(hashedPassword);
+        paramCount++;
     }
+
+    // מוסיפים את ה-ID בסוף
+    query += ` WHERE id=$${paramCount}`;
+    params.push(id);
+
+    // ביצוע העדכון
+    await pool.query(query, params);
+    
+    res.json({ message: "User updated successfully" });
+
+  } catch (err) {
+    console.error(err);
+    if (err.code === '23505') {
+        return res.status(400).json({ error: "Email already exists" });
+    }
+    res.status(500).send('Server Error');
+  }
 });
 
 // מחיקת משתמש

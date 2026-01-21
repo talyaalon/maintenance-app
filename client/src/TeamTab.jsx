@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Edit2, ChevronDown, ChevronUp, User, X, Plus, Save } from 'lucide-react';
-import TasksTab from './TasksTab'; // <--- זה הייבוא הקריטי שחוסך לנו 100 שורות קוד
+import { Trash2, Edit2, ChevronDown, ChevronUp, User, X, Plus, Save, Eye, EyeOff } from 'lucide-react';
+import TasksTab from './TasksTab'; 
 
 const TeamTab = ({ token, t, user, onRefresh, lang }) => {
     // --- 1. State for Team Management ---
@@ -10,7 +10,9 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
     // --- 2. State for Editing User ---
     const [editMember, setEditMember] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '' });
+    // הוספתי שדה password לטופס העריכה
+    const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', password: '' });
+    const [showPassword, setShowPassword] = useState(false);
 
     // --- משתנים להוספת משתמש חדש ---
     const [showAddModal, setShowAddModal] = useState(false);
@@ -36,18 +38,24 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
+            
             if (res.ok) {
                 alert(t.alert_created || "User created successfully! Email sent.");
                 setShowAddModal(false);
                 setAddForm({ full_name: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '' });
                 fetchTeam(); // רענון הרשימה
             } else {
-                alert("Error: " + (data.error || "Failed"));
+                // הצגת שגיאה ספציפית
+                if (data.error === "Email already exists") {
+                    alert(t.error_email_exists || "Email already exists");
+                } else {
+                    alert("Error: " + (data.error || "Failed"));
+                }
             }
         } catch (e) { alert("Server Error"); }
     };
 
-    // --- 3. State for Viewing Employee Tasks (The new feature!) ---
+    // --- 3. State for Viewing Employee Tasks ---
     const [selectedMember, setSelectedMember] = useState(null); 
     const [memberTasks, setMemberTasks] = useState([]); 
     const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -68,10 +76,12 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
 
     // --- Handle Member Click (Open Simulation Mode) ---
     const handleMemberClick = async (member) => {
+        // רק מנהלים יכולים לראות משימות של אחרים
+        if (user.role === 'EMPLOYEE') return;
+
         setSelectedMember(member);
         setIsLoadingTasks(true);
         try {
-            // שולפים את כל המשימות של העובד (אם מנהל - השרת ידאג להביא את כל הצוות)
             const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/user/${member.id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -105,11 +115,12 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
 
     const openEditModal = (member) => {
         setEditMember(member);
-        // טעינת הפרטים הקיימים כולל טלפון
         setEditForm({ 
             full_name: member.full_name, 
             email: member.email, 
-            phone: member.phone || '' 
+            phone: member.phone || '',
+            role: member.role, // חשוב לשלוח את התפקיד כדי שלא ידרס
+            password: '' // סיסמה ריקה כברירת מחדל
         });
         setShowEditModal(true);
     };
@@ -122,12 +133,19 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(editForm)
             });
+            
+            const data = await res.json();
+
             if (res.ok) {
                 setShowEditModal(false);
                 fetchTeam();
-                alert("User updated successfully");
+                alert(t.alert_update_success || "User updated successfully");
             } else {
-                alert("Error updating user");
+                if (data.error === "Email already exists") {
+                    alert(t.error_email_exists || "Email already exists");
+                } else {
+                    alert("Error updating user");
+                }
             }
         } catch (e) { alert("Server error"); }
     };
@@ -141,10 +159,9 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                 </div>
                 
                 <div className="flex flex-col">
-                    {/* השם הוא כפתור לחיץ */}
                     <span 
                         onClick={() => handleMemberClick(member)}
-                        className="font-bold text-gray-800 cursor-pointer hover:text-purple-600 hover:underline transition-colors text-lg"
+                        className={`font-bold text-gray-800 text-lg ${user.role !== 'EMPLOYEE' ? 'cursor-pointer hover:text-purple-600 hover:underline' : ''}`}
                     >
                         {member.full_name}
                     </span>
@@ -207,12 +224,10 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                 )}
             </div>
 
-            {/* --- Full Simulation Modal (החלק החדש שחוסך שורות) --- */}
+            {/* --- Full Simulation Modal --- */}
             {selectedMember && (
                 <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 backdrop-blur-sm p-4">
                     <div className="bg-white w-full h-full max-w-6xl max-h-[95vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-scale-in">
-                        
-                        {/* Header */}
                         <div className="bg-[#6A0DAD] text-white p-4 flex justify-between items-center shadow-md z-10 shrink-0">
                             <div>
                                 <h3 className="text-lg font-bold flex items-center gap-2">
@@ -223,7 +238,6 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                             <button onClick={() => setSelectedMember(null)} className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition"><X size={20}/></button>
                         </div>
 
-                        {/* Content: We render the FULL TasksTab component here! */}
                         <div className="flex-1 overflow-y-auto bg-gray-50 relative">
                             {isLoadingTasks ? (
                                 <div className="flex justify-center items-center h-full text-purple-600 font-bold">Loading Employee View...</div>
@@ -233,7 +247,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                         tasks={memberTasks} 
                                         t={t} 
                                         token={token}
-                                        user={selectedMember} // We trick the component to think this is the logged-in user
+                                        user={selectedMember} 
                                         onRefresh={() => handleMemberClick(selectedMember)} 
                                         lang={lang}
                                     />
@@ -244,14 +258,14 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                 </div>
             )}
 
-            {/* --- Edit User Modal (הוספתי כאן את שדה הטלפון) --- */}
+            {/* --- Edit User Modal (משופר עם סיסמה ושמירת תפקיד) --- */}
             {showEditModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
                     <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
-                        <h3 className="text-lg font-bold mb-4">Edit User</h3>
+                        <h3 className="text-lg font-bold mb-4">{t.edit || "Edit"}</h3>
                         <form onSubmit={handleEditSubmit} className="space-y-3">
                             <div>
-                                <label className="text-sm font-bold text-gray-700">Name</label>
+                                <label className="text-sm font-bold text-gray-700">{t.full_name_label}</label>
                                 <input 
                                     className="w-full p-2 border rounded" 
                                     value={editForm.full_name} 
@@ -260,7 +274,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                 />
                             </div>
                             <div>
-                                <label className="text-sm font-bold text-gray-700">Email</label>
+                                <label className="text-sm font-bold text-gray-700">{t.email_label}</label>
                                 <input 
                                     className="w-full p-2 border rounded" 
                                     value={editForm.email} 
@@ -268,9 +282,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                     required
                                 />
                             </div>
-                            {/* שדה טלפון חדש */}
                             <div>
-                                <label className="text-sm font-bold text-gray-700">Phone</label>
+                                <label className="text-sm font-bold text-gray-700">{t.phone_label}</label>
                                 <input 
                                     className="w-full p-2 border rounded" 
                                     value={editForm.phone} 
@@ -278,16 +291,31 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                     placeholder="050-0000000"
                                 />
                             </div>
+                            {/* שדה סיסמה חדש */}
+                            <div className="relative">
+                                <label className="text-sm font-bold text-gray-700">{t.new_password || "New Password"}</label>
+                                <input 
+                                    type={showPassword ? "text" : "password"}
+                                    className="w-full p-2 border rounded pr-10" 
+                                    placeholder={t.optional || "Optional"}
+                                    value={editForm.password} 
+                                    onChange={e => setEditForm({...editForm, password: e.target.value})} 
+                                />
+                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute top-8 right-2 text-gray-400">
+                                    {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                                </button>
+                            </div>
+
                             <div className="flex gap-2 mt-4">
-                                <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 py-2 border rounded">Cancel</button>
-                                <button type="submit" className="flex-1 py-2 bg-purple-600 text-white rounded font-bold">Save</button>
+                                <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 py-2 border rounded">{t.cancel}</button>
+                                <button type="submit" className="flex-1 py-2 bg-purple-600 text-white rounded font-bold">{t.save}</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
         
-            {/* --- מודל הוספת משתמש (החלק החדש) --- */}
+            {/* --- Add User Modal --- */}
             {showAddModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scale-in">
