@@ -602,7 +602,7 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     }
 });
 
-// --- IMPORT & VALIDATION ENDPOINT (מתוקן - ללא קריסת location_id) ---
+// --- IMPORT & VALIDATION ENDPOINT (הגרסה החכמה והגמישה) ---
 app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     const { tasks, isDryRun } = req.body; 
     const client = await pool.connect();
@@ -613,68 +613,88 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
         const errors = []; 
         const validTasks = [];
 
-        // 1. טעינת נתוני עזר
+        // 1. טעינת נתוני עזר (ללא location_id בנכסים כדי למנוע קריסה)
         const usersRes = await client.query('SELECT id, full_name FROM users');
         const locationsRes = await client.query('SELECT id, name FROM locations');
-        // תיקון: הסרנו את location_id מהשאילתה של הנכסים כדי למנוע את השגיאה
-        const assetsRes = await client.query('SELECT id, name, code, category_id FROM assets');
-        const categoriesRes = await client.query('SELECT id, name FROM categories');
-
+        const assetsRes = await client.query('SELECT id, name, code, category_id FROM assets'); // תיקון כאן
+        
+        // יצירת מילונים לחיפוש מהיר (הופכים הכל לאותיות קטנות להשוואה קלה)
         const usersMap = new Map(usersRes.rows.map(u => [u.full_name.trim().toLowerCase(), u.id]));
         const locMap = new Map(locationsRes.rows.map(l => [l.name.trim().toLowerCase(), l.id]));
         const assetCodeMap = new Map(assetsRes.rows.map(a => [a.code.trim().toLowerCase(), a]));
         const assetNameMap = new Map(assetsRes.rows.map(a => [a.name.trim().toLowerCase(), a]));
 
+        // פונקציית עזר למציאת ערך לפי מספר אפשרויות של כותרות
+        const getValue = (row, possibleKeys) => {
+            for (const key of possibleKeys) {
+                // מחפש את המפתח בדיוק, או באותיות קטנות/גדולות
+                const foundKey = Object.keys(row).find(k => k.trim().toLowerCase() === key.toLowerCase());
+                if (foundKey && row[foundKey]) return row[foundKey];
+            }
+            return null;
+        };
+
         // 2. מעבר על השורות ובדיקה
         for (let i = 0; i < tasks.length; i++) {
             const row = tasks[i];
             const rowErrors = [];
+            
+            // שליפת נתונים גמישה (תומך גם בעברית וגם באנגלית)
+            const title = getValue(row, ['Title', 'Task Title', 'כותרת', 'שם המשימה']);
+            const workerName = getValue(row, ['Worker Name', 'Worker', 'Assigned To', 'עובד', 'שם העובד']);
+            const locName = getValue(row, ['Location Name', 'Location', 'מיקום']);
+            const assetCode = getValue(row, ['Asset Code', 'Code', 'קוד נכס']);
+            const assetName = getValue(row, ['Asset Name', 'Asset', 'שם הנכס']);
+            const desc = getValue(row, ['Description', 'תיאור']) || '';
+            const urgencyRaw = getValue(row, ['Urgency', 'דחיפות']);
+            const dateRaw = getValue(row, ['Due Date', 'Date', 'תאריך', 'תאריך יעד']);
+
             let worker_id = null;
             let location_id = null;
             let asset_id = null;
 
-            // בדיקת כותרת
-            if (!row['Title']) {
-                rowErrors.push(`Row ${i + 1}: Missing 'Title'`);
+            // בדיקת כותרת (חובה)
+            if (!title) {
+                rowErrors.push(`Row ${i + 1}: Missing 'Title' (Task Title)`);
             }
 
             // בדיקת עובד
-            if (row['Worker Name']) {
-                const wName = row['Worker Name'].toString().trim().toLowerCase();
+            if (workerName) {
+                const wName = workerName.toString().trim().toLowerCase();
                 if (usersMap.has(wName)) {
                     worker_id = usersMap.get(wName);
                 } else {
-                    rowErrors.push(`Row ${i + 1}: Worker '${row['Worker Name']}' not found.`);
+                    rowErrors.push(`Row ${i + 1}: Worker '${workerName}' not found in system.`);
                 }
             } else {
-                worker_id = req.user.id; 
+                worker_id = req.user.id; // ברירת מחדל: אני
             }
 
             // בדיקת נכס
-            if (row['Asset Code']) {
-                const aCode = row['Asset Code'].toString().trim().toLowerCase();
+            if (assetCode) {
+                const aCode = assetCode.toString().trim().toLowerCase();
                 if (assetCodeMap.has(aCode)) {
                     const asset = assetCodeMap.get(aCode);
                     asset_id = asset.id;
                 } else {
-                    rowErrors.push(`Row ${i + 1}: Asset Code '${row['Asset Code']}' not found.`);
+                    rowErrors.push(`Row ${i + 1}: Asset Code '${assetCode}' not found.`);
                 }
-            } else if (row['Asset Name']) {
-                const aName = row['Asset Name'].toString().trim().toLowerCase();
+            } else if (assetName) {
+                const aName = assetName.toString().trim().toLowerCase();
                 if (assetNameMap.has(aName)) {
                     asset_id = assetNameMap.get(aName).id;
                 } else {
-                    rowErrors.push(`Row ${i + 1}: Asset Name '${row['Asset Name']}' not found.`);
+                    rowErrors.push(`Row ${i + 1}: Asset Name '${assetName}' not found.`);
                 }
             }
 
             // בדיקת מיקום
-            if (row['Location Name']) {
-                const lName = row['Location Name'].toString().trim().toLowerCase();
+            if (locName) {
+                const lName = locName.toString().trim().toLowerCase();
                 if (locMap.has(lName)) {
                     location_id = locMap.get(lName);
                 } else {
-                    rowErrors.push(`Row ${i + 1}: Location '${row['Location Name']}' not found.`);
+                    rowErrors.push(`Row ${i + 1}: Location '${locName}' not found.`);
                 }
             }
 
@@ -682,10 +702,10 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                 errors.push(...rowErrors);
             } else {
                 validTasks.push({
-                    title: row['Title'],
-                    description: row['Description'] || '',
-                    urgency: ['Normal', 'High'].includes(row['Urgency']) ? row['Urgency'] : 'Normal',
-                    due_date: row['Due Date'] ? new Date(row['Due Date']) : new Date(),
+                    title: title,
+                    description: desc,
+                    urgency: ['High', 'Urgent', 'גבוהה', 'דחוף'].includes(urgencyRaw) ? 'High' : 'Normal',
+                    due_date: dateRaw ? new Date(dateRaw) : new Date(),
                     worker_id,
                     location_id,
                     asset_id
@@ -693,9 +713,9 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             }
         }
 
-        // 3. החלטה: Test או Import
+        // 3. סיום: החזרת תשובה
         if (isDryRun) {
-            await client.query('ROLLBACK'); 
+            await client.query('ROLLBACK'); // לא שומר כלום בבדיקה
             if (errors.length > 0) {
                 return res.json({ success: false, errors, message: "Found blocking errors." });
             } else {
@@ -704,9 +724,10 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
         } else {
             if (errors.length > 0) {
                 await client.query('ROLLBACK');
-                return res.status(400).json({ error: "Please fix errors before importing.", details: errors });
+                return res.status(400).json({ error: "Please fix errors.", details: errors });
             }
 
+            // שמירה בפועל
             for (const t of validTasks) {
                 await client.query(
                     `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id) 
@@ -721,7 +742,12 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     } catch (e) {
         await client.query('ROLLBACK');
         console.error(e);
-        res.status(500).json({ error: e.message });
+        // טיפול בשגיאת מיקום ספציפית אם עדיין קורית
+        if (e.message.includes('location_id')) {
+             res.status(500).json({ error: "Database Error: The system tried to access a missing location field. Check Server Logs." });
+        } else {
+             res.status(500).json({ error: e.message });
+        }
     } finally {
         client.release();
     }

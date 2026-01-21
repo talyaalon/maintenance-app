@@ -47,27 +47,42 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
         .catch(console.error);
     }, [token]);
 
-    // --- Template Generation (החלק החדש!) ---
+    // --- Template Generation (Updated) ---
     const handleDownloadTemplate = () => {
         const templateData = [
             {
-                "Title": "Check AC Filter",
-                "Description": "Clean filters in lobby",
+                "Task Title": "Clean Air Filters", // כותרת ברורה
+                "Description": "Check and clean filters in the main lobby",
                 "Urgency": "Normal",
                 "Due Date": "2024-12-31",
-                "Worker Name": "John Doe",
-                "Location Name": "Lobby",
-                "Asset Code": "AC-001",
+                "Worker Name": "John Doe", // שם עובד (חייב להיות קיים במערכת)
+                "Location Name": "Lobby",  // שם מיקום (חייב להיות קיים במערכת)
+                "Asset Code": "AC-001",    // קוד נכס (אופציונלי)
+                "Asset Name": "",          
+                "Category": ""
+            },
+            {
+                "Task Title": "Weekly Inspection",
+                "Description": "",
+                "Urgency": "High",
+                "Due Date": "2024-11-20",
+                "Worker Name": "",
+                "Location Name": "",
+                "Asset Code": "",
                 "Asset Name": "",
                 "Category": ""
             }
         ];
         
         const worksheet = XLSX.utils.json_to_sheet(templateData);
+        // קצת רוחב לעמודות שיהיה קריא
+        worksheet['!cols'] = [ {wch: 20}, {wch: 30}, {wch: 10}, {wch: 12}, {wch: 15}, {wch: 15}, {wch: 15} ];
+        
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
         XLSX.writeFile(workbook, "Import_Tasks_Template.xlsx");
     };
+
 
     // --- EXPORT LOGIC ---
     const moveToSelected = (field) => {
