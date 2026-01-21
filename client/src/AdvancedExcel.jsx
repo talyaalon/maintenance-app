@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { Download, Upload, FileSpreadsheet, Filter, Trash2, AlertTriangle, X, CheckCircle, Info, ArrowRight, Plus, Play, Save, AlertCircle } from 'lucide-react';
 
 const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
-    const [activeTab, setActiveTab] = useState('import'); // ברירת מחדל לייבוא (כי זה מה שרצית לשדרג)
+    const [activeTab, setActiveTab] = useState('import'); 
     const [users, setUsers] = useState([]);
     
     // --- EXPORT STATE ---
@@ -29,16 +29,15 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
     const [isExporting, setIsExporting] = useState(false);
     const [isUpdateMode, setIsUpdateMode] = useState(false);
 
-    // --- IMPORT STATE (החדש והחכם) ---
+    // --- IMPORT STATE ---
     const [importFile, setImportFile] = useState(null);
     const [previewData, setPreviewData] = useState([]);
-    const [headers, setHeaders] = useState([]); // כותרות הטבלה
+    const [headers, setHeaders] = useState([]); 
     const [fileName, setFileName] = useState("");
-    const [validationStatus, setValidationStatus] = useState("idle"); // idle, testing, valid, error
+    const [validationStatus, setValidationStatus] = useState("idle"); 
     const [errorList, setErrorList] = useState([]);
-    const [isProcessing, setIsProcessing] = useState(false); // בודק או מייבא
+    const [isProcessing, setIsProcessing] = useState(false); 
 
-    // טעינת עובדים (לפילטרים של הייצוא)
     useEffect(() => {
         fetch('https://maintenance-app-h84v.onrender.com/users', {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -48,7 +47,29 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
         .catch(console.error);
     }, [token]);
 
-    // --- לוגיקה לייצוא (נשאר כמו שהיה אצלך) ---
+    // --- Template Generation (החלק החדש!) ---
+    const handleDownloadTemplate = () => {
+        const templateData = [
+            {
+                "Title": "Check AC Filter",
+                "Description": "Clean filters in lobby",
+                "Urgency": "Normal",
+                "Due Date": "2024-12-31",
+                "Worker Name": "John Doe",
+                "Location Name": "Lobby",
+                "Asset Code": "AC-001",
+                "Asset Name": "",
+                "Category": ""
+            }
+        ];
+        
+        const worksheet = XLSX.utils.json_to_sheet(templateData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
+        XLSX.writeFile(workbook, "Import_Tasks_Template.xlsx");
+    };
+
+    // --- EXPORT LOGIC ---
     const moveToSelected = (field) => {
         setSelectedFields([...selectedFields, field]);
         setAvailableFields(availableFields.filter(f => f.id !== field.id));
@@ -115,7 +136,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
         }
     };
 
-    // --- לוגיקה לייבוא (החדש והחכם!) ---
+    // --- IMPORT LOGIC ---
     const handleFileUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -132,7 +153,6 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
             const wb = XLSX.read(bstr, { type: 'binary' });
             const wsname = wb.SheetNames[0];
             const ws = wb.Sheets[wsname];
-            // defval ensures empty cells exist as keys
             const data = XLSX.utils.sheet_to_json(ws, { defval: "" }); 
             
             if (data.length > 0) {
@@ -143,7 +163,6 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
         reader.readAsBinaryString(file);
     };
 
-    // פונקציה חכמה שבודקת או מייבאת
     const processFile = async (isDryRun) => {
         setIsProcessing(true);
         try {
@@ -160,17 +179,14 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
 
             if (result.success) {
                 if (isDryRun) {
-                    // מצב בדיקה עבר בהצלחה
                     setValidationStatus("valid"); 
                     setErrorList([]);
                 } else {
-                    // מצב ייבוא עבר בהצלחה
                     alert(t.alert_created || "Import successful!");
                     onRefresh();
                     onClose();
                 }
             } else {
-                // נמצאו שגיאות
                 setValidationStatus("error");
                 setErrorList(result.errors || (result.details ? result.details : [result.error]));
             }
@@ -222,7 +238,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
                     {/* --- EXPORT TAB --- */}
                     {activeTab === 'export' && (
                         <div className="p-6 flex flex-col h-full space-y-4">
-                            {/* 1. Filters Section */}
+                            {/* ... Export UI (נשאר אותו דבר) ... */}
                             <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
                                 <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
                                     <Filter size={18}/> {t.filters || "Filters"}
@@ -246,7 +262,6 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
                                 </div>
                             </div>
 
-                            {/* 2. Checkbox: Update Mode */}
                             <div className="flex items-center gap-2 px-2">
                                 <input type="checkbox" id="upd" checked={isUpdateMode} onChange={handleUpdateModeChange} className="w-4 h-4 text-purple-600"/>
                                 <label htmlFor="upd" className="text-sm font-bold text-gray-700 cursor-pointer">
@@ -254,9 +269,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
                                 </label>
                             </div>
 
-                            {/* 3. Field Selector */}
                             <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-[300px]">
-                                {/* Available Fields */}
                                 <div className="flex-1 border rounded-lg p-3 bg-white shadow-sm flex flex-col">
                                     <h4 className="font-bold text-gray-700 border-b pb-2 mb-2 text-xs uppercase">Available Fields</h4>
                                     <div className="overflow-y-auto flex-1 space-y-1">
@@ -271,7 +284,6 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
 
                                 <div className="flex items-center justify-center text-gray-300 md:rotate-0 rotate-90"><ArrowRight size={24} /></div>
 
-                                {/* Selected Fields */}
                                 <div className="flex-1 border border-purple-200 rounded-lg p-3 bg-white shadow-md flex flex-col">
                                     <h4 className="font-bold text-purple-700 border-b pb-2 mb-2 text-xs uppercase">Fields to Export</h4>
                                     <div className="overflow-y-auto flex-1 space-y-1">
@@ -292,21 +304,19 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
                         </div>
                     )}
 
-                    {/* --- IMPORT TAB (החדש והחכם!) --- */}
+                    {/* --- IMPORT TAB --- */}
                     {activeTab === 'import' && (
                         <div className="flex flex-col h-full">
                             
                             {/* Toolbar */}
                             <div className="bg-gray-50 p-4 border-b flex justify-between items-center px-6">
                                 <div className="flex gap-2">
-                                    {/* כפתור בחירת קובץ */}
                                     <label className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition flex items-center gap-2 shadow-sm">
                                         <Upload size={18} />
                                         {fileName || "Load File"}
                                         <input type="file" hidden accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
                                     </label>
 
-                                    {/* כפתור TEST */}
                                     {previewData.length > 0 && (
                                         <button 
                                             onClick={() => processFile(true)}
@@ -316,11 +326,10 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
                                         </button>
                                     )}
 
-                                    {/* כפתור IMPORT */}
                                     {previewData.length > 0 && (
                                         <button 
                                             onClick={() => processFile(false)}
-                                            disabled={validationStatus !== "valid"} // פעיל רק אם הבדיקה עברה
+                                            disabled={validationStatus !== "valid"} 
                                             className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition ${
                                                 validationStatus === "valid" 
                                                 ? "bg-[#6A0DAD] text-white hover:bg-purple-800" 
@@ -333,9 +342,9 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
                                 </div>
                                 
                                 <div className="flex items-center gap-3">
-                                    <a href="/template.xlsx" download className="text-sm text-purple-600 hover:underline flex items-center gap-1">
-                                        Download Template
-                                    </a>
+                                    <button onClick={handleDownloadTemplate} className="text-sm text-purple-600 hover:underline flex items-center gap-1 font-bold">
+                                        <Download size={14}/> Download Template
+                                    </button>
                                     <button onClick={handleDeleteAll} className="text-red-500 p-2 hover:bg-red-50 rounded-full" title="Delete All Tasks">
                                         <Trash2 size={18}/>
                                     </button>

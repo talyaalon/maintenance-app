@@ -602,27 +602,26 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     }
 });
 
-// --- IMPORT & VALIDATION ENDPOINT (החכם החדש) ---
+// --- IMPORT & VALIDATION ENDPOINT (מתוקן - ללא קריסת location_id) ---
 app.post('/tasks/import-process', authenticateToken, async (req, res) => {
-    const { tasks, isDryRun } = req.body; // isDryRun = true (Test Mode), false (Save Mode)
+    const { tasks, isDryRun } = req.body; 
     const client = await pool.connect();
     
     try {
         await client.query('BEGIN');
         
-        const errors = []; // רשימת שגיאות שתחזור למשתמש
+        const errors = []; 
         const validTasks = [];
 
-        // 1. טעינת נתוני עזר לבדיקה
+        // 1. טעינת נתוני עזר
         const usersRes = await client.query('SELECT id, full_name FROM users');
         const locationsRes = await client.query('SELECT id, name FROM locations');
-        const assetsRes = await client.query('SELECT id, name, code, category_id, location_id FROM assets');
+        // תיקון: הסרנו את location_id מהשאילתה של הנכסים כדי למנוע את השגיאה
+        const assetsRes = await client.query('SELECT id, name, code, category_id FROM assets');
         const categoriesRes = await client.query('SELECT id, name FROM categories');
 
         const usersMap = new Map(usersRes.rows.map(u => [u.full_name.trim().toLowerCase(), u.id]));
         const locMap = new Map(locationsRes.rows.map(l => [l.name.trim().toLowerCase(), l.id]));
-        const catMap = new Map(categoriesRes.rows.map(c => [c.name.trim().toLowerCase(), c.id]));
-        // מיפוי נכסים גם לפי שם וגם לפי קוד
         const assetCodeMap = new Map(assetsRes.rows.map(a => [a.code.trim().toLowerCase(), a]));
         const assetNameMap = new Map(assetsRes.rows.map(a => [a.name.trim().toLowerCase(), a]));
 
@@ -634,7 +633,7 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             let location_id = null;
             let asset_id = null;
 
-            // בדיקת כותרת (חובה)
+            // בדיקת כותרת
             if (!row['Title']) {
                 rowErrors.push(`Row ${i + 1}: Missing 'Title'`);
             }
@@ -645,45 +644,32 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                 if (usersMap.has(wName)) {
                     worker_id = usersMap.get(wName);
                 } else {
-                    rowErrors.push(`Row ${i + 1}: Worker '${row['Worker Name']}' not found in team.`);
+                    rowErrors.push(`Row ${i + 1}: Worker '${row['Worker Name']}' not found.`);
                 }
             } else {
-                // אם לא צוין עובד, זה בסדר (ללא שיוך) או ברירת מחדל
                 worker_id = req.user.id; 
             }
 
-            // בדיקת נכס וקטגוריה
+            // בדיקת נכס
             if (row['Asset Code']) {
                 const aCode = row['Asset Code'].toString().trim().toLowerCase();
                 if (assetCodeMap.has(aCode)) {
                     const asset = assetCodeMap.get(aCode);
                     asset_id = asset.id;
-                    
-                    // ולידציה: האם שם הנכס תואם (אם הוזן)?
-                    if (row['Asset Name'] && asset.name.toLowerCase() !== row['Asset Name'].toString().trim().toLowerCase()) {
-                        rowErrors.push(`Row ${i + 1}: Asset Code '${row['Asset Code']}' matches, but name is different.`);
-                    }
-                    
-                    // אם לנכס יש מיקום, נשתמש בו
-                    if (asset.location_id) location_id = asset.location_id;
-
                 } else {
                     rowErrors.push(`Row ${i + 1}: Asset Code '${row['Asset Code']}' not found.`);
                 }
             } else if (row['Asset Name']) {
-                // חיפוש לפי שם אם אין קוד
                 const aName = row['Asset Name'].toString().trim().toLowerCase();
                 if (assetNameMap.has(aName)) {
-                    const asset = assetNameMap.get(aName);
-                    asset_id = asset.id;
-                    if (asset.location_id) location_id = asset.location_id;
+                    asset_id = assetNameMap.get(aName).id;
                 } else {
                     rowErrors.push(`Row ${i + 1}: Asset Name '${row['Asset Name']}' not found.`);
                 }
             }
 
-            // בדיקת מיקום (אם לא הגיע מהנכס)
-            if (!location_id && row['Location Name']) {
+            // בדיקת מיקום
+            if (row['Location Name']) {
                 const lName = row['Location Name'].toString().trim().toLowerCase();
                 if (locMap.has(lName)) {
                     location_id = locMap.get(lName);
@@ -692,11 +678,9 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                 }
             }
 
-            // אם יש שגיאות, נוסיף לרשימה הראשית
             if (rowErrors.length > 0) {
                 errors.push(...rowErrors);
             } else {
-                // הכנת הנתונים להכנסה
                 validTasks.push({
                     title: row['Title'],
                     description: row['Description'] || '',
@@ -711,21 +695,18 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
 
         // 3. החלטה: Test או Import
         if (isDryRun) {
-            // במצב Test רק מחזירים את התוצאות
-            await client.query('ROLLBACK'); // לא שומרים כלום
+            await client.query('ROLLBACK'); 
             if (errors.length > 0) {
                 return res.json({ success: false, errors, message: "Found blocking errors." });
             } else {
                 return res.json({ success: true, message: "Everything seems valid." });
             }
         } else {
-            // במצב אמת - אם יש שגיאות עוצרים
             if (errors.length > 0) {
                 await client.query('ROLLBACK');
                 return res.status(400).json({ error: "Please fix errors before importing.", details: errors });
             }
 
-            // שמירה בפועל
             for (const t of validTasks) {
                 await client.query(
                     `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id) 
