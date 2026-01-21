@@ -1,3 +1,4 @@
+const bcrypt = require('bcrypt'); // או 'bcryptjs'
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
