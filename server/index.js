@@ -447,55 +447,64 @@ app.get('/tasks', authenticateToken, async (req, res) => {
 app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, res) => {
   try {
     const creationImageUrl = req.file ? `https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}` : null;
-    const { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date } = req.body;
+    // כאן הוספנו את asset_id שיהיה אפשר לשייך נכס - זה היה חסר בקוד הקודם!
+    const { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id } = req.body;
     
     const worker_id = assigned_worker_id || req.user.id;
     const isRecurring = is_recurring === 'true';
     
-    // --- התיקון הקריטי למשימות מחזוריות (ParseInt) ---
-    // המרת ימים למספרים (כי באקסל/HTML זה מגיע כמחרוזת)
-    const selDays = selected_days ? JSON.parse(selected_days).map(d => parseInt(d)) : []; 
-
+    // --- משימה חד פעמית ---
     if (!isRecurring) {
         await pool.query(
-            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING')`,
-            [title, location_id, worker_id, urgency, due_date, description, creationImageUrl]
+            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status, asset_id) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
+            [title, location_id, worker_id, urgency, due_date, description, creationImageUrl, asset_id || null]
         );
         return res.json({ message: "Task created" });
     }
 
-    // משימות מחזוריות
+    // --- משימות מחזוריות (לוגיקה משופרת) ---
     const tasksToInsert = [];
-    const startDate = new Date(due_date);
-    const oneYearFromNow = new Date(startDate);
-    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
-    let currentDate = new Date(startDate);
+    const start = new Date(due_date);
+    const end = new Date(start);
+    end.setFullYear(end.getFullYear() + 1); // יוצר משימות לשנה קדימה
+    
+    // המרת ימים למספרים (חשוב מאוד לתיקון הבאג של ימים בשבוע)
+    const daysArray = selected_days ? JSON.parse(selected_days).map(d => parseInt(d)) : [];
+    const monthlyDate = parseInt(recurring_date);
 
-    while (currentDate <= oneYearFromNow) {
-        let shouldInsert = false;
+    // לולאה שעוברת יום-יום
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        let match = false;
+        
         if (recurring_type === 'weekly') {
-            // התיקון: בדיקה מול מערך מספרים
-            if (selDays.includes(currentDate.getDay())) shouldInsert = true;
-        } else if (recurring_type === 'monthly') {
-            if (currentDate.getDate() === parseInt(recurring_date)) shouldInsert = true;
-        } else if (recurring_type === 'yearly') {
-             // בדיקה לשנתי (נוסף)
-             const startMonth = startDate.getMonth();
-             const startDay = startDate.getDate();
-             if (currentDate.getMonth() === startMonth && currentDate.getDate() === startDay) shouldInsert = true;
+            if (daysArray.includes(d.getDay())) match = true;
+        } 
+        else if (recurring_type === 'monthly') {
+            if (d.getDate() === monthlyDate) match = true;
+        } 
+        else if (recurring_type === 'yearly') {
+            if (d.getMonth() === start.getMonth() && d.getDate() === start.getDate()) match = true;
         }
-        if (shouldInsert) tasksToInsert.push(new Date(currentDate));
-        currentDate.setDate(currentDate.getDate() + 1);
+
+        if (match) {
+            tasksToInsert.push(new Date(d));
+        }
     }
 
+    if (tasksToInsert.length === 0) {
+        return res.status(400).json({ error: "No dates matched the recurring pattern!" });
+    }
+
+    // שמירה בבת אחת (כולל asset_id)
     for (const date of tasksToInsert) {
         await pool.query(
-            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING')`,
-            [title + ' (Recurring)', location_id, worker_id, urgency, date, description, creationImageUrl]
+            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status, asset_id) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
+            [title + ' (Recurring)', location_id, worker_id, urgency, date, description, creationImageUrl, asset_id || null]
         );
     }
+    
     res.json({ message: `Created ${tasksToInsert.length} recurring tasks` });
 
   } catch (err) { console.error(err); res.status(500).send('Server Error'); }

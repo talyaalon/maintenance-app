@@ -70,27 +70,29 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => { // ה
     <div className="p-4 flex flex-col items-center pb-24 max-w-lg mx-auto">
       <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t.nav_profile}</h2>
 
-      {/* אזור תמונת הפרופיל - ממורכז */}
-      <div className="relative mb-4 group flex flex-col items-center">
-        <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-purple-100 flex items-center justify-center relative">
-            {previewImage ? (
-                <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
-            ) : (
-                <span className="text-4xl font-bold text-purple-600">
-                    {user.name?.charAt(0).toUpperCase()}
-                </span>
-            )}
+      {/* אזור תמונת הפרופיל - הבלוק החדש */}
+      <div className="relative mb-6 group flex flex-col items-center">
+        <div className="relative">
+            {/* עיגול התמונה */}
+            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-purple-100 flex items-center justify-center">
+                {previewImage ? (
+                    <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                    <span className="text-4xl font-bold text-purple-600">
+                        {user.name?.charAt(0).toUpperCase()}
+                    </span>
+                )}
+            </div>
             
-            {/* כפתור המצלמה - ממורכז בתוך העיגול או בצד */}
+            {/* כפתור המצלמה - ממוקם מחוץ לעיגול כדי שלא ייחתך */}
             {isEditing && (
-                <label className="absolute bottom-0 right-0 bg-purple-600 p-2 rounded-full text-white cursor-pointer hover:bg-purple-700 shadow-md transition-transform transform hover:scale-110 z-10">
+                <label className="absolute bottom-0 right-0 translate-y-1/4 translate-x-1/4 bg-purple-600 p-2 rounded-full text-white cursor-pointer hover:bg-purple-700 shadow-md transition-transform transform hover:scale-110 z-20">
                     <Camera size={18} />
                     <input type="file" hidden accept="image/*" onChange={handleImageChange} />
                 </label>
             )}
         </div>
         
-        {/* שם ותפקיד מתחת לתמונה */}
         <div className="mt-3 text-center">
             <h3 className="text-xl font-bold text-gray-900">{formData.full_name}</h3>
             <p className="text-sm text-gray-500">{user.role}</p>
@@ -122,14 +124,15 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => { // ה
             />
         </div>
 
-        {/* --- שדה טלפון החדש --- */}
+        {/* שדה טלפון עם הכיתוב אופציונלי */}
         <div>
             <label className="block text-sm font-medium text-gray-500 mb-1 flex items-center gap-2">
-                <Phone size={16} className="text-gray-400"/> {t.phone_label || "Phone Number"}
+                <Phone size={16} className="text-gray-400"/> {t.phone_label || "Phone Number"} 
+                <span className="text-xs text-gray-400">({t.optional || "Optional"})</span>
             </label>
             <input 
                 type="tel" 
-                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                className="w-full p-3 bg-gray-50 rounded-lg border outline-none disabled:text-gray-400"
                 value={formData.phone}
                 onChange={e => setFormData({...formData, phone: e.target.value})}
                 disabled={!isEditing}
@@ -181,8 +184,8 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => { // ה
         </div>
       </form>
         
-      <button onClick={onLogout} className="mt-8 text-red-500 flex items-center gap-2 hover:bg-red-50 px-4 py-2 rounded-full transition">
-          <LogOut size={18} /> {t.logout}
+      <button onClick={onLogout} className="mt-8 text-red-500 flex items-center gap-2 hover:bg-red-50 px-4 py-2 rounded-full transition font-bold">
+          <LogOut size={18} /> {t.logout || "Logout"}
       </button>
 
     </div>

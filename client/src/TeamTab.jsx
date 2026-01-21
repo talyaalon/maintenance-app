@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Edit2, ChevronDown, ChevronUp, User, X } from 'lucide-react';
+import { Trash2, Edit2, ChevronDown, ChevronUp, User, X, Plus, Save } from 'lucide-react';
 import TasksTab from './TasksTab'; // <--- זה הייבוא הקריטי שחוסך לנו 100 שורות קוד
 
 const TeamTab = ({ token, t, user, onRefresh, lang }) => {
@@ -11,6 +11,41 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
     const [editMember, setEditMember] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '' });
+
+    // --- משתנים להוספת משתמש חדש ---
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [addForm, setAddForm] = useState({ full_name: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '' });
+
+    const activeManagers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
+
+    // --- פונקציה לשליחת משתמש חדש ---
+    const handleAddUser = async (e) => {
+        e.preventDefault();
+        
+        // אם המשתמש הוא מנהל רגיל, העובד החדש אוטומטית תחתיו
+        let payload = { ...addForm };
+        if (user.role === 'MANAGER') {
+            payload.parent_manager_id = user.id;
+            payload.role = 'EMPLOYEE';
+        }
+
+        try {
+            const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(t.alert_created || "User created successfully! Email sent.");
+                setShowAddModal(false);
+                setAddForm({ full_name: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '' });
+                fetchTeam(); // רענון הרשימה
+            } else {
+                alert("Error: " + (data.error || "Failed"));
+            }
+        } catch (e) { alert("Server Error"); }
+    };
 
     // --- 3. State for Viewing Employee Tasks (The new feature!) ---
     const [selectedMember, setSelectedMember] = useState(null); 
@@ -142,8 +177,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-black">{t.my_team_title || "My Team"}</h2>
-                <button className="bg-[#6A0DAD] text-white px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2" onClick={() => alert("Please use the 'Add User' page")}>
-                   <User size={18}/> {t.add_team_member || "Add User"}
+                <button className="bg-[#6A0DAD] text-white px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2" onClick={() => setShowAddModal(true)}>
+                   <Plus size={18}/> {t.add_team_member || "Add User"}
                 </button>
             </div>
 
@@ -247,6 +282,44 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                 <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 py-2 border rounded">Cancel</button>
                                 <button type="submit" className="flex-1 py-2 bg-purple-600 text-white rounded font-bold">Save</button>
                             </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        
+            {/* --- מודל הוספת משתמש (החלק החדש) --- */}
+            {showAddModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scale-in">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-bold text-gray-800">{t.add_team_member || "Add User"}</h3>
+                            <button onClick={() => setShowAddModal(false)}><X size={20} className="text-gray-400"/></button>
+                        </div>
+                        <form onSubmit={handleAddUser} className="space-y-3">
+                            <input className="w-full p-3 border rounded-xl" placeholder={t.full_name_label || "Name"} value={addForm.full_name} onChange={e => setAddForm({...addForm, full_name: e.target.value})} required />
+                            <input className="w-full p-3 border rounded-xl" placeholder={t.email_label || "Email"} type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} required />
+                            <input className="w-full p-3 border rounded-xl" placeholder={t.password_placeholder || "Password"} value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} required />
+                            <input className="w-full p-3 border rounded-xl" placeholder={t.phone_label || "Phone (Optional)"} value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} />
+                            
+                            {user.role === 'BIG_BOSS' && (
+                                <div className="space-y-3">
+                                    <select className="w-full p-3 border rounded-xl bg-white" value={addForm.role} onChange={e => setAddForm({...addForm, role: e.target.value})}>
+                                        <option value="EMPLOYEE">Employee</option>
+                                        <option value="MANAGER">Manager</option>
+                                    </select>
+                                    
+                                    {addForm.role === 'EMPLOYEE' && (
+                                        <select className="w-full p-3 border rounded-xl bg-white" value={addForm.parent_manager_id} onChange={e => setAddForm({...addForm, parent_manager_id: e.target.value})} required>
+                                            <option value="">Select Manager...</option>
+                                            {activeManagers.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                                        </select>
+                                    )}
+                                </div>
+                            )}
+                            
+                            <button type="submit" className="w-full py-3 bg-[#6A0DAD] text-white rounded-xl font-bold shadow-lg mt-2 flex justify-center items-center gap-2">
+                                <Save size={18}/> {t.save || "Create User"}
+                            </button>
                         </form>
                     </div>
                 </div>
