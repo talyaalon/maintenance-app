@@ -47,7 +47,7 @@ const sendUpdateEmail = async (email, fullName, changes) => {
       subject: 'Account Update - Maintenance Management',
       html: `
         <div dir="ltr" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;border:1px solid #e0e0e0;">
-          <h2 style="color:#6A0DAD;text-align:center;">Account Profile Updated</h2>
+          <h2 style="color:#714B67;text-align:center;">Account Profile Updated</h2>
           <div style="background:white;padding:20px;border-radius:8px;">
             <p style="font-size:16px;">Hello <strong>${fullName}</strong>,</p>
             <p>The following changes were made to your profile:</p>
@@ -56,7 +56,7 @@ const sendUpdateEmail = async (email, fullName, changes) => {
             </div>
             <p style="font-size:14px; color:#666;">If you did not request these changes, please contact your manager.</p>
             <div style="text-align:center;margin-top:30px;">
-              <a href="${appLink}" style="background:#6A0DAD;color:white;padding:10px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">Login to System</a>
+              <a href="${appLink}" style="background:#714B67;color:white;padding:10px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">Login to System</a>
             </div>
           </div>
         </div>
@@ -80,17 +80,17 @@ const sendWelcomeEmail = async (email, fullName, password, role, managerName) =>
       subject: 'Login Details - Maintenance Management',
       html: `
         <div dir="ltr" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;">
-          <h1 style="color:#6A0DAD;text-align:center;">Maintenance Management</h1>
+          <h1 style="color:#714B67;text-align:center;">Maintenance Management</h1>
           <div style="background:white;padding:20px;border-radius:8px;">
             <h2>Hello ${fullName},</h2>
-            <h3 style="color:#6A0DAD;">${titleText}</h3>
+            <h3 style="color:#714B67;">${titleText}</h3>
             <p>${descriptionText}</p>
-            <div style="background:#f3f4f6;padding:15px;border-radius:8px;margin:20px 0;border-left:4px solid #6A0DAD;">
+            <div style="background:#f3f4f6;padding:15px;border-radius:8px;margin:20px 0;border-left:4px solid #714B67;">
               <p><strong>📧 Email:</strong> ${email}</p>
               <p><strong>🔑 Password:</strong> ${password}</p>
             </div>
             <div style="text-align:center;margin-top:30px;">
-              <a href="${appLink}" style="background:#6A0DAD;color:white;padding:12px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">Login to App</a>
+              <a href="${appLink}" style="background:#714B67;color:white;padding:12px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">Login to App</a>
             </div>
           </div>
         </div>

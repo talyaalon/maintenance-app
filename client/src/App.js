@@ -163,7 +163,7 @@ function App() {
       {/* כפתור צף לפעולה מהירה */}
       {activeTab === 1 && (
         <button onClick={() => setIsTaskFormOpen(true)} 
-            className={`fixed bottom-24 w-14 h-14 bg-[#6A0DAD] text-white rounded-full shadow-lg flex items-center justify-center z-40 transition transform hover:scale-110 ${isRTL ? 'left-6' : 'right-6'}`}>
+            className={`fixed bottom-24 w-14 h-14 bg-[#714B67] text-white rounded-full shadow-lg flex items-center justify-center z-40 transition transform hover:scale-110 ${isRTL ? 'left-6' : 'right-6'}`}>
             <Plus size={30} />
         </button>
       )}
@@ -172,27 +172,27 @@ function App() {
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-5px_10px_rgba(0,0,0,0.05)] z-50 pb-safe">
         <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
             
-            <button onClick={() => setActiveTab(1)} className={`flex flex-col items-center w-full ${activeTab === 1 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
+            <button onClick={() => setActiveTab(1)} className={`flex flex-col items-center w-full ${activeTab === 1 ? 'text-[#714B67]' : 'text-gray-400'}`}>
                 <LayoutDashboard size={24} strokeWidth={activeTab === 1 ? 2.5 : 2} />
                 <span className="text-[10px] mt-1 font-medium">{t.nav_tasks}</span>
             </button>
 
             {!isEmployee && (
-                <button onClick={() => setActiveTab(2)} className={`flex flex-col items-center w-full ${activeTab === 2 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
+                <button onClick={() => setActiveTab(2)} className={`flex flex-col items-center w-full ${activeTab === 2 ? 'text-[#714B67]' : 'text-gray-400'}`}>
                     <Users size={24} strokeWidth={activeTab === 2 ? 2.5 : 2} />
                     <span className="text-[10px] mt-1 font-medium">{t.nav_team}</span>
                 </button>
             )}
 
             {!isEmployee && (
-                <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
+                <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#714B67]' : 'text-gray-400'}`}>
                     <Settings size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
                     {/* תרגום: הגדרות */}
                     <span className="text-[10px] mt-1 font-medium">{t.nav_config}</span> 
                 </button>
             )}
 
-            <button onClick={() => setActiveTab(4)} className={`flex flex-col items-center w-full ${activeTab === 4 ? 'text-[#6A0DAD]' : 'text-gray-400'}`}>
+            <button onClick={() => setActiveTab(4)} className={`flex flex-col items-center w-full ${activeTab === 4 ? 'text-[#714B67]' : 'text-gray-400'}`}>
                 <UserCircle size={24} strokeWidth={activeTab === 4 ? 2.5 : 2} />
                 <span className="text-[10px] mt-1 font-medium">{t.nav_profile}</span>
             </button>

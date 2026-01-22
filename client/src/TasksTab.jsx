@@ -20,8 +20,8 @@ const calendarStyles = `
   .react-calendar__month-view__weekdays { text-align: center; text-transform: uppercase; font-weight: bold; font-size: 0.85em; color: #6b7280; margin-bottom: 10px; }
   .react-calendar__tile { height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 10px; border-radius: 12px; font-size: 1rem; }
   .react-calendar__tile:hover { background-color: #f3f4f6; }
-  .react-calendar__tile--now { background: #f3e8ff !important; color: #6A0DAD; font-weight: bold; border: 1px solid #d8b4fe; }
-  .react-calendar__tile--active { background: #6A0DAD !important; color: white !important; }
+  .react-calendar__tile--now { background: #f3e8ff !important; color: #714B67; font-weight: bold; border: 1px solid #d8b4fe; }
+  .react-calendar__tile--active { background: #714B67 !important; color: white !important; }
   .task-count-badge { font-size: 10px; background-color: #e5e7eb; color: #374151; padding: 2px 6px; border-radius: 99px; margin-top: 4px; font-weight: bold; }
   .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.2); color: white; }
 `;
@@ -175,7 +175,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => {
                         <FileSpreadsheet size={20} />
                     </button>
                 )}
-                <button onClick={() => setShowCreateModal(true)} className="p-2 bg-[#6A0DAD] text-white rounded-full hover:bg-purple-800 transition shadow-sm">
+                <button onClick={() => setShowCreateModal(true)} className="p-2 bg-[#714B67] text-white rounded-full hover:bg-purple-800 transition shadow-sm">
                     <Plus size={20} />
                 </button>
           </div>

@@ -36,7 +36,7 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 font-sans" dir={dir}>
-      <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md relative border-t-4 border-[#6A0DAD]">
+      <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md relative border-t-4 border-[#714B67]">
         
         {/* בחירת שפה */}
         <div className={`absolute top-4 ${lang === 'he' ? 'left-4' : 'right-4'} flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full border border-gray-200`}>
@@ -55,7 +55,7 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
 
         {/* כותרת */}
         <div className="text-center mb-8 mt-4">
-            <h2 className="text-3xl font-bold text-[#6A0DAD] tracking-wide mb-1">
+            <h2 className="text-3xl font-bold text-[#714B67] tracking-wide mb-1">
             {t.app_name || "Maintenance App"}
             </h2>
             <p className="text-gray-400 text-sm font-medium">{t.login_title}</p>
@@ -94,7 +94,7 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
 
           <button
             type="submit"
-            className="w-full py-3.5 bg-[#6A0DAD] hover:bg-purple-800 text-white font-bold rounded-xl transition-all duration-200 shadow-lg mt-2 flex justify-center items-center gap-2"
+            className="w-full py-3.5 bg-[#714B67] hover:bg-purple-800 text-white font-bold rounded-xl transition-all duration-200 shadow-lg mt-2 flex justify-center items-center gap-2"
           >
             {t.login_btn}
           </button>

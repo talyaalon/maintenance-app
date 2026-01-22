@@ -101,7 +101,7 @@ const LocationsTab = ({ token, t }) => {
                 <h2 className="text-2xl font-bold text-gray-800">{t.nav_locations}</h2>
                 <button 
                     onClick={() => setIsAdding(!isAdding)} 
-                    className="bg-[#6A0DAD] text-white px-4 py-2 rounded-full shadow flex items-center gap-2 text-sm hover:bg-purple-800 transition">
+                    className="bg-[#714B67] text-white px-4 py-2 rounded-full shadow flex items-center gap-2 text-sm hover:bg-purple-800 transition">
                     {isAdding ? <X size={18}/> : <Plus size={18}/>}
                     {isAdding ? 'ביטול' : t.add_location}
                 </button>

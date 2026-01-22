@@ -230,7 +230,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
             <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden animate-scale-in flex flex-col max-h-[90vh]">
                 
                 {/* Header */}
-                <div className="bg-[#6A0DAD] p-4 flex justify-between items-center text-white shadow-md shrink-0">
+                <div className="bg-[#714B67] p-4 flex justify-between items-center text-white shadow-md shrink-0">
                     <h2 className="text-xl font-bold flex items-center gap-2">
                         <FileSpreadsheet /> {t.excel_center || "Excel Center"}
                     </h2>
@@ -313,7 +313,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
                                 </div>
                             </div>
 
-                            <button onClick={handleExport} disabled={isExporting} className="w-full py-3 bg-[#6A0DAD] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition flex justify-center items-center gap-2">
+                            <button onClick={handleExport} disabled={isExporting} className="w-full py-3 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition flex justify-center items-center gap-2">
                                 {isExporting ? "Exporting..." : <><Download size={20}/> {t.download_excel || "Download Excel"}</>}
                             </button>
                         </div>
@@ -347,7 +347,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
                                             disabled={validationStatus !== "valid"} 
                                             className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition ${
                                                 validationStatus === "valid" 
-                                                ? "bg-[#6A0DAD] text-white hover:bg-purple-800" 
+                                                ? "bg-[#714B67] text-white hover:bg-purple-800" 
                                                 : "bg-gray-200 text-gray-400 cursor-not-allowed"
                                             }`}
                                         >

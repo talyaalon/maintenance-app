@@ -150,7 +150,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh }) =
         
         {/* --- Header (קבוע למעלה) --- */}
         <div className="flex justify-between items-center p-4 border-b bg-gray-50 shrink-0">
-            <h2 className="text-xl font-bold text-[#6A0DAD]">{t.create_new_task || "Create Task"}</h2>
+            <h2 className="text-xl font-bold text-[#714B67]">{t.create_new_task || "Create Task"}</h2>
             <button onClick={handleClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={20}/></button>
         </div>
 
@@ -296,7 +296,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh }) =
 
         {/* --- Footer (קבוע למטה) --- */}
         <div className="p-4 border-t bg-gray-50 shrink-0">
-            <button onClick={handleSubmit} className="w-full py-3.5 bg-[#6A0DAD] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition transform active:scale-95 text-lg">
+            <button onClick={handleSubmit} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition transform active:scale-95 text-lg">
                 {t.save_task_btn || "Create Task"}
             </button>
         </div>

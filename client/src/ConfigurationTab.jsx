@@ -168,10 +168,10 @@ const ConfigurationTab = ({ token, t }) => {
       
       {/* Navigation */}
       <div className="flex gap-2 mb-6 bg-white p-1 rounded-lg shadow-sm border overflow-x-auto">
-        <button onClick={() => setActiveSubTab('assets')} className={`flex-1 py-2 px-3 rounded-md font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap ${activeSubTab === 'assets' ? 'bg-[#6A0DAD] text-white shadow' : 'text-gray-500'}`}><Box size={16}/> {t.assets_tab}</button>
-        <button onClick={() => setActiveSubTab('categories')} className={`flex-1 py-2 px-3 rounded-md font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap ${activeSubTab === 'categories' ? 'bg-[#6A0DAD] text-white shadow' : 'text-gray-500'}`}><Tag size={16}/> {t.categories_tab}</button>
+        <button onClick={() => setActiveSubTab('assets')} className={`flex-1 py-2 px-3 rounded-md font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap ${activeSubTab === 'assets' ? 'bg-[#714B67] text-white shadow' : 'text-gray-500'}`}><Box size={16}/> {t.assets_tab}</button>
+        <button onClick={() => setActiveSubTab('categories')} className={`flex-1 py-2 px-3 rounded-md font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap ${activeSubTab === 'categories' ? 'bg-[#714B67] text-white shadow' : 'text-gray-500'}`}><Tag size={16}/> {t.categories_tab}</button>
         {/* התיקון: שימוש ב-t.nav_locations */}
-        <button onClick={() => setActiveSubTab('locations')} className={`flex-1 py-2 px-3 rounded-md font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap ${activeSubTab === 'locations' ? 'bg-[#6A0DAD] text-white shadow' : 'text-gray-500'}`}><MapPin size={16}/> {t.nav_locations || "Locations"}</button>
+        <button onClick={() => setActiveSubTab('locations')} className={`flex-1 py-2 px-3 rounded-md font-bold text-sm flex items-center justify-center gap-2 whitespace-nowrap ${activeSubTab === 'locations' ? 'bg-[#714B67] text-white shadow' : 'text-gray-500'}`}><MapPin size={16}/> {t.nav_locations || "Locations"}</button>
       </div>
 
       {/* --- Assets Tab --- */}
@@ -190,7 +190,7 @@ const ConfigurationTab = ({ token, t }) => {
                   <option value="">{t.select_category}...</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <button type="submit" className={`w-full py-2 rounded font-bold text-white shadow ${editAssetId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-[#6A0DAD] hover:bg-purple-800'}`}>
+              <button type="submit" className={`w-full py-2 rounded font-bold text-white shadow ${editAssetId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-[#714B67] hover:bg-purple-800'}`}>
                   {editAssetId ? "Update Asset" : t.save_asset_btn}
               </button>
            </form>

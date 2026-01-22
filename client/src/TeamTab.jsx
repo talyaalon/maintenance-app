@@ -194,7 +194,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-black">{t.my_team_title || "My Team"}</h2>
-                <button className="bg-[#6A0DAD] text-white px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2" onClick={() => setShowAddModal(true)}>
+                <button className="bg-[#714B67] text-white px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2" onClick={() => setShowAddModal(true)}>
                    <Plus size={18}/> {t.add_team_member || "Add User"}
                 </button>
             </div>
@@ -228,7 +228,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             {selectedMember && (
                 <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 backdrop-blur-sm p-4">
                     <div className="bg-white w-full h-full max-w-6xl max-h-[95vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-scale-in">
-                        <div className="bg-[#6A0DAD] text-white p-4 flex justify-between items-center shadow-md z-10 shrink-0">
+                        <div className="bg-[#714B67] text-white p-4 flex justify-between items-center shadow-md z-10 shrink-0">
                             <div>
                                 <h3 className="text-lg font-bold flex items-center gap-2">
                                     <User size={20}/> {t.viewing_as || "Viewing as"}: {selectedMember.full_name}
@@ -345,7 +345,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                 </div>
                             )}
                             
-                            <button type="submit" className="w-full py-3 bg-[#6A0DAD] text-white rounded-xl font-bold shadow-lg mt-2 flex justify-center items-center gap-2">
+                            <button type="submit" className="w-full py-3 bg-[#714B67] text-white rounded-xl font-bold shadow-lg mt-2 flex justify-center items-center gap-2">
                                 <Save size={18}/> {t.save || "Create User"}
                             </button>
                         </form>
