@@ -247,9 +247,9 @@ app.post('/users', authenticateToken, async (req, res) => {
         assignedManager = req.user.id;
     }
 
-    // --- התיקון כאן למטה: שינינו ל-password ---
-    const newUser = await pool.query(
-      `INSERT INTO users (full_name, email, password, role, phone, manager_id) 
+   const newUser = await pool.query(
+      // 👇 השינוי כאן: password במקום password_hash, ו-parent_manager_id במקום manager_id
+      `INSERT INTO users (full_name, email, password, role, phone, parent_manager_id) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, full_name, email, role, phone`,
       [full_name, email, hashedPassword, role, phone, assignedManager]
     );
