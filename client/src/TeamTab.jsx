@@ -10,7 +10,6 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
     // --- 2. State for Editing User ---
     const [editMember, setEditMember] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
-    // הוספתי שדה password לטופס העריכה
     const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
 
@@ -18,17 +17,22 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [addForm, setAddForm] = useState({ full_name: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '' });
 
+    // רשימת המנהלים הפעילים לבחירה בטופס
     const activeManagers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
 
     // --- פונקציה לשליחת משתמש חדש ---
     const handleAddUser = async (e) => {
         e.preventDefault();
         
-        // אם המשתמש הוא מנהל רגיל, העובד החדש אוטומטית תחתיו
         let payload = { ...addForm };
+        
+        // אם המשתמש הוא מנהל רגיל, הוא אוטומטית המנהל של העובד החדש
         if (user.role === 'MANAGER') {
             payload.parent_manager_id = user.id;
-            payload.role = 'EMPLOYEE';
+            // אם מנהל יוצר משתמש, הוא כנראה מתכוון לעובד, אבל נשאיר גמישות
+            if (payload.role === 'MANAGER') {
+                 // אופציונלי: האם מנהל יכול ליצור מנהל תחתיו? נשאיר כרגע.
+            }
         }
 
         try {
@@ -43,9 +47,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                 alert(t.alert_created || "User created successfully! Email sent.");
                 setShowAddModal(false);
                 setAddForm({ full_name: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '' });
-                fetchTeam(); // רענון הרשימה
+                fetchTeam(); // רענון הרשימה מיד אחרי ההוספה
             } else {
-                // הצגת שגיאה ספציפית
                 if (data.error === "Email already exists") {
                     alert(t.error_email_exists || "Email already exists");
                 } else {
@@ -70,13 +73,15 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) setTeam(await res.json());
+            if (res.ok) {
+                const data = await res.json();
+                setTeam(data);
+            }
         } catch (e) { console.error(e); }
     };
 
-    // --- Handle Member Click (Open Simulation Mode) ---
+    // --- Handle Member Click ---
     const handleMemberClick = async (member) => {
-        // רק מנהלים יכולים לראות משימות של אחרים
         if (user.role === 'EMPLOYEE') return;
 
         setSelectedMember(member);
@@ -96,7 +101,6 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         }
     };
 
-    // --- Team Management Functions ---
     const toggleManager = (managerId) => {
         setExpandedManager(expandedManager === managerId ? null : managerId);
     };
@@ -109,7 +113,10 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) fetchTeam();
-            else alert("Error deleting user");
+            else {
+                const d = await res.json();
+                alert(d.error || "Error deleting user");
+            }
         } catch (e) { alert("Server error"); }
     };
 
@@ -119,8 +126,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             full_name: member.full_name, 
             email: member.email, 
             phone: member.phone || '',
-            role: member.role, // חשוב לשלוח את התפקיד כדי שלא ידרס
-            password: '' // סיסמה ריקה כברירת מחדל
+            role: member.role,
+            password: '' 
         });
         setShowEditModal(true);
     };
@@ -150,11 +157,10 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         } catch (e) { alert("Server error"); }
     };
 
-    // --- Render Member Row Component ---
     const renderMemberRow = (member, isSub = false) => (
         <div key={member.id} className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center ${isSub ? 'ml-6 border-l-4 border-l-purple-200' : 'mb-3'}`}>
             <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full ${member.role === 'MANAGER' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
+                <div className={`p-2 rounded-full ${member.role === 'MANAGER' || member.role === 'BIG_BOSS' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
                     <User size={20} />
                 </div>
                 
@@ -172,12 +178,13 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             </div>
 
             <div className="flex items-center gap-2">
-                {member.role === 'MANAGER' && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-bold">Manager</span>}
+                {(member.role === 'MANAGER' || member.role === 'BIG_BOSS') && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-bold">{member.role}</span>}
                 
                 <button onClick={() => openEditModal(member)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition"><Edit2 size={16}/></button>
                 <button onClick={() => handleDelete(member.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash2 size={16}/></button>
                 
-                {member.role === 'MANAGER' && (
+                {/* חץ להרחבה - רלוונטי לכל מנהל */}
+                {(member.role === 'MANAGER' || member.role === 'BIG_BOSS') && (
                     <button onClick={() => toggleManager(member.id)} className="p-1 text-gray-400">
                         {expandedManager === member.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
                     </button>
@@ -186,8 +193,10 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         </div>
     );
 
-    // זה יציג גם מנהלים וגם מנהלים ראשיים, כדי שכולם יראו את העובדים שלהם
+    // 👇 התיקון כאן: מציגים ברשימה הראשית את כל המנהלים (גם BIG_BOSS וגם MANAGER)
     const managers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
+    
+    // עובדים ישירים של המשתמש המחובר (במקרה שאין לו מנהלים ברשימה)
     const directEmployees = team.filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === user.id);
 
     return (
@@ -203,13 +212,14 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             {/* Team List */}
             <div className="space-y-4 max-w-3xl mx-auto">
                 {managers.map(manager => {
+                    // מציגים תחת המנהל את כל העובדים המשויכים אליו
                     const subEmployees = team.filter(u => u.parent_manager_id === manager.id);
                     return (
                         <div key={manager.id} className="space-y-2">
                             {renderMemberRow(manager)}
                             {expandedManager === manager.id && (
                                 <div className="space-y-2 animate-fade-in">
-                                    {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">No employees</p>}
+                                    {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">No employees assigned</p>}
                                     {subEmployees.map(sub => renderMemberRow(sub, true))}
                                 </div>
                             )}
@@ -217,6 +227,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                     );
                 })}
 
+                {/* תצוגה לעובדים ישירים אם הרשימה הראשית ריקה */}
                 {managers.length === 0 && directEmployees.length > 0 && (
                     <>
                         <h3 className="text-sm font-bold text-gray-500 mt-6 mb-2">{t.direct_employees || "Direct Employees"}</h3>
@@ -259,7 +270,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                 </div>
             )}
 
-            {/* --- Edit User Modal (משופר עם סיסמה ושמירת תפקיד) --- */}
+            {/* --- Edit User Modal --- */}
             {showEditModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
                     <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
@@ -292,7 +303,6 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                     placeholder="050-0000000"
                                 />
                             </div>
-                            {/* שדה סיסמה חדש */}
                             <div className="relative">
                                 <label className="text-sm font-bold text-gray-700">{t.new_password || "New Password"}</label>
                                 <input 
@@ -337,12 +347,11 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                         <option value="MANAGER">Manager</option>
                                     </select>
                                     
-                                    {addForm.role === 'EMPLOYEE' && (
-                                        <select className="w-full p-3 border rounded-xl bg-white" value={addForm.parent_manager_id} onChange={e => setAddForm({...addForm, parent_manager_id: e.target.value})} required>
-                                            <option value="">Select Manager...</option>
-                                            {activeManagers.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                                        </select>
-                                    )}
+                                    {/* 👇 התיקון: מאפשר לבחור מנהל מעליו גם אם יוצרים מנהל חדש, כדי ליצור היררכיה */}
+                                    <select className="w-full p-3 border rounded-xl bg-white" value={addForm.parent_manager_id} onChange={e => setAddForm({...addForm, parent_manager_id: e.target.value})}>
+                                        <option value="">Select Manager / Parent...</option>
+                                        {activeManagers.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>)}
+                                    </select>
                                 </div>
                             )}
                             
