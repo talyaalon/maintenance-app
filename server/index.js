@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcrypt'); // Add this line!
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
