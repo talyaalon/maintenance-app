@@ -29,10 +29,12 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         // אם המשתמש הוא מנהל רגיל, הוא אוטומטית המנהל של העובד החדש
         if (user.role === 'MANAGER') {
             payload.parent_manager_id = user.id;
-            // אם מנהל יוצר משתמש, הוא כנראה מתכוון לעובד, אבל נשאיר גמישות
-            if (payload.role === 'MANAGER') {
-                 // אופציונלי: האם מנהל יכול ליצור מנהל תחתיו? נשאיר כרגע.
-            }
+            payload.role = 'EMPLOYEE'; // מנהל רגיל יכול ליצור רק עובדים תחתיו
+        }
+
+        // אם בחרנו ליצור מנהל, נוודא שאין לו parent_manager_id (כדי שיהיה עצמאי)
+        if (payload.role === 'MANAGER') {
+            payload.parent_manager_id = null;
         }
 
         try {
@@ -193,10 +195,9 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         </div>
     );
 
-    // 👇 התיקון כאן: מציגים ברשימה הראשית את כל המנהלים (גם BIG_BOSS וגם MANAGER)
+    // רשימה ראשית: מנהלים ובוסים
     const managers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
-    
-    // עובדים ישירים של המשתמש המחובר (במקרה שאין לו מנהלים ברשימה)
+    // עובדים ישירים (ללא שיוך למנהל אחר ברשימה)
     const directEmployees = team.filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === user.id);
 
     return (
@@ -212,7 +213,6 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             {/* Team List */}
             <div className="space-y-4 max-w-3xl mx-auto">
                 {managers.map(manager => {
-                    // מציגים תחת המנהל את כל העובדים המשויכים אליו
                     const subEmployees = team.filter(u => u.parent_manager_id === manager.id);
                     return (
                         <div key={manager.id} className="space-y-2">
@@ -342,16 +342,32 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                             
                             {user.role === 'BIG_BOSS' && (
                                 <div className="space-y-3">
-                                    <select className="w-full p-3 border rounded-xl bg-white" value={addForm.role} onChange={e => setAddForm({...addForm, role: e.target.value})}>
+                                    {/* בחירת תפקיד */}
+                                    <select 
+                                        className="w-full p-3 border rounded-xl bg-white" 
+                                        value={addForm.role} 
+                                        onChange={e => setAddForm({
+                                            ...addForm, 
+                                            role: e.target.value,
+                                            parent_manager_id: '' // איפוס המנהל אם מחליפים תפקיד
+                                        })}
+                                    >
                                         <option value="EMPLOYEE">Employee</option>
                                         <option value="MANAGER">Manager</option>
                                     </select>
                                     
-                                    {/* 👇 התיקון: מאפשר לבחור מנהל מעליו גם אם יוצרים מנהל חדש, כדי ליצור היררכיה */}
-                                    <select className="w-full p-3 border rounded-xl bg-white" value={addForm.parent_manager_id} onChange={e => setAddForm({...addForm, parent_manager_id: e.target.value})}>
-                                        <option value="">Select Manager / Parent...</option>
-                                        {activeManagers.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>)}
-                                    </select>
+                                    {/* 👇 התנאי החדש: הצגת רשימת המנהלים רק אם בחרנו ליצור EMPLOYEE */}
+                                    {addForm.role === 'EMPLOYEE' && (
+                                        <select 
+                                            className="w-full p-3 border rounded-xl bg-white" 
+                                            value={addForm.parent_manager_id} 
+                                            onChange={e => setAddForm({...addForm, parent_manager_id: e.target.value})}
+                                            required={addForm.role === 'EMPLOYEE'} // חובה רק אם זה עובד
+                                        >
+                                            <option value="">Select Manager...</option>
+                                            {activeManagers.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>)}
+                                        </select>
+                                    )}
                                 </div>
                             )}
                             
