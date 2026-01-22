@@ -228,10 +228,9 @@ app.get('/users', authenticateToken, async (req, res) => {
 });
 
 // יצירת משתמש
-// --- יצירת משתמש חדש (Create User) - גרסה מתוקנת וסופית ---
+// --- יצירת משתמש חדש (Create User) ---
 app.post('/users', authenticateToken, async (req, res) => {
   try {
-    // 👇 תיקון 1: שינינו כאן מ-manager_id ל-parent_manager_id כדי להתאים ל-React
     const { full_name, email, password, role, phone, parent_manager_id } = req.body;
     
     // ולידציה בסיסית
@@ -242,20 +241,26 @@ app.post('/users', authenticateToken, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     
     // קביעת מנהל
-    let assignedManager = parent_manager_id; // משתמשים במשתנה שקלטנו
-
-    // אם לא נבחר מנהל (למשל ע"י מנהל שיוצר עובד לעצמו), והיוצר הוא MANAGER - הוא המנהל
+    let assignedManager = parent_manager_id;
     if (!assignedManager && req.user.role === 'MANAGER') {
         assignedManager = req.user.id;
     }
 
-    // הוספה למסד הנתונים
     const newUser = await pool.query(
       `INSERT INTO users (full_name, email, password, role, phone, parent_manager_id) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, full_name, email, role, phone`,
       [full_name, email, hashedPassword, role, phone, assignedManager]
     );
     
+    // ✅ התיקון: שליחת המייל
+    // אנחנו שולחים כאן את ה-password הרגיל (לפני ההצפנה) כדי שהעובד ידע מה הסיסמה שלו
+    try {
+        await sendWelcomeEmail(email, full_name, password, role);
+    } catch (emailError) {
+        console.error("Error sending welcome email:", emailError);
+        // אנחנו לא עוצרים את הבקשה אם המייל נכשל, אבל רושמים שגיאה בלוג
+    }
+
     res.json(newUser.rows[0]);
 
   } catch (err) {
@@ -266,37 +271,56 @@ app.post('/users', authenticateToken, async (req, res) => {
     res.status(500).send('Server Error');
   }
 });
-// --- עדכון משתמש קיים (Update User) - תיקון המחיקה והסיסמה ---
+
+// --- עדכון משתמש קיים (Update User) ---
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    // מוציאים רק את השדות שאנחנו רוצים לעדכן
     const { full_name, email, phone, role, password } = req.body;
 
-    // בונים את השאילתה דינמית כדי לא לדרוס שדות שלא נשלחו (כמו manager_id)
+    // 1. קבלת המידע הישן להשוואה
+    const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    const oldUser = oldUserRes.rows[0];
+
+    // 2. בניית השאילתה
     let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4';
     let params = [full_name, email, phone, role];
     let paramCount = 5;
 
-    // אם נשלחה סיסמה חדשה - נעדכן גם אותה
+    // אם נשלחה סיסמה חדשה
     if (password && password.trim() !== '') {
         const hashedPassword = await bcrypt.hash(password, 10);
-        query += `, password_hash=$${paramCount}`;
+        // 👇 התיקון הקריטי: שינינו כאן מ-password_hash ל-password
+        query += `, password=$${paramCount}`; 
         params.push(hashedPassword);
         paramCount++;
     }
 
-    // מוסיפים את ה-ID בסוף
-    query += ` WHERE id=$${paramCount}`;
+    query += ` WHERE id=$${paramCount} RETURNING *`;
     params.push(id);
 
     // ביצוע העדכון
-    await pool.query(query, params);
+    const result = await pool.query(query, params);
+    const updatedUser = result.rows[0];
+
+    // 3. זיהוי שינויים ושליחת מייל
+    let changes = [];
+    if (oldUser.full_name !== updatedUser.full_name) changes.push(`Name changed to: <strong>${updatedUser.full_name}</strong>`);
+    if (oldUser.email !== updatedUser.email) changes.push(`Email changed to: <strong>${updatedUser.email}</strong>`);
+    if (oldUser.phone !== updatedUser.phone) changes.push(`Phone updated`);
+    // בדיקה אם הסיסמה שונתה (אם נשלחה סיסמה בבקשה)
+    if (password && password.trim() !== '') changes.push('Password has been changed');
+
+    if (changes.length > 0) {
+        sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes)
+            .catch(err => console.error("Email send error:", err));
+    }
     
-    res.json({ message: "User updated successfully" });
+    res.json({ message: "User updated successfully", user: updatedUser });
 
   } catch (err) {
-    console.error(err);
+    console.error(err); // זה ידפיס את השגיאה ללוג ב-Render
     if (err.code === '23505') {
         return res.status(400).json({ error: "Email already exists" });
     }
