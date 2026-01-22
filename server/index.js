@@ -228,27 +228,29 @@ app.get('/users', authenticateToken, async (req, res) => {
 });
 
 // יצירת משתמש
-// --- יצירת משתמש חדש (Create User) ---
+// --- יצירת משתמש חדש (Create User) - גרסה מתוקנת וסופית ---
 app.post('/users', authenticateToken, async (req, res) => {
   try {
-    const { full_name, email, password, role, phone, manager_id } = req.body;
+    // 👇 תיקון 1: שינינו כאן מ-manager_id ל-parent_manager_id כדי להתאים ל-React
+    const { full_name, email, password, role, phone, parent_manager_id } = req.body;
     
     // ולידציה בסיסית
     if (!full_name || !email || !password || !role) {
         return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // הצפנת הסיסמה
     const hashedPassword = await bcrypt.hash(password, 10);
     
     // קביעת מנהל
-    let assignedManager = manager_id;
+    let assignedManager = parent_manager_id; // משתמשים במשתנה שקלטנו
+
+    // אם לא נבחר מנהל (למשל ע"י מנהל שיוצר עובד לעצמו), והיוצר הוא MANAGER - הוא המנהל
     if (!assignedManager && req.user.role === 'MANAGER') {
         assignedManager = req.user.id;
     }
 
-   const newUser = await pool.query(
-      // 👇 השינוי כאן: password במקום password_hash, ו-parent_manager_id במקום manager_id
+    // הוספה למסד הנתונים
+    const newUser = await pool.query(
       `INSERT INTO users (full_name, email, password, role, phone, parent_manager_id) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, full_name, email, role, phone`,
       [full_name, email, hashedPassword, role, phone, assignedManager]
@@ -264,7 +266,6 @@ app.post('/users', authenticateToken, async (req, res) => {
     res.status(500).send('Server Error');
   }
 });
-
 // --- עדכון משתמש קיים (Update User) - תיקון המחיקה והסיסמה ---
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {

@@ -186,7 +186,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         </div>
     );
 
-    const managers = team.filter(u => u.role === 'MANAGER');
+    // זה יציג גם מנהלים וגם מנהלים ראשיים, כדי שכולם יראו את העובדים שלהם
+    const managers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
     const directEmployees = team.filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === user.id);
 
     return (
