@@ -148,11 +148,23 @@ app.post('/login', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) return res.status(400).json({ error: "משתמש לא נמצא" });
+    
     const user = result.rows[0];
-    if (password !== user.password) return res.status(400).json({ error: "סיסמה שגויה" });
+
+    // בדיקה: אם הסיסמה מוצפנת, נשתמש ב-bcrypt. אם לא (משתמשים ישנים), נבדוק רגיל
+    const validPassword = await bcrypt.compare(password, user.password);
+    
+    // אם ההשוואה נכשלה, נבדוק אם זו סיסמה ישנה (לא מוצפנת) למקרה שזה משתמש ותיק
+    if (!validPassword && password !== user.password) {
+        return res.status(400).json({ error: "סיסמה שגויה" });
+    }
+
     const token = jwt.sign({ id: user.id, role: user.role, name: user.full_name }, SECRET_KEY, { expiresIn: '24h' });
     res.json({ token, user: { id: user.id, name: user.full_name, role: user.role, email: user.email, phone: user.phone, profile_picture_url: user.profile_picture_url } });
-  } catch (err) { res.status(500).json({ error: "שגיאת שרת" }); }
+  } catch (err) { 
+      console.error(err);
+      res.status(500).json({ error: "שגיאת שרת" }); 
+  }
 });
 
 // עדכון פרופיל
@@ -226,16 +238,18 @@ app.post('/users', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: "Missing required fields" });
     }
 
+    // הצפנת הסיסמה
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // קביעת מנהל: אם נשלח manager_id נשתמש בו, אחרת אם המבקש הוא מנהל, הוא המנהל
+    // קביעת מנהל
     let assignedManager = manager_id;
     if (!assignedManager && req.user.role === 'MANAGER') {
         assignedManager = req.user.id;
     }
 
+    // --- התיקון כאן למטה: שינינו ל-password ---
     const newUser = await pool.query(
-      `INSERT INTO users (full_name, email, password_hash, role, phone, manager_id) 
+      `INSERT INTO users (full_name, email, password, role, phone, manager_id) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, full_name, email, role, phone`,
       [full_name, email, hashedPassword, role, phone, assignedManager]
     );
@@ -244,7 +258,6 @@ app.post('/users', authenticateToken, async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    // בדיקה האם זו שגיאת "אימייל כפול" (קוד 23505 ב-Postgres)
     if (err.code === '23505') {
         return res.status(400).json({ error: "Email already exists" });
     }
