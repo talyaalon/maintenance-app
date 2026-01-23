@@ -56,6 +56,25 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
         .catch(console.error);
     }, [token, user]);
 
+    // 👇 הלוגיקה החדשה: סינון הרשימה לפי היררכיה
+    const getRelevantUsers = () => {
+        if (!users.length) return [];
+        
+        // מנהל ראשי רואה את כולם
+        if (user.role === 'BIG_BOSS') return users;
+
+        // מנהל רואה רק את עצמו ואת העובדים הישירים שלו
+        if (user.role === 'MANAGER') {
+            return users.filter(u => u.id === user.id || u.parent_manager_id === user.id);
+        }
+
+        // עובד רואה רק את עצמו
+        return users.filter(u => u.id === user.id);
+    };
+
+    // משתנה עזר שמחזיק את הרשימה המסוננת לשימוש בטופס
+    const relevantUsers = getRelevantUsers();
+
     const handleDownloadTemplate = () => {
         const templateData = [
             {
@@ -175,9 +194,12 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
         reader.readAsBinaryString(file);
     };
 
+    // בדיקת הרשאות (מעודכנת לפי הרשימה המסוננת)
     const validatePermissions = (tasksData) => {
         const errors = [];
-        const allowedNames = new Set(users.map(u => u.full_name.trim().toLowerCase()));
+        // אנו בודקים רק מול הרשימה הרלוונטית (relevantUsers)
+        const allowedNames = new Set(relevantUsers.map(u => u.full_name.trim().toLowerCase()));
+        // מוסיפים גם את שם המשתמש הנוכחי ליתר ביטחון
         allowedNames.add(user.full_name.trim().toLowerCase());
 
         tasksData.forEach((row, index) => {
@@ -188,8 +210,9 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
 
             if (workerNameKey && row[workerNameKey]) {
                 const nameInFile = row[workerNameKey].toString().trim().toLowerCase();
+                // אם השם בקובץ לא נמצא ברשימה המורשית של המנהל - שגיאה
                 if (user.role !== 'BIG_BOSS' && !allowedNames.has(nameInFile)) {
-                    errors.push(`Row ${index + 1}: Permission Denied. Cannot import task for "${row[workerNameKey]}". User not in your team.`);
+                    errors.push(`Row ${index + 1}: Permission Denied. You cannot import tasks for "${row[workerNameKey]}". This user is not in your team.`);
                 }
             }
         });
@@ -250,10 +273,9 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
 
     return (
         <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm font-sans">
-            {/* 👇 שינוי גובה ל-550px ורוחב ל-4xl כדי שייכנס במסך */}
             <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-[550px] max-h-[85vh] flex flex-col overflow-hidden">
                 
-                {/* Header קבוע */}
+                {/* Header */}
                 <div className="bg-white border-b px-6 py-3 flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-4">
                         <div className="bg-[#714B67] p-2 rounded text-white">
@@ -270,7 +292,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition"><X size={20}/></button>
                 </div>
 
-                {/* Content Area - נגלל רק בפנים */}
+                {/* Content */}
                 <div className="flex-1 overflow-hidden bg-gray-50 p-5">
                     
                     {/* --- EXPORT VIEW --- */}
@@ -297,13 +319,17 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                                     </label>
                                 </div>
 
+                                {/* בחירת עובד - משתמשים ברשימה המסוננת relevantUsers */}
                                 {user.role !== 'EMPLOYEE' && (
                                     <div className="flex items-center gap-2">
                                         <Filter size={14} className="text-gray-500"/>
                                         <select className="border-none bg-transparent font-medium text-gray-600 focus:ring-0 cursor-pointer hover:text-[#714B67] py-0" 
                                             value={filterWorker} onChange={e => setFilterWorker(e.target.value)}>
-                                            <option value="">All My Employees</option>
-                                            {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                                            <option value="">
+                                                {user.role === 'BIG_BOSS' ? "-- All Employees --" : "-- All My Employees --"}
+                                            </option>
+                                            {/* 👇 כאן השינוי - משתמשים ב-relevantUsers במקום ב-users */}
+                                            {relevantUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                                         </select>
                                     </div>
                                 )}
@@ -403,7 +429,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                     )}
                 </div>
 
-                {/* Footer קבוע */}
+                {/* Footer */}
                 <div className="bg-white border-t p-4 flex justify-start gap-3 shrink-0">
                     {activeTab === 'export' ? (
                         <>
