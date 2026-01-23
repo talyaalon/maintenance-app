@@ -183,7 +183,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       </div>
       
       {/* מודלים */}
-      {showExcel && <AdvancedExcel token={token} t={t} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
+      {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
       
       {showCreateModal && (
           // 👇 השינוי כאן: העברתי את subordinates לטופס היצירה
