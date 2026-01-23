@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx'; 
-import { Download, Upload, FileSpreadsheet, Filter, Trash2, AlertTriangle, X, CheckCircle, Info, ArrowRight, Plus, Play, Save, AlertCircle } from 'lucide-react';
+import { Download, Upload, FileSpreadsheet, Filter, Trash2, AlertTriangle, X, CheckCircle, Search, Plus, Play, Save, FileText } from 'lucide-react';
 
-const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
-    const [activeTab, setActiveTab] = useState('import'); 
+const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
+    const [activeTab, setActiveTab] = useState('export'); // ברירת מחדל לייצוא כדי לראות את העיצוב החדש
     const [users, setUsers] = useState([]);
-    
+    const [searchTerm, setSearchTerm] = useState(''); // לחיפוש שדות
+
     // --- EXPORT STATE ---
     const allFields = [
         { id: 'id', label: 'ID (Required for Update)' },
@@ -18,7 +19,9 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
         { id: 'location_name', label: t.location || 'Location' },
         { id: 'asset_code', label: 'Asset Code' },
         { id: 'asset_name', label: 'Asset Name' },
-        { id: 'category_name', label: 'Category' }
+        { id: 'category_name', label: 'Category' },
+        { id: 'manager_name', label: 'Manager' },
+        { id: 'completion_note', label: 'Completion Note' }
     ];
 
     const [availableFields, setAvailableFields] = useState(allFields);
@@ -28,6 +31,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
     const [endDate, setEndDate] = useState('');
     const [isExporting, setIsExporting] = useState(false);
     const [isUpdateMode, setIsUpdateMode] = useState(false);
+    const [exportFormat, setExportFormat] = useState('XLSX'); // תמיכה עתידית ב-CSV
 
     // --- IMPORT STATE ---
     const [importFile, setImportFile] = useState(null);
@@ -38,51 +42,40 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
     const [errorList, setErrorList] = useState([]);
     const [isProcessing, setIsProcessing] = useState(false); 
 
+    // טעינת משתמשים והגדרת הרשאות
     useEffect(() => {
         fetch('https://maintenance-app-h84v.onrender.com/users', {
             headers: { 'Authorization': `Bearer ${token}` }
         })
         .then(res => res.json())
-        .then(setUsers)
+        .then(data => {
+            setUsers(data);
+            // אם המשתמש הוא עובד, ננעל את הפילטר עליו אוטומטית
+            if (user.role === 'EMPLOYEE') {
+                setFilterWorker(user.id);
+            }
+        })
         .catch(console.error);
-    }, [token]);
+    }, [token, user]);
 
-    // --- Template Generation (Updated) ---
+    // --- Template Generation ---
     const handleDownloadTemplate = () => {
         const templateData = [
             {
-                "Task Title": "Clean Air Filters", // כותרת ברורה
-                "Description": "Check and clean filters in the main lobby",
+                "Task Title": "Clean Air Filters", 
+                "Description": "Check filters in lobby",
                 "Urgency": "Normal",
                 "Due Date": "2024-12-31",
-                "Worker Name": "John Doe", // שם עובד (חייב להיות קיים במערכת)
-                "Location Name": "Lobby",  // שם מיקום (חייב להיות קיים במערכת)
-                "Asset Code": "AC-001",    // קוד נכס (אופציונלי)
-                "Asset Name": "",          
-                "Category": ""
-            },
-            {
-                "Task Title": "Weekly Inspection",
-                "Description": "",
-                "Urgency": "High",
-                "Due Date": "2024-11-20",
-                "Worker Name": "",
-                "Location Name": "",
-                "Asset Code": "",
-                "Asset Name": "",
-                "Category": ""
+                "Worker Name": user.full_name, // שם העובד הנוכחי כדוגמה
+                "Location Name": "Lobby",  
+                "Asset Code": "AC-001"
             }
         ];
-        
         const worksheet = XLSX.utils.json_to_sheet(templateData);
-        // קצת רוחב לעמודות שיהיה קריא
-        worksheet['!cols'] = [ {wch: 20}, {wch: 30}, {wch: 10}, {wch: 12}, {wch: 15}, {wch: 15}, {wch: 15} ];
-        
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Template");
-        XLSX.writeFile(workbook, "Import_Tasks_Template.xlsx");
+        XLSX.writeFile(workbook, "Import_Template.xlsx");
     };
-
 
     // --- EXPORT LOGIC ---
     const moveToSelected = (field) => {
@@ -91,7 +84,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
     };
 
     const moveToAvailable = (field) => {
-        if (isUpdateMode && field.id === 'id') return; 
+        if (isUpdateMode && field.id === 'id') return; // לא ניתן להסיר ID במצב עדכון
         setAvailableFields([...availableFields, field]);
         setSelectedFields(selectedFields.filter(f => f.id !== field.id));
     };
@@ -100,17 +93,31 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
         const checked = e.target.checked;
         setIsUpdateMode(checked);
         if (checked) {
+            // במצב עדכון, חובה להוסיף את ה-ID
             const idField = availableFields.find(f => f.id === 'id');
             if (idField) moveToSelected(idField);
         }
     };
+
+    // סינון שדות זמינים לפי חיפוש
+    const filteredAvailableFields = availableFields.filter(f => 
+        f.label.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     const handleExport = async () => {
         if (selectedFields.length === 0) return alert("Please select fields to export");
         setIsExporting(true);
         try {
             const params = new URLSearchParams();
-            if (filterWorker) params.append('worker_id', filterWorker);
+            
+            // לוגיקת הרשאות ייצוא
+            if (user.role === 'EMPLOYEE') {
+                params.append('worker_id', user.id);
+            } else if (filterWorker) {
+                params.append('worker_id', filterWorker);
+            }
+            // אם מנהל לא בחר כלום - השרת יחזיר את כל העובדים שלו
+
             if (startDate) params.append('start_date', startDate);
             if (endDate) params.append('end_date', endDate);
 
@@ -142,7 +149,9 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
             const worksheet = XLSX.utils.json_to_sheet(excelData);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Tasks");
-            XLSX.writeFile(workbook, `Tasks_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
+            
+            const fileExtension = exportFormat === 'CSV' ? 'csv' : 'xlsx';
+            XLSX.writeFile(workbook, `Tasks_Export.${fileExtension}`);
 
         } catch (e) {
             alert("Error exporting: " + e.message);
@@ -151,7 +160,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
         }
     };
 
-    // --- IMPORT LOGIC ---
+    // --- IMPORT LOGIC & VALIDATION ---
     const handleFileUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -169,7 +178,6 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
             const wsname = wb.SheetNames[0];
             const ws = wb.Sheets[wsname];
             const data = XLSX.utils.sheet_to_json(ws, { defval: "" }); 
-            
             if (data.length > 0) {
                 setHeaders(Object.keys(data[0]));
                 setPreviewData(data);
@@ -178,15 +186,47 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
         reader.readAsBinaryString(file);
     };
 
+    // אימות הרשאות בצד לקוח (Import Validation)
+    const validatePermissions = (tasksData) => {
+        const errors = [];
+        // רשימת שמות מורשים (כולל המשתמש עצמו)
+        const allowedNames = new Set(users.map(u => u.full_name.trim().toLowerCase()));
+        allowedNames.add(user.full_name.trim().toLowerCase());
+
+        tasksData.forEach((row, index) => {
+            const workerNameKey = Object.keys(row).find(k => 
+                ['Worker Name', 'Worker', 'Assigned To', 'עובד', 'שם העובד'].includes(k) || 
+                k.toLowerCase().includes('worker')
+            );
+
+            if (workerNameKey && row[workerNameKey]) {
+                const nameInFile = row[workerNameKey].toString().trim().toLowerCase();
+                // אם המשתמש הוא מנהל מערכת ראשי, מותר לו הכל. אחרת בודקים ברשימה
+                if (user.role !== 'BIG_BOSS' && !allowedNames.has(nameInFile)) {
+                    errors.push(`Row ${index + 1}: Permission Denied. Cannot import task for "${row[workerNameKey]}". User not in your team.`);
+                }
+            }
+        });
+        return errors;
+    };
+
     const processFile = async (isDryRun) => {
         setIsProcessing(true);
+        setValidationStatus("idle");
+        setErrorList([]);
+
+        const permissionErrors = validatePermissions(previewData);
+        if (permissionErrors.length > 0) {
+            setValidationStatus("error");
+            setErrorList(permissionErrors);
+            setIsProcessing(false);
+            return;
+        }
+
         try {
             const res = await fetch('https://maintenance-app-h84v.onrender.com/tasks/import-process', {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ tasks: previewData, isDryRun: isDryRun })
             });
 
@@ -195,7 +235,6 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
             if (result.success) {
                 if (isDryRun) {
                     setValidationStatus("valid"); 
-                    setErrorList([]);
                 } else {
                     alert(t.alert_created || "Import successful!");
                     onRefresh();
@@ -206,238 +245,216 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose }) => {
                 setErrorList(result.errors || (result.details ? result.details : [result.error]));
             }
         } catch (err) {
-            console.error(err);
             setValidationStatus("error");
-            setErrorList(["Server communication error"]);
+            setErrorList(["Server error"]);
         } finally {
             setIsProcessing(false);
         }
     };
 
     const handleDeleteAll = async () => {
-        if(!window.confirm("⚠️ Delete ALL tasks? This cannot be undone!")) return;
+        if(!window.confirm("⚠️ Delete ALL tasks?")) return;
         try {
-            const res = await fetch('https://maintenance-app-h84v.onrender.com/tasks/delete-all', {
+            await fetch('https://maintenance-app-h84v.onrender.com/tasks/delete-all', {
                 method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
             });
-            if(res.ok) { alert("Deleted."); onRefresh(); onClose(); }
-            else alert("Error.");
+            alert("Deleted."); onRefresh(); onClose();
         } catch(e) { alert("Error."); }
     };
 
+    // --- JSX UI (Odoo Style) ---
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden animate-scale-in flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm font-sans">
+            {/* מיכל ראשי בגודל קבוע - עיצוב דמוי חלון */}
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-5xl h-[700px] flex flex-col overflow-hidden">
                 
-                {/* Header */}
-                <div className="bg-[#714B67] p-4 flex justify-between items-center text-white shadow-md shrink-0">
-                    <h2 className="text-xl font-bold flex items-center gap-2">
-                        <FileSpreadsheet /> {t.excel_center || "Excel Center"}
-                    </h2>
-                    <button onClick={onClose} className="p-1 hover:bg-purple-600 rounded-full transition"><X /></button>
-                </div>
-
-                {/* Tabs */}
-                <div className="flex border-b bg-gray-50 shrink-0">
-                    <button onClick={() => setActiveTab('import')} className={`flex-1 py-3 font-bold text-sm transition-all ${activeTab === 'import' ? 'text-purple-700 border-b-4 border-purple-700 bg-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                        {t.import_data || "📥 Import / Update"}
-                    </button>
-                    <button onClick={() => setActiveTab('export')} className={`flex-1 py-3 font-bold text-sm transition-all ${activeTab === 'export' ? 'text-purple-700 border-b-4 border-purple-700 bg-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                        {t.export_data || "📤 Export Data"}
-                    </button>
-                </div>
-
-                {/* Main Content Area */}
-                <div className="flex-1 overflow-y-auto bg-gray-50/30">
-                    
-                    {/* --- EXPORT TAB --- */}
-                    {activeTab === 'export' && (
-                        <div className="p-6 flex flex-col h-full space-y-4">
-                            {/* ... Export UI (נשאר אותו דבר) ... */}
-                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
-                                <h3 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
-                                    <Filter size={18}/> {t.filters || "Filters"}
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 mb-1 block">{t.employee}</label>
-                                        <select className="w-full p-2 border rounded-lg bg-white" value={filterWorker} onChange={e => setFilterWorker(e.target.value)}>
-                                            <option value="">-- All Employees --</option>
-                                            {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 mb-1 block">{t.date_range}</label>
-                                        <div className="flex gap-2 items-center">
-                                            <input type="date" className="w-full p-2 border rounded-lg" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                                            <span className="text-gray-400">➝</span>
-                                            <input type="date" className="w-full p-2 border rounded-lg" value={endDate} onChange={e => setEndDate(e.target.value)} />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 px-2">
-                                <input type="checkbox" id="upd" checked={isUpdateMode} onChange={handleUpdateModeChange} className="w-4 h-4 text-purple-600"/>
-                                <label htmlFor="upd" className="text-sm font-bold text-gray-700 cursor-pointer">
-                                    {t.export_for_update || "I want to update data (Includes ID)"}
-                                </label>
-                            </div>
-
-                            <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-[300px]">
-                                <div className="flex-1 border rounded-lg p-3 bg-white shadow-sm flex flex-col">
-                                    <h4 className="font-bold text-gray-700 border-b pb-2 mb-2 text-xs uppercase">Available Fields</h4>
-                                    <div className="overflow-y-auto flex-1 space-y-1">
-                                        {availableFields.map(f => (
-                                            <div key={f.id} onClick={() => moveToSelected(f)} className="p-2 bg-gray-50 border rounded cursor-pointer hover:bg-purple-50 flex justify-between items-center group">
-                                                <span className="text-sm">{f.label}</span>
-                                                <Plus size={14} className="text-gray-400 group-hover:text-purple-600"/>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-center text-gray-300 md:rotate-0 rotate-90"><ArrowRight size={24} /></div>
-
-                                <div className="flex-1 border border-purple-200 rounded-lg p-3 bg-white shadow-md flex flex-col">
-                                    <h4 className="font-bold text-purple-700 border-b pb-2 mb-2 text-xs uppercase">Fields to Export</h4>
-                                    <div className="overflow-y-auto flex-1 space-y-1">
-                                        {selectedFields.map(f => (
-                                            <div key={f.id} onClick={() => moveToAvailable(f)} className={`p-2 border rounded cursor-pointer flex justify-between items-center group ${f.id === 'id' && isUpdateMode ? 'bg-gray-100 border-gray-200 cursor-not-allowed' : 'bg-purple-50 border-purple-100 hover:bg-red-50'}`}>
-                                                <span className="text-sm font-medium">{f.label}</span>
-                                                {!(f.id === 'id' && isUpdateMode) && <Trash2 size={14} className="text-purple-400 group-hover:text-red-500"/>}
-                                            </div>
-                                        ))}
-                                        {selectedFields.length === 0 && <p className="text-gray-400 text-xs text-center mt-10">Select fields...</p>}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button onClick={handleExport} disabled={isExporting} className="w-full py-3 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition flex justify-center items-center gap-2">
-                                {isExporting ? "Exporting..." : <><Download size={20}/> {t.download_excel || "Download Excel"}</>}
-                            </button>
+                {/* Header קבוע */}
+                <div className="bg-white border-b px-6 py-4 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-[#714B67] p-2 rounded text-white">
+                            <FileSpreadsheet size={24}/>
                         </div>
-                    )}
+                        <h2 className="text-2xl font-bold text-gray-800">{activeTab === 'export' ? t.export_data || "Export Data" : t.import_data || "Import Data"}</h2>
+                    </div>
+                    
+                    {/* טאבים למעבר מהיר */}
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button onClick={() => setActiveTab('import')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${activeTab === 'import' ? 'bg-white shadow text-[#714B67]' : 'text-gray-500 hover:text-gray-700'}`}>Import</button>
+                        <button onClick={() => setActiveTab('export')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${activeTab === 'export' ? 'bg-white shadow text-[#714B67]' : 'text-gray-500 hover:text-gray-700'}`}>Export</button>
+                    </div>
 
-                    {/* --- IMPORT TAB --- */}
-                    {activeTab === 'import' && (
-                        <div className="flex flex-col h-full">
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition"><X size={24}/></button>
+                </div>
+
+                {/* Content Area - נגלל רק בפנים אם צריך */}
+                <div className="flex-1 overflow-hidden bg-gray-50 p-6">
+                    
+                    {/* --- EXPORT VIEW (Odoo Style) --- */}
+                    {activeTab === 'export' && (
+                        <div className="flex flex-col h-full gap-6">
                             
-                            {/* Toolbar */}
-                            <div className="bg-gray-50 p-4 border-b flex justify-between items-center px-6">
-                                <div className="flex gap-2">
-                                    <label className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium cursor-pointer hover:bg-gray-50 hover:border-gray-400 transition flex items-center gap-2 shadow-sm">
-                                        <Upload size={18} />
-                                        {fileName || "Load File"}
-                                        <input type="file" hidden accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
+                            {/* שורת הגדרות עליונה */}
+                            <div className="flex flex-wrap gap-8 items-start">
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" id="update_data" checked={isUpdateMode} onChange={handleUpdateModeChange} className="w-4 h-4 text-[#714B67] focus:ring-[#714B67] border-gray-300 rounded cursor-pointer"/>
+                                    <label htmlFor="update_data" className="text-sm text-gray-700 font-medium cursor-pointer">
+                                        {t.export_for_update || "I want to update data (import-compatible export)"}
                                     </label>
-
-                                    {previewData.length > 0 && (
-                                        <button 
-                                            onClick={() => processFile(true)}
-                                            className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-50 hover:text-purple-600 transition flex items-center gap-2 shadow-sm"
-                                        >
-                                            {isProcessing ? "Testing..." : <><Play size={18} /> Test</>}
-                                        </button>
-                                    )}
-
-                                    {previewData.length > 0 && (
-                                        <button 
-                                            onClick={() => processFile(false)}
-                                            disabled={validationStatus !== "valid"} 
-                                            className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition ${
-                                                validationStatus === "valid" 
-                                                ? "bg-[#714B67] text-white hover:bg-purple-800" 
-                                                : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                                            }`}
-                                        >
-                                            <Save size={18} /> Import
-                                        </button>
-                                    )}
                                 </div>
-                                
+
                                 <div className="flex items-center gap-3">
-                                    <button onClick={handleDownloadTemplate} className="text-sm text-purple-600 hover:underline flex items-center gap-1 font-bold">
-                                        <Download size={14}/> Download Template
-                                    </button>
-                                    <button onClick={handleDeleteAll} className="text-red-500 p-2 hover:bg-red-50 rounded-full" title="Delete All Tasks">
-                                        <Trash2 size={18}/>
-                                    </button>
+                                    <span className="text-sm font-bold text-gray-700">Export Format:</span>
+                                    <label className="flex items-center gap-1 cursor-pointer">
+                                        <input type="radio" name="format" checked={exportFormat === 'XLSX'} onChange={() => setExportFormat('XLSX')} className="text-[#714B67] focus:ring-[#714B67]"/>
+                                        <span className="text-sm text-gray-600">XLSX</span>
+                                    </label>
+                                    <label className="flex items-center gap-1 cursor-pointer">
+                                        <input type="radio" name="format" checked={exportFormat === 'CSV'} onChange={() => setExportFormat('CSV')} className="text-[#714B67] focus:ring-[#714B67]"/>
+                                        <span className="text-sm text-gray-600">CSV</span>
+                                    </label>
                                 </div>
-                            </div>
 
-                            {/* Status Messages */}
-                            {validationStatus === "valid" && (
-                                <div className="bg-green-50 border-b border-green-200 p-4 flex items-center gap-3 animate-fade-in">
-                                    <CheckCircle className="text-green-600" size={24} />
-                                    <div>
-                                        <h4 className="text-green-800 font-bold">Everything seems valid.</h4>
-                                        <p className="text-green-700 text-sm">You can now click the 'Import' button to save the tasks.</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {validationStatus === "error" && (
-                                <div className="bg-red-50 border-b border-red-200 p-4 animate-fade-in max-h-40 overflow-y-auto">
-                                    <div className="flex items-start gap-3">
-                                        <AlertTriangle className="text-red-600 shrink-0 mt-1" size={24} />
-                                        <div>
-                                            <h4 className="text-red-800 font-bold mb-1">The file contains blocking errors:</h4>
-                                            <ul className="list-disc list-inside text-red-700 text-sm space-y-1">
-                                                {errorList.map((err, idx) => (
-                                                    <li key={idx}>{err}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Data Preview Table */}
-                            <div className="flex-1 overflow-auto bg-gray-100 p-6">
-                                {previewData.length === 0 ? (
-                                    <div className="h-full flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 rounded-xl bg-white/50">
-                                        <FileSpreadsheet size={64} className="mb-4 opacity-50"/>
-                                        <p className="text-lg">No file loaded</p>
-                                        <p className="text-sm">Upload an Excel file to see a preview</p>
-                                    </div>
-                                ) : (
-                                    <div className="bg-white rounded-xl shadow border overflow-hidden">
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left border-collapse">
-                                                <thead>
-                                                    <tr className="bg-gray-50 border-b">
-                                                        <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider w-16">#</th>
-                                                        {headers.map(h => (
-                                                            <th key={h} className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                                                                {h}
-                                                            </th>
-                                                        ))}
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {previewData.slice(0, 50).map((row, i) => (
-                                                        <tr key={i} className="hover:bg-gray-50 transition">
-                                                            <td className="p-3 text-xs text-gray-400 font-mono border-r">{i + 1}</td>
-                                                            {headers.map((h, j) => (
-                                                                <td key={j} className="p-3 text-sm text-gray-700 whitespace-nowrap border-r last:border-r-0">
-                                                                    {row[h]}
-                                                                </td>
-                                                            ))}
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                        {previewData.length > 50 && (
-                                            <div className="p-3 text-center text-xs text-gray-500 bg-gray-50 border-t">
-                                                Showing first 50 rows of {previewData.length}
-                                            </div>
-                                        )}
+                                {/* בחירת עובד ופילטרים - רק אם זה לא עובד רגיל */}
+                                {user.role !== 'EMPLOYEE' && (
+                                    <div className="flex items-center gap-2">
+                                        <Filter size={16} className="text-gray-500"/>
+                                        <select className="text-sm border-none bg-transparent font-medium text-gray-600 focus:ring-0 cursor-pointer hover:text-[#714B67]" 
+                                            value={filterWorker} onChange={e => setFilterWorker(e.target.value)}>
+                                            <option value="">filter: All My Employees</option>
+                                            {users.map(u => <option key={u.id} value={u.id}>filter: {u.full_name}</option>)}
+                                        </select>
                                     </div>
                                 )}
                             </div>
+
+                            {/* אזור בחירת השדות - שתי עמודות */}
+                            <div className="flex-1 flex gap-6 overflow-hidden min-h-0">
+                                
+                                {/* עמודה שמאלית - Available Fields */}
+                                <div className="flex-1 flex flex-col min-h-0">
+                                    <div className="mb-2">
+                                        <h4 className="text-sm font-bold text-gray-800 mb-1">Available fields</h4>
+                                        <div className="relative">
+                                            <Search size={16} className="absolute left-3 top-2.5 text-gray-400"/>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Search..." 
+                                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-[#714B67]"
+                                                value={searchTerm}
+                                                onChange={e => setSearchTerm(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-sm">
+                                        {filteredAvailableFields.map(field => (
+                                            <div key={field.id} onClick={() => moveToSelected(field)} 
+                                                className="flex justify-between items-center px-4 py-2 border-b border-gray-50 hover:bg-purple-50 cursor-pointer group transition-colors text-sm text-gray-600"
+                                            >
+                                                <span>{field.label}</span>
+                                                <Plus size={16} className="text-gray-300 group-hover:text-[#714B67]"/>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* עמודה ימנית - Fields to export */}
+                                <div className="flex-1 flex flex-col min-h-0">
+                                    <div className="mb-2 h-[60px] flex items-end"> 
+                                        <h4 className="text-sm font-bold text-gray-800 mb-2">Fields to export</h4>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto border border-gray-200 rounded-md bg-white shadow-sm">
+                                        {selectedFields.map((field, idx) => (
+                                            <div key={field.id} 
+                                                className={`flex justify-between items-center px-4 py-2 border-b border-gray-50 group text-sm ${field.id === 'id' && isUpdateMode ? 'bg-gray-100 text-gray-400' : 'hover:bg-red-50 text-gray-800 cursor-pointer'}`}
+                                            >
+                                                <span className="font-medium">{field.label}</span>
+                                                {!(field.id === 'id' && isUpdateMode) ? (
+                                                    <Trash2 size={16} onClick={() => moveToAvailable(field)} className="text-gray-300 group-hover:text-red-500"/>
+                                                ) : <span className="text-xs italic">Required</span>}
+                                            </div>
+                                        ))}
+                                        {selectedFields.length === 0 && (
+                                            <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
+                                                No fields selected
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+                    )}
+
+                    {/* --- IMPORT VIEW --- */}
+                    {activeTab === 'import' && (
+                        <div className="h-full flex flex-col gap-4">
+                            <div className="bg-white p-6 rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center gap-3 hover:bg-gray-50 transition cursor-pointer relative">
+                                <Upload size={40} className="text-gray-400"/>
+                                <p className="text-gray-600 font-medium">{fileName || "Drag & Drop or Click to Upload Excel"}</p>
+                                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
+                            </div>
+
+                            <div className="flex justify-between items-center">
+                                <button onClick={handleDownloadTemplate} className="text-[#714B67] text-sm font-bold hover:underline flex items-center gap-1">
+                                    <Download size={14}/> Download Template
+                                </button>
+                                {user.role === 'BIG_BOSS' && <button onClick={handleDeleteAll} className="text-red-500 text-xs hover:underline">Delete All Data</button>}
+                            </div>
+
+                            {/* סטטוסים והודעות */}
+                            {validationStatus === 'valid' && (
+                                <div className="bg-green-50 border border-green-200 p-4 rounded-md flex gap-3 text-green-800 items-start animate-fade-in">
+                                    <CheckCircle size={20} className="mt-0.5"/>
+                                    <div>
+                                        <p className="font-bold">File Validated Successfully</p>
+                                        <p className="text-sm">Found {previewData.length} records ready to import.</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {validationStatus === 'error' && (
+                                <div className="bg-red-50 border border-red-200 p-4 rounded-md flex gap-3 text-red-800 items-start animate-fade-in overflow-y-auto max-h-40">
+                                    <AlertTriangle size={20} className="mt-0.5 shrink-0"/>
+                                    <div>
+                                        <p className="font-bold">Blocking Errors Found</p>
+                                        <ul className="list-disc list-inside text-sm mt-1">
+                                            {errorList.map((e, i) => <li key={i}>{e}</li>)}
+                                        </ul>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer קבוע - כפתורים */}
+                <div className="bg-white border-t p-4 flex justify-start gap-3 shrink-0">
+                    {activeTab === 'export' ? (
+                        <>
+                            <button onClick={handleExport} disabled={isExporting} className="bg-[#714B67] text-white px-6 py-2 rounded-md font-bold hover:bg-[#5a3b52] transition shadow-sm disabled:opacity-50 flex items-center gap-2">
+                                {isExporting ? "Exporting..." : "Export"}
+                            </button>
+                            <button onClick={onClose} className="bg-white border border-gray-300 text-gray-700 px-6 py-2 rounded-md font-medium hover:bg-gray-50 transition">
+                                Close
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            {previewData.length > 0 && (
+                                <button onClick={() => processFile(true)} className="bg-white border border-[#714B67] text-[#714B67] px-6 py-2 rounded-md font-bold hover:bg-purple-50 transition">
+                                    Test Import
+                                </button>
+                            )}
+                            <button 
+                                onClick={() => processFile(false)} 
+                                disabled={validationStatus !== 'valid'}
+                                className="bg-[#714B67] text-white px-6 py-2 rounded-md font-bold hover:bg-[#5a3b52] transition shadow-sm disabled:opacity-50 disabled:bg-gray-300"
+                            >
+                                Import
+                            </button>
+                            <button onClick={onClose} className="bg-white border border-gray-300 text-gray-700 px-6 py-2 rounded-md font-medium hover:bg-gray-50 transition">
+                                Close
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
