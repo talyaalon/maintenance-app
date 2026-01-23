@@ -26,7 +26,6 @@ const calendarStyles = `
   .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.2); color: white; }
 `;
 
-// 👇 השינוי כאן: הוספתי את subordinates לרשימת ה-Props
 const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const [mainTab, setMainTab] = useState('todo'); 
   const [viewMode, setViewMode] = useState('daily'); 
@@ -35,11 +34,14 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const [showExcel, setShowExcel] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  // בודק אם אנחנו נמצאים בתוך טאב צוות (לפי קיום המשתנה subordinates)
+  // אם subordinates קיים (גם אם הוא ריק), סימן שאנחנו במבט מנהל דרך TeamTab
+  const isTeamView = Array.isArray(subordinates);
+
   // --- סינון משימות ---
   const pendingTasks = tasks.filter(task => {
       if (task.status !== 'PENDING') return false;
       const taskDate = parseISO(task.due_date);
-      // מציג משימות להיום או משימות שעבר זמנן
       return isSameDay(taskDate, new Date()) || isBefore(taskDate, startOfDay(new Date()));
   });
 
@@ -78,7 +80,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           );
       }
       
-      // --- תצוגה שבועית (7 ימים קדימה) ---
       if (viewMode === 'weekly') {
           const next7Days = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(new Date()), i));
           return (
@@ -108,7 +109,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           );
       }
 
-      // --- תצוגת לוח שנה ---
       if (viewMode === 'calendar') {
           return (
               <div className="animate-fade-in flex flex-col items-center">
@@ -164,7 +164,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   };
 
   return (
-    <div className="p-4 pb-24 min-h-screen bg-gray-50">
+    <div className="p-4 pb-24 min-h-screen bg-gray-50 relative">
       <style>{calendarStyles}</style>
       
       {/* --- כותרת ופעולות --- */}
@@ -176,9 +176,13 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                         <FileSpreadsheet size={20} />
                     </button>
                 )}
-                <button onClick={() => setShowCreateModal(true)} className="p-2 bg-[#714B67] text-white rounded-full hover:bg-purple-800 transition shadow-sm">
-                    <Plus size={20} />
-                </button>
+                
+                {/* 👇 כפתור קטן - מופיע רק במצב צוות (isTeamView) */}
+                {isTeamView && (
+                    <button onClick={() => setShowCreateModal(true)} className="p-2 bg-[#714B67] text-white rounded-full hover:bg-purple-800 transition shadow-sm">
+                        <Plus size={20} />
+                    </button>
+                )}
           </div>
       </div>
       
@@ -186,14 +190,14 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
       
       {showCreateModal && (
-          // 👇 השינוי כאן: העברתי את subordinates לטופס היצירה
           <CreateTaskForm 
               token={token} 
               t={t} 
               user={user} 
-              subordinates={subordinates} // הוספנו את זה
+              subordinates={subordinates}
               onRefresh={onRefresh} 
               onClose={() => setShowCreateModal(false)} 
+              lang={lang} // חשוב להעביר את השפה לטופס
           />
       )}
 
@@ -217,6 +221,17 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       {mainTab === 'completed' && renderCompletedView()}
 
       {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} token={token} user={user} onRefresh={onRefresh} t={t} />}
+
+      {/* 👇 כפתור צף גדול - מופיע רק אם אנחנו לא בתוך טאב צוות */}
+      {!isTeamView && (
+        <button 
+            onClick={() => setShowCreateModal(true)} 
+            className="fixed bottom-24 right-6 w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:bg-purple-800 transition transform hover:scale-105 active:scale-95"
+        >
+            <Plus size={32} />
+        </button>
+      )}
+
     </div>
   );
 };
