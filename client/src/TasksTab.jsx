@@ -26,7 +26,8 @@ const calendarStyles = `
   .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.2); color: white; }
 `;
 
-const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => {
+// 👇 השינוי כאן: הוספתי את subordinates לרשימת ה-Props
+const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const [mainTab, setMainTab] = useState('todo'); 
   const [viewMode, setViewMode] = useState('daily'); 
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -185,10 +186,12 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang }) => {
       {showExcel && <AdvancedExcel token={token} t={t} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
       
       {showCreateModal && (
+          // 👇 השינוי כאן: העברתי את subordinates לטופס היצירה
           <CreateTaskForm 
               token={token} 
               t={t} 
               user={user} 
+              subordinates={subordinates} // הוספנו את זה
               onRefresh={onRefresh} 
               onClose={() => setShowCreateModal(false)} 
           />
@@ -233,7 +236,6 @@ const ViewBtn = ({ active, onClick, label }) => (
 
 // --- כרטיס משימה מעוצב ---
 const TaskCard = ({ task, onClick, t, statusColor = 'border-purple-500', compact = false }) => {
-    // אם יש שם נכס, נשתמש בו כשם הראשי. אחרת שם המשימה.
     const displayName = task.asset_name || task.title;
     return (
         <div onClick={onClick} className={`bg-white p-3 rounded-xl shadow-sm border-r-4 ${statusColor} cursor-pointer hover:shadow-md transition-all flex flex-col gap-1 relative overflow-hidden`}>
@@ -305,7 +307,6 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     if(showSuccess) return <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]"><div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center"><Check size={40} className="text-green-600 mb-2"/><h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2></div></div>;
 
     return (
-        // שינוי 1: z-[100] כדי לעלות מעל הפוטר
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-[100] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
                 {/* Header */}
@@ -316,10 +317,8 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     <button onClick={onClose} className="bg-gray-100 p-2 rounded-full hover:bg-gray-200"><X size={20}/></button>
                 </div>
                 
-                {/* שינוי 2: pb-32 כדי לאפשר גלילה עד הסוף */}
                 <div className="p-6 space-y-6 pb-32">
                     
-                    {/* שינוי 3: בלוק חדש וברור לפרטי הנכס */}
                     {(task.asset_name || task.asset_code) && (
                         <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 shadow-sm">
                             <div className="flex items-center gap-2 mb-2">

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, Camera, FileText, Box, RefreshCw } from 'lucide-react';
 
-const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh }) => {
+// 👇 השינוי הראשון: הוספתי את subordinates לרשימת ה-Props
+const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates }) => {
   // --- סטייט לניהול התדירות והטופס ---
   const [frequency, setFrequency] = useState('Once'); // Once, Weekly, Monthly, Yearly
   
@@ -48,12 +49,25 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh }) =
     fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
         .then(res => res.json()).then(setAssets).catch(err => console.error("Error assets", err));
 
-    // 3. עובדים (רק למנהלים) - מביא את כל המשתמשים כדי שנוכל לבחור
+    // 3. עובדים (רק למנהלים) - לוגיקה חכמה
     if (currentUser?.role !== 'EMPLOYEE') {
-        fetch('https://maintenance-app-h84v.onrender.com/users', { headers })
-        .then(res => res.json()).then(setTeamMembers).catch(err => console.error("Error users", err));
+        // 👇 השינוי המרכזי כאן:
+        // אם קיבלנו רשימת כפופים (subordinates) מה-TeamTab, נשתמש בה!
+        if (subordinates && subordinates.length > 0) {
+            setTeamMembers(subordinates);
+        } else {
+            // אחרת (למשל מנהל שנכנס רגיל לטאב משימות), נביא את רשימת המשתמשים מהשרת
+            fetch('https://maintenance-app-h84v.onrender.com/users', { headers })
+                .then(res => res.json())
+                .then(data => {
+                    // אופציונלי: כאן אפשר לסנן רק את העובדים של המנהל הנוכחי אם רוצים,
+                    // אבל כרגע נשאיר את זה שמביא את כולם אם לא נשלח סינון ספציפי
+                    setTeamMembers(data);
+                })
+                .catch(err => console.error("Error users", err));
+        }
     }
-  }, [token, currentUser]);
+  }, [token, currentUser, subordinates]); // הוספנו את subordinates לתלויות
 
   // סינון נכסים לפי קטגוריה
   const filteredAssets = selectedCategory 
@@ -251,13 +265,14 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh }) =
                  </div>
             </div>
 
-            {/* בחירת עובד */}
+            {/* בחירת עובד - Assign To */}
             {currentUser?.role !== 'EMPLOYEE' && (
                 <div>
                     <label className="text-sm font-bold text-gray-700 block mb-1">{t.assign_to_label}</label>
                     <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none" 
                         value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
                         <option value={currentUser.id}>{t.assign_self}</option>
+                        {/* כאן תוצג רק הרשימה הרלוונטית (של המנהל הספציפי או כולם אם לא נבחר מנהל) */}
                         {teamMembers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                     </select>
                 </div>

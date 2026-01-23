@@ -195,9 +195,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         </div>
     );
 
-    // רשימה ראשית: מנהלים ובוסים
     const managers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
-    // עובדים ישירים (ללא שיוך למנהל אחר ברשימה)
     const directEmployees = team.filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === user.id);
 
     return (
@@ -227,7 +225,6 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                     );
                 })}
 
-                {/* תצוגה לעובדים ישירים אם הרשימה הראשית ריקה */}
                 {managers.length === 0 && directEmployees.length > 0 && (
                     <>
                         <h3 className="text-sm font-bold text-gray-500 mt-6 mb-2">{t.direct_employees || "Direct Employees"}</h3>
@@ -255,11 +252,13 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                 <div className="flex justify-center items-center h-full text-purple-600 font-bold">Loading Employee View...</div>
                             ) : (
                                 <div className="pointer-events-auto h-full"> 
+                                    {/* 👇 התיקון כאן: אנחנו מסננים ושולחים רק את העובדים של המנהל הנוכחי */}
                                     <TasksTab 
                                         tasks={memberTasks} 
                                         t={t} 
                                         token={token}
                                         user={selectedMember} 
+                                        subordinates={team.filter(u => u.parent_manager_id === selectedMember.id)} // שולחים את הרשימה המסוננת
                                         onRefresh={() => handleMemberClick(selectedMember)} 
                                         lang={lang}
                                     />
@@ -342,27 +341,25 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                             
                             {user.role === 'BIG_BOSS' && (
                                 <div className="space-y-3">
-                                    {/* בחירת תפקיד */}
                                     <select 
                                         className="w-full p-3 border rounded-xl bg-white" 
                                         value={addForm.role} 
                                         onChange={e => setAddForm({
                                             ...addForm, 
                                             role: e.target.value,
-                                            parent_manager_id: '' // איפוס המנהל אם מחליפים תפקיד
+                                            parent_manager_id: '' 
                                         })}
                                     >
                                         <option value="EMPLOYEE">Employee</option>
                                         <option value="MANAGER">Manager</option>
                                     </select>
                                     
-                                    {/* 👇 התנאי החדש: הצגת רשימת המנהלים רק אם בחרנו ליצור EMPLOYEE */}
                                     {addForm.role === 'EMPLOYEE' && (
                                         <select 
                                             className="w-full p-3 border rounded-xl bg-white" 
                                             value={addForm.parent_manager_id} 
                                             onChange={e => setAddForm({...addForm, parent_manager_id: e.target.value})}
-                                            required={addForm.role === 'EMPLOYEE'} // חובה רק אם זה עובד
+                                            required={addForm.role === 'EMPLOYEE'} 
                                         >
                                             <option value="">Select Manager...</option>
                                             {activeManagers.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>)}
