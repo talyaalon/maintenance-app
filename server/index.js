@@ -479,34 +479,65 @@ app.get('/tasks', authenticateToken, async (req, res) => {
     } catch (err) { console.error(err); res.sendStatus(500); }
 });
 
+// --- יצירת משימה חדשה (Create Task) - גרסה מתוקנת וחסינה ---
 app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, res) => {
   try {
     const creationImageUrl = req.file ? `https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}` : null;
-    // כאן הוספנו את asset_id שיהיה אפשר לשייך נכס - זה היה חסר בקוד הקודם!
-    const { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id } = req.body;
     
-    const worker_id = assigned_worker_id || req.user.id;
+    // שליפת הנתונים מהבקשה
+    let { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id } = req.body;
+    
+    // --- סניטציה (ניקוי נתונים) למניעת קריסות ---
+    
+    // 1. טיפול במיקום (חובה שיהיה מספר)
+    if (location_id === '' || location_id === 'undefined' || location_id === 'null') {
+        return res.status(400).json({ error: "Location is required (חובה לבחור מיקום)" });
+    }
+    
+    // 2. טיפול בנכס (אם ריק - שיהיה NULL)
+    if (asset_id === '' || asset_id === 'undefined' || asset_id === 'null') {
+        asset_id = null;
+    }
+
+    // 3. טיפול בתאריך (אם ריק - ברירת מחדל להיום)
+    if (!due_date || due_date === '') {
+        due_date = new Date();
+    }
+
+    // 4. עובד משויך
+    const worker_id = (assigned_worker_id && assigned_worker_id !== '' && assigned_worker_id !== 'undefined') 
+                      ? assigned_worker_id 
+                      : req.user.id;
+
     const isRecurring = is_recurring === 'true';
     
+    console.log("📝 Creating Task:", { title, location_id, asset_id, worker_id, due_date }); // לוג לבדיקה
+
     // --- משימה חד פעמית ---
     if (!isRecurring) {
         await pool.query(
             `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status, asset_id) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
-            [title, location_id, worker_id, urgency, due_date, description, creationImageUrl, asset_id || null]
+            [title, location_id, worker_id, urgency, due_date, description, creationImageUrl, asset_id]
         );
-        return res.json({ message: "Task created" });
+        return res.json({ message: "Task created successfully" });
     }
 
-    // --- משימות מחזוריות (לוגיקה משופרת) ---
+    // --- משימות מחזוריות ---
     const tasksToInsert = [];
     const start = new Date(due_date);
     const end = new Date(start);
     end.setFullYear(end.getFullYear() + 1); // יוצר משימות לשנה קדימה
     
-    // המרת ימים למספרים (חשוב מאוד לתיקון הבאג של ימים בשבוע)
-    const daysArray = selected_days ? JSON.parse(selected_days).map(d => parseInt(d)) : [];
-    const monthlyDate = parseInt(recurring_date);
+    // המרת ימים למספרים בצורה בטוחה
+    let daysArray = [];
+    if (selected_days) {
+        try {
+            daysArray = JSON.parse(selected_days).map(d => parseInt(d));
+        } catch (e) { console.error("Error parsing days", e); }
+    }
+    
+    const monthlyDate = parseInt(recurring_date) || 1;
 
     // לולאה שעוברת יום-יום
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -536,13 +567,16 @@ app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, r
         await pool.query(
             `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status, asset_id) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
-            [title + ' (Recurring)', location_id, worker_id, urgency, date, description, creationImageUrl, asset_id || null]
+            [title + ' (Recurring)', location_id, worker_id, urgency, date, description, creationImageUrl, asset_id]
         );
     }
     
     res.json({ message: `Created ${tasksToInsert.length} recurring tasks` });
 
-  } catch (err) { console.error(err); res.status(500).send('Server Error'); }
+  } catch (err) { 
+      console.error("❌ Error creating task:", err); // זה יציג את השגיאה המדויקת בלוגים של Render
+      res.status(500).json({ error: "Server Error: " + err.message }); 
+  }
 });
 
 app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_image'), async (req, res) => {
