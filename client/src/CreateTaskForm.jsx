@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, Camera, FileText, Box, RefreshCw } from 'lucide-react';
 
-// 👇 הוספתי את lang לרשימת ה-Props כדי שנוכל לתרגם את הימים
 const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang }) => {
   // --- סטייט לניהול התדירות והטופס ---
   const [frequency, setFrequency] = useState('Once'); // Once, Weekly, Monthly, Yearly
@@ -14,7 +13,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     due_date: new Date().toISOString().split('T')[0], // תאריך ברירת מחדל להיום
     location_id: '', 
     asset_id: '', 
-    assigned_worker_id: currentUser?.role === 'EMPLOYEE' ? currentUser.id : '',
+    // בודקים אם currentUser קיים לפני שניגשים ל-id שלו
+    assigned_worker_id: (currentUser && currentUser.role === 'EMPLOYEE') ? currentUser.id : '',
     description: '', 
     selected_days: [], 
     recurring_date: 1, 
@@ -50,7 +50,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
         .then(res => res.json()).then(setAssets).catch(err => console.error("Error assets", err));
 
-    if (currentUser?.role !== 'EMPLOYEE') {
+    // טעינת עובדים רק אם המשתמש הוא מנהל וקיים
+    if (currentUser && currentUser.role !== 'EMPLOYEE') {
         if (subordinates && subordinates.length > 0) {
             setTeamMembers(subordinates);
         } else {
@@ -138,10 +139,10 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   };
 
   return (
-    // 👇 תיקון למובייל: z-[100] כדי לעלות מעל הפוטר, ושינוי רקע לכהה יותר
+    // z-[100] מבטיח שהמודל יהיה מעל הכל, גם מעל הטאבים
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-60 p-4 backdrop-blur-sm">
       
-      {/* 👇 תיקון גודל: w-[95%] ו-max-h-[80vh] כדי להשאיר רווח מלמעלה ולמטה */}
+      {/* w-[95%] מבטיח רווח בצדדים בפלאפון, max-h-[80vh] משאיר מקום למעלה ולמטה */}
       <div className="bg-white w-[95%] max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[80vh] animate-scale-in overflow-hidden">
         
         {/* --- Header --- */}
@@ -175,16 +176,18 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                         <label className="text-xs font-bold text-gray-500 mb-1 block">
                             {frequency === 'Once' ? (t.pick_date || "Pick Date") : (t.start_date || "Start Date")}
                         </label>
-                        {/* 👇 תיקון עיצוב התאריך: bg-white ומסגרת סגולה */}
-                        <input type="date" className="w-full p-2 border border-[#714B67] rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-purple-200" 
-                            value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
-                        />
+                        {/* תיקון שדה התאריך: min-w-0 מונע גלישה */}
+                        <div className="relative w-full">
+                            <input type="date" className="w-full p-2 border border-[#714B67] rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-purple-200 min-w-0" 
+                                value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
+                            />
+                        </div>
                     </div>
 
                     {frequency === 'Weekly' && (
                         <div className="mt-3">
                             <label className="text-xs font-bold text-gray-500 mb-2 block">{t.pick_days || "Select Days"}</label>
-                            {/* 👇 שימוש במערך הימים המותאם לשפה (currentDays) ושימוש ב-grid לסידור יפה */}
+                            {/* רשת כפתורים מסודרת */}
                             <div className="grid grid-cols-7 gap-1 text-center">
                                 {currentDays.map((day, index) => (
                                     <button type="button" key={index} onClick={() => toggleDay(index)} 
@@ -244,11 +247,13 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             </div>
 
             {/* בחירת עובד - Assign To */}
-            {currentUser?.role !== 'EMPLOYEE' && (
+            {/* 👇 התיקון לקריסה: בדיקה ש-currentUser קיים לפני הגישה אליו */}
+            {currentUser && currentUser.role !== 'EMPLOYEE' && (
                 <div>
                     <label className="text-sm font-bold text-gray-700 block mb-1">{t.assign_to_label}</label>
                     <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
                         value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
+                        {/* שימוש בסימן שאלה כדי למנוע קריסה אם ה-id לא קיים לרגע */}
                         <option value={currentUser.id}>{t.assign_self}</option>
                         {teamMembers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                     </select>
@@ -288,7 +293,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
         {/* --- Footer --- */}
         <div className="p-4 border-t bg-gray-50 shrink-0">
-            <button onClick={handleSubmit} className="w-full py-3 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition transform active:scale-95 text-lg">
+            <button onClick={handleSubmit} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition transform active:scale-95 text-lg">
                 {t.save_task_btn || "Create Task"}
             </button>
         </div>
