@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, Camera, FileText, Box, RefreshCw } from 'lucide-react';
 
-// 👇 השינוי הראשון: הוספתי את subordinates לרשימת ה-Props
 const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates }) => {
   // --- סטייט לניהול התדירות והטופס ---
   const [frequency, setFrequency] = useState('Once'); // Once, Weekly, Monthly, Yearly
@@ -51,7 +50,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
     // 3. עובדים (רק למנהלים) - לוגיקה חכמה
     if (currentUser?.role !== 'EMPLOYEE') {
-        // 👇 השינוי המרכזי כאן:
         // אם קיבלנו רשימת כפופים (subordinates) מה-TeamTab, נשתמש בה!
         if (subordinates && subordinates.length > 0) {
             setTeamMembers(subordinates);
@@ -60,14 +58,12 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             fetch('https://maintenance-app-h84v.onrender.com/users', { headers })
                 .then(res => res.json())
                 .then(data => {
-                    // אופציונלי: כאן אפשר לסנן רק את העובדים של המנהל הנוכחי אם רוצים,
-                    // אבל כרגע נשאיר את זה שמביא את כולם אם לא נשלח סינון ספציפי
                     setTeamMembers(data);
                 })
                 .catch(err => console.error("Error users", err));
         }
     }
-  }, [token, currentUser, subordinates]); // הוספנו את subordinates לתלויות
+  }, [token, currentUser, subordinates]); 
 
   // סינון נכסים לפי קטגוריה
   const filteredAssets = selectedCategory 
@@ -160,7 +156,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   return (
     // המבנה הזה (fixed + flex column) פותר את הבעיה שהכפתורים נחתכים בנייד
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[95vh] animate-scale-in overflow-hidden">
+      {/* 👇 השינוי: הקטנת המודל ל-max-w-md ו-max-h-[85vh] */}
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[85vh] animate-scale-in overflow-hidden">
         
         {/* --- Header (קבוע למעלה) --- */}
         <div className="flex justify-between items-center p-4 border-b bg-gray-50 shrink-0">
@@ -171,15 +168,15 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         {/* --- Scrollable Content (האמצע נגלל) --- */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
             
-            {/* 1. מתי לבצע? (הלוגיקה החדשה) */}
-            <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 shadow-sm">
-                <label className="block text-sm font-bold text-purple-900 mb-2 flex items-center gap-2">
+            {/* 1. מתי לבצע? (הלוגיקה החדשה) - עיצוב מעודכן */}
+            <div className="bg-white p-4 rounded-xl border border-[#714B67] shadow-sm">
+                <label className="block text-sm font-bold text-[#714B67] mb-2 flex items-center gap-2">
                     <Calendar size={18}/> {t.frequency_label || "Frequency / Date"}
                 </label>
                 
                 {/* בחירת סוג תדירות */}
                 <select 
-                    className="w-full p-3 border rounded-lg bg-white font-bold text-gray-700 mb-3 focus:ring-2 focus:ring-purple-200 outline-none"
+                    className="w-full p-2.5 border rounded-lg bg-white font-bold text-gray-700 mb-3 focus:ring-1 focus:ring-[#714B67] outline-none"
                     value={frequency} 
                     onChange={e => setFrequency(e.target.value)}
                 >
@@ -190,14 +187,14 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 </select>
 
                 {/* התוכן משתנה לפי הבחירה */}
-                <div className="bg-white p-3 rounded-lg border animate-fade-in">
+                <div className="animate-fade-in">
                     
                     {/* בחירת תאריך התחלה (רלוונטי לכולם) */}
                     <div>
                         <label className="text-xs font-bold text-gray-500 mb-1 block">
                             {frequency === 'Once' ? (t.pick_date || "Pick Date") : (t.start_date || "Start Date")}
                         </label>
-                        <input type="date" className="w-full p-2 border rounded-lg outline-none focus:border-purple-500" 
+                        <input type="date" className="w-full p-2 border rounded-lg outline-none focus:border-[#714B67]" 
                             value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
                         />
                     </div>
@@ -209,9 +206,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                             <div className="flex justify-between gap-1">
                                 {daysShort.map((day, index) => (
                                     <button type="button" key={day} onClick={() => toggleDay(index)} 
-                                        className={`w-9 h-9 rounded-full text-[10px] font-bold transition-all flex items-center justify-center shadow-sm ${
+                                        className={`w-8 h-8 rounded-full text-[10px] font-bold transition-all flex items-center justify-center shadow-sm ${
                                             formData.selected_days.includes(index) 
-                                            ? 'bg-purple-600 text-white scale-110' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                            ? 'bg-[#714B67] text-white scale-110' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                                         }`}
                                     >
                                         {day}
@@ -225,7 +222,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                     {frequency === 'Monthly' && (
                         <div className="mt-3">
                             <label className="text-xs font-bold text-gray-500 mb-1 block">{t.pick_day_of_month || "Day of Month"}</label>
-                            <select className="w-full p-2 border rounded-lg outline-none"
+                            <select className="w-full p-2 border rounded-lg outline-none focus:border-[#714B67]"
                                 value={formData.recurring_date} onChange={e => setFormData({...formData, recurring_date: parseInt(e.target.value)})}
                             >
                                 {[...Array(31)].map((_, i) => (
@@ -240,7 +237,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             {/* 2. פרטי המשימה */}
             <div>
                 <label className="text-sm font-bold text-gray-700 block mb-1">{t.task_title_label}</label>
-                <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-200 outline-none transition" 
+                <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition" 
                     value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} 
                     placeholder={t.task_title_placeholder}
                 />
@@ -249,7 +246,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             <div className="flex gap-3">
                  <div className="flex-1">
                     <label className="text-sm font-bold text-gray-700 block mb-1">{t.location}</label>
-                    <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none" 
+                    <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
                         value={formData.location_id} onChange={e => setFormData({...formData, location_id: e.target.value})}>
                         <option value="">{t.select_location}</option>
                         {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -257,7 +254,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                  </div>
                  <div className="flex-1">
                     <label className="text-sm font-bold text-gray-700 block mb-1">{t.urgency_label}</label>
-                    <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none" 
+                    <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
                         value={formData.urgency} onChange={e => setFormData({...formData, urgency: e.target.value})}>
                         <option value="Normal">{t.normal_label}</option>
                         <option value="High">{t.urgent_label}</option>
@@ -269,7 +266,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             {currentUser?.role !== 'EMPLOYEE' && (
                 <div>
                     <label className="text-sm font-bold text-gray-700 block mb-1">{t.assign_to_label}</label>
-                    <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none" 
+                    <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
                         value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
                         <option value={currentUser.id}>{t.assign_self}</option>
                         {/* כאן תוצג רק הרשימה הרלוונטית (של המנהל הספציפי או כולם אם לא נבחר מנהל) */}
@@ -282,12 +279,12 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             <div className="border rounded-xl p-3 bg-gray-50">
                  <label className="text-xs font-bold text-gray-500 mb-2 block flex items-center gap-1"><Box size={14}/> {t.select_asset_title || "Asset (Optional)"}</label>
                  <div className="flex gap-2">
-                    <select className="flex-1 p-2 border rounded text-sm bg-white outline-none" 
+                    <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]" 
                         value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setFormData({...formData, asset_id: ''}); }}>
                         <option value="">{t.category_label}</option>
                         {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
-                    <select className="flex-1 p-2 border rounded text-sm bg-white outline-none" 
+                    <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]" 
                         disabled={!selectedCategory} value={formData.asset_id} onChange={e => setFormData({...formData, asset_id: e.target.value})}>
                         <option value="">{t.select_asset}</option>
                         {filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -298,7 +295,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             {/* תיאור ותמונה */}
             <div>
                 <label className="text-sm font-bold text-gray-700 block mb-1">{t.description_label}</label>
-                <textarea className="w-full p-3 border rounded-lg bg-gray-50 h-24 resize-none outline-none focus:bg-white focus:ring-2 focus:ring-purple-200" 
+                <textarea className="w-full p-3 border rounded-lg bg-gray-50 h-24 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-[#714B67]" 
                     value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} 
                 />
             </div>
