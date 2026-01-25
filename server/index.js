@@ -9,10 +9,7 @@ const nodemailer = require('nodemailer');
 const xlsx = require('xlsx');
 const fs = require('fs');
 
-// 👇 ודאי ש-multer מופיע רק פעם אחת כאן
 const multer = require('multer');
-
-// ייבוא Cloudinary
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
@@ -20,27 +17,23 @@ const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
-// 👇 הגדרות Cloudinary
 cloudinary.config({
   cloud_name: 'dojnc3j0r',
   api_key: '133411631835124',
   api_secret: '-7M6Z0dvS0fPFkQiEuWj66FWPXM'
 });
 
-// 👇 עדכון: תמיכה בוידאו וקבצים מרובים
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'maintenance_app',
-    resource_type: 'auto', // מאפשר העלאת וידאו ותמונות אוטומטית
-    allowed_formats: ['jpg', 'png', 'jpeg', 'webp', 'mp4', 'mov', 'avi', 'mkv'], // פורמטים מורחבים
+    resource_type: 'auto',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp', 'mp4', 'mov', 'avi', 'mkv'],
   },
 });
 
-// שימוש ב-multer
 const upload = multer({ storage: storage });
 
-// --- הגדרת המייל (Brevo SMTP) ---
 console.log("📧 Configuring Email using Brevo SMTP...");
 const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
@@ -60,7 +53,6 @@ transporter.verify((error, success) => {
   }
 });
 
-// --- פונקציות עזר למייל ---
 const sendUpdateEmail = async (email, fullName, changes) => {
     const appLink = "https://maintenance-management-app.netlify.app";
     let changesHtml = '<ul style="padding-left: 20px; color: #333;">';
@@ -130,7 +122,6 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// DB Connection
 const isProduction = process.env.NODE_ENV === 'production';
 const connectionString = process.env.DATABASE_URL 
   ? process.env.DATABASE_URL 
@@ -152,16 +143,11 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// ==========================================
-// 👇 מסלול מיוחד לתיקון בסיס הנתונים (חובה להריץ פעם אחת)
-// ==========================================
 app.get('/fix-db', async (req, res) => {
     try {
         const client = await pool.connect();
         try {
-            // הוספת עמודת images (מערך)
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS images TEXT[]');
-            // הוספת עמודת תמונת סיום
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_image_url TEXT');
             res.send("✅ Database updated successfully! Columns 'images' and 'completion_image_url' added.");
         } finally {
@@ -171,8 +157,6 @@ app.get('/fix-db', async (req, res) => {
         res.status(500).send("❌ Error: " + e.message);
     }
 });
-
-// --- מסלולים (Routes) ---
 
 // Login
 app.post('/login', async (req, res) => {
@@ -196,7 +180,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// עדכון פרופיל
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
         const userId = req.user.id;
@@ -235,7 +218,6 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
     } catch (err) { res.status(500).send("Update failed"); }
 });
 
-// ניהול משתמשים
 app.get('/users', authenticateToken, async (req, res) => {
     try {
         let query = `
@@ -257,7 +239,6 @@ app.get('/users', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Server Error'); }
 });
 
-// יצירת משתמש חדש
 app.post('/users', authenticateToken, async (req, res) => {
   try {
     const { full_name, email, password, role, phone, parent_manager_id } = req.body;
@@ -296,7 +277,6 @@ app.post('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// עדכון משתמש קיים
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -372,8 +352,6 @@ app.get('/managers', authenticateToken, async (req, res) => {
     res.json(managers.rows);
   } catch (err) { res.status(500).send('Server Error'); }
 });
-
-// --- LOCATIONS / CATEGORIES / ASSETS ---
 
 app.get('/locations', authenticateToken, async (req, res) => {
   try {
@@ -458,7 +436,6 @@ app.delete('/locations/:id', authenticateToken, (req, res) => deleteItem('locati
 app.delete('/categories/:id', authenticateToken, (req, res) => deleteItem('categories', req.params.id, res));
 app.delete('/assets/:id', authenticateToken, (req, res) => deleteItem('assets', req.params.id, res));
 
-// --- TASKS ---
 app.get('/tasks', authenticateToken, async (req, res) => {
     try {
         const { role, id } = req.user;
@@ -493,12 +470,8 @@ app.get('/tasks', authenticateToken, async (req, res) => {
     } catch (err) { console.error(err); res.sendStatus(500); }
 });
 
-// ==========================================
-// 👇 יצירת משימה חדשה (תומך ריבוי תמונות + וידאו)
-// ==========================================
 app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   try {
-    // 1. קבלת התמונות בצורה בטוחה (מערך או תמונה בודדת)
     const files = req.files || [];
     const imageUrls = files.map(file => file.path);
     
@@ -506,7 +479,6 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
     let { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id } = req.body;
     
-    // 2. תיקוני נתונים (סניטציה)
     if (!location_id || location_id === 'undefined') return res.status(400).json({ error: "Location is required" });
     if (!asset_id || asset_id === 'undefined' || asset_id === 'null') asset_id = null;
     if (!due_date) due_date = new Date();
@@ -514,7 +486,6 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
     const worker_id = (assigned_worker_id && assigned_worker_id !== 'undefined') ? assigned_worker_id : req.user.id;
     const isRecurring = is_recurring === 'true';
 
-    // 3. יצירת משימה חד-פעמית
     if (!isRecurring) {
         await pool.query(
             `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
@@ -524,7 +495,6 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         return res.json({ message: "Task created successfully" });
     }
 
-    // 4. יצירת משימות חוזרות
     const tasksToInsert = [];
     const start = new Date(due_date);
     const end = new Date(start);
@@ -567,7 +537,6 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   }
 });
 
-// סיום משימה
 app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_image'), async (req, res) => {
     try {
         const { id } = req.params;
@@ -577,7 +546,6 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
             return res.status(400).json({ error: "Required image or note" });
         }
 
-        // תיקון: שימוש ב-Cloudinary Path
         const completionImageUrl = req.file ? req.file.path : null;
 
         await pool.query(
@@ -625,23 +593,23 @@ app.delete('/tasks/delete-all', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// 👇 ייצוא לאקסל: משופר עם סינונים ושם מנהל
+// 👇 ייצוא לאקסל (מעודכן: כולל תמונות)
 // ==========================================
 app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     try {
         const { worker_id, start_date, end_date, status } = req.query;
         
-        // שליפה מתוחכמת כולל שם המנהל (דרך טבלת users)
         let query = `
             SELECT t.id, t.title, t.description, t.urgency, t.status, t.due_date,
+                   t.images,  -- 👇 הוספת התמונות
                    u.full_name as worker_name,
-                   m.full_name as manager_name,  -- הוספת שם המנהל
+                   m.full_name as manager_name,
                    l.name as location_name,
                    a.name as asset_name, a.code as asset_code,
                    c.name as category_name
             FROM tasks t
             LEFT JOIN users u ON t.worker_id = u.id
-            LEFT JOIN users m ON u.parent_manager_id = m.id -- חיבור למציאת המנהל
+            LEFT JOIN users m ON u.parent_manager_id = m.id
             LEFT JOIN locations l ON t.location_id = l.id
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN categories c ON a.category_id = c.id
@@ -656,7 +624,6 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
             params.push(worker_id); 
         }
         
-        // סינון לפי תאריכים
         if (start_date) { 
             query += ` AND t.due_date >= $${pIndex++}`; 
             params.push(start_date); 
@@ -666,7 +633,6 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
             params.push(end_date); 
         }
 
-        // סינון לפי סטטוס (אם נבחר)
         if (status && status !== 'all') {
             query += ` AND t.status = $${pIndex++}`;
             params.push(status);
@@ -682,6 +648,9 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     }
 });
 
+// ==========================================
+// 👇 ייבוא מאקסל (מעודכן: תמיכה בתמונות)
+// ==========================================
 app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     const { tasks, isDryRun } = req.body; 
     const client = await pool.connect();
@@ -721,6 +690,13 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             const desc = getValue(row, ['Description', 'תיאור']) || '';
             const urgencyRaw = getValue(row, ['Urgency', 'דחיפות']);
             const dateRaw = getValue(row, ['Due Date', 'Date', 'תאריך', 'תאריך יעד']);
+            
+            // 👇 קריאת תמונות (מחרוזת מופרדת בפסיקים)
+            const imagesRaw = getValue(row, ['Images', 'Image URLs', 'Photos', 'תמונות', 'קישורי תמונות']);
+            let images = [];
+            if (imagesRaw) {
+                images = imagesRaw.toString().split(',').map(url => url.trim()).filter(url => url.length > 0);
+            }
 
             let worker_id = null;
             let location_id = null;
@@ -777,7 +753,8 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                     due_date: dateRaw ? new Date(dateRaw) : new Date(),
                     worker_id,
                     location_id,
-                    asset_id
+                    asset_id,
+                    images // 👇 הוספת התמונות לאובייקט
                 });
             }
         }
@@ -797,9 +774,9 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
 
             for (const t of validTasks) {
                 await client.query(
-                    `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id) 
-                     VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7)`,
-                    [t.title, t.description, t.urgency, t.due_date, t.worker_id, t.asset_id, t.location_id]
+                    `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images) 
+                     VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8)`, // 👇 נוסף $8
+                    [t.title, t.description, t.urgency, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images]
                 );
             }
             await client.query('COMMIT');

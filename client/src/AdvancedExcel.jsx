@@ -21,7 +21,9 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
         { id: 'asset_code', label: 'Asset Code' },
         { id: 'asset_name', label: 'Asset Name' },
         { id: 'category_name', label: 'Category' },
-        { id: 'completion_note', label: 'Completion Note' }
+        { id: 'completion_note', label: 'Completion Note' },
+        // 👇 שדה חדש לתמונות
+        { id: 'images', label: 'Images (URLs)' }
     ];
 
     const [availableFields, setAvailableFields] = useState(allFields);
@@ -79,7 +81,8 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                 "Due Date": "2024-12-31",
                 "Worker Name": user.full_name, 
                 "Location Name": "Lobby",  
-                "Asset Code": "AC-001"
+                "Asset Code": "AC-001",
+                "Images": "https://example.com/img1.jpg, https://example.com/img2.jpg" // 👇 דוגמה
             }
         ];
         const worksheet = XLSX.utils.json_to_sheet(templateData);
@@ -147,6 +150,10 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                     if (field.id === 'due_date' && value) {
                         value = new Date(value).toISOString().split('T')[0];
                     }
+                    // 👇 טיפול מיוחד במערך תמונות (הפיכה למחרוזת)
+                    if (field.id === 'images' && Array.isArray(value)) {
+                        value = value.join(', ');
+                    }
                     row[field.label] = value || "";
                 });
                 return row;
@@ -194,7 +201,6 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
     const validatePermissions = (tasksData) => {
         const errors = [];
         
-        // 👇 תיקון קריטי: בדיקה ש-full_name קיים לפני שמפעילים עליו trim
         const allowedNames = new Set(
             relevantUsers
                 .map(u => (u.full_name ? String(u.full_name).trim().toLowerCase() : ""))
@@ -212,7 +218,6 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
             );
 
             if (workerNameKey && row[workerNameKey]) {
-                // 👇 תיקון קריטי: המרה בטוחה ל-String לפני trim
                 const nameInFile = String(row[workerNameKey] || "").trim().toLowerCase();
                 
                 if (nameInFile && user.role !== 'BIG_BOSS' && !allowedNames.has(nameInFile)) {
