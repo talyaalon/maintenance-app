@@ -184,7 +184,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         const userId = req.user.id;
         const { full_name, email, password, phone } = req.body; // כולל טלפון
         let profilePictureUrl = req.body.existing_picture; 
-        if (req.file) profilePictureUrl = `https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}`;
+        if (req.file) profilePictureUrl = req.file.path;
         
         const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         const oldUser = oldUserRes.rows[0];
@@ -601,7 +601,7 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
             return res.status(400).json({ error: "Required image or note" });
         }
 
-        const completionImageUrl = req.file ? `https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}` : null;
+        const completionImageUrl = req.file ? req.file.path : null;
 
         await pool.query(
             `UPDATE tasks SET status = 'WAITING_APPROVAL', completion_note = $1, completion_image_url = $2 WHERE id = $3`,
