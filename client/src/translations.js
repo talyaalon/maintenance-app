@@ -2,7 +2,7 @@ export const translations = {
   // --- English ---
   en: {
     // --- Navigation ---
-    app_name: "MAINTENANCE APP",
+    app_name: "OpsManager APP",
     nav_tasks: "Tasks",
     nav_team: "Team",
     nav_config: "Config",
@@ -237,7 +237,7 @@ export const translations = {
   // --- Hebrew ---
   he: {
     // --- Navigation ---
-    app_name: "מערכת אחזקה",
+    app_name: "אפליקציית מנהל התפעול",
     nav_tasks: "משימות",
     nav_team: "הצוות שלי",
     nav_config: "הגדרות",
@@ -472,7 +472,7 @@ export const translations = {
   // --- Thai ---
   th: {
     // --- Navigation ---
-    app_name: "แอพซ่อมบำรุง",
+    app_name: "แอปผู้จัดการฝ่ายปฏิบัติการ",
     nav_tasks: "งาน",
     nav_team: "ทีมของฉัน",
     nav_config: "การตั้งค่า",

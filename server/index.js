@@ -60,9 +60,9 @@ const sendUpdateEmail = async (email, fullName, changes) => {
     changesHtml += '</ul>';
 
     const mailOptions = {
-      from: '"Maintenance App" <maintenance.app.tkp@gmail.com>',
+      from: '"OpsManager App" <maintenance.app.tkp@gmail.com>',
       to: email,
-      subject: 'Account Update - Maintenance Management',
+      subject: 'Account Update - OpsManager App',
       html: `
         <div dir="ltr" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;border:1px solid #e0e0e0;">
           <h2 style="color:#714B67;text-align:center;">Account Profile Updated</h2>
@@ -93,9 +93,9 @@ const sendWelcomeEmail = async (email, fullName, password, role, managerName) =>
     }
 
     const mailOptions = {
-      from: '"Maintenance App" <maintenance.app.tkp@gmail.com>',
+      from: '"OpsManager App" <maintenance.app.tkp@gmail.com>',
       to: email,
-      subject: 'Login Details - Maintenance Management',
+      subject: 'Login Details - OpsManager App',
       html: `
         <div dir="ltr" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;">
           <h1 style="color:#714B67;text-align:center;">Maintenance Management</h1>
