@@ -20,7 +20,7 @@ const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
-// 👇 כאן את מדביקה את הפרטים שהעתקת מ-Cloudinary
+// 👇 הגדרות Cloudinary
 cloudinary.config({
   cloud_name: 'dojnc3j0r',
   api_key: '133411631835124',
@@ -30,11 +30,12 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'maintenance_app', // שם התיקייה שתיווצר בתוך Cloudinary
+    folder: 'maintenance_app',
     allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
   },
 });
 
+// שימוש ב-multer
 const upload = multer({ storage: storage });
 
 // --- הגדרת המייל (Brevo SMTP) ---
@@ -123,8 +124,6 @@ const sendWelcomeEmail = async (email, fullName, password, role, managerName) =>
     catch (error) { console.error("❌ Error sending email:", error); }
 };
 
-
-
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -151,6 +150,26 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// ==========================================
+// 👇 מסלול מיוחד לתיקון בסיס הנתונים (חובה להריץ פעם אחת)
+// ==========================================
+app.get('/fix-db', async (req, res) => {
+    try {
+        const client = await pool.connect();
+        try {
+            // הוספת עמודת images (מערך)
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS images TEXT[]');
+            // הוספת עמודת תמונת סיום
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_image_url TEXT');
+            res.send("✅ Database updated successfully! Columns 'images' and 'completion_image_url' added.");
+        } finally {
+            client.release();
+        }
+    } catch (e) {
+        res.status(500).send("❌ Error: " + e.message);
+    }
+});
+
 // --- מסלולים (Routes) ---
 
 // Login
@@ -162,10 +181,7 @@ app.post('/login', async (req, res) => {
     
     const user = result.rows[0];
 
-    // בדיקה: אם הסיסמה מוצפנת, נשתמש ב-bcrypt. אם לא (משתמשים ישנים), נבדוק רגיל
     const validPassword = await bcrypt.compare(password, user.password);
-    
-    // אם ההשוואה נכשלה, נבדוק אם זו סיסמה ישנה (לא מוצפנת) למקרה שזה משתמש ותיק
     if (!validPassword && password !== user.password) {
         return res.status(400).json({ error: "סיסמה שגויה" });
     }
@@ -182,8 +198,10 @@ app.post('/login', async (req, res) => {
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
         const userId = req.user.id;
-        const { full_name, email, password, phone } = req.body; // כולל טלפון
+        const { full_name, email, password, phone } = req.body;
         let profilePictureUrl = req.body.existing_picture; 
+        
+        // תיקון: שימוש בנתיב של Cloudinary
         if (req.file) profilePictureUrl = req.file.path;
         
         const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
@@ -238,20 +256,17 @@ app.get('/users', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Server Error'); }
 });
 
-// יצירת משתמש
-// --- יצירת משתמש חדש (Create User) ---
+// יצירת משתמש חדש
 app.post('/users', authenticateToken, async (req, res) => {
   try {
     const { full_name, email, password, role, phone, parent_manager_id } = req.body;
     
-    // ולידציה בסיסית
     if (!full_name || !email || !password || !role) {
         return res.status(400).json({ error: "Missing required fields" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // קביעת מנהל
     let assignedManager = parent_manager_id;
     if (!assignedManager && req.user.role === 'MANAGER') {
         assignedManager = req.user.id;
@@ -263,13 +278,10 @@ app.post('/users', authenticateToken, async (req, res) => {
       [full_name, email, hashedPassword, role, phone, assignedManager]
     );
     
-    // ✅ התיקון: שליחת המייל
-    // אנחנו שולחים כאן את ה-password הרגיל (לפני ההצפנה) כדי שהעובד ידע מה הסיסמה שלו
     try {
         await sendWelcomeEmail(email, full_name, password, role);
     } catch (emailError) {
         console.error("Error sending welcome email:", emailError);
-        // אנחנו לא עוצרים את הבקשה אם המייל נכשל, אבל רושמים שגיאה בלוג
     }
 
     res.json(newUser.rows[0]);
@@ -283,26 +295,22 @@ app.post('/users', authenticateToken, async (req, res) => {
   }
 });
 
-// --- עדכון משתמש קיים (Update User) ---
+// עדכון משתמש קיים
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { full_name, email, phone, role, password } = req.body;
 
-    // 1. קבלת המידע הישן להשוואה
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
     const oldUser = oldUserRes.rows[0];
 
-    // 2. בניית השאילתה
     let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4';
     let params = [full_name, email, phone, role];
     let paramCount = 5;
 
-    // אם נשלחה סיסמה חדשה
     if (password && password.trim() !== '') {
         const hashedPassword = await bcrypt.hash(password, 10);
-        // 👇 התיקון הקריטי: שינינו כאן מ-password_hash ל-password
         query += `, password=$${paramCount}`; 
         params.push(hashedPassword);
         paramCount++;
@@ -311,16 +319,13 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     query += ` WHERE id=$${paramCount} RETURNING *`;
     params.push(id);
 
-    // ביצוע העדכון
     const result = await pool.query(query, params);
     const updatedUser = result.rows[0];
 
-    // 3. זיהוי שינויים ושליחת מייל
     let changes = [];
     if (oldUser.full_name !== updatedUser.full_name) changes.push(`Name changed to: <strong>${updatedUser.full_name}</strong>`);
     if (oldUser.email !== updatedUser.email) changes.push(`Email changed to: <strong>${updatedUser.email}</strong>`);
     if (oldUser.phone !== updatedUser.phone) changes.push(`Phone updated`);
-    // בדיקה אם הסיסמה שונתה (אם נשלחה סיסמה בבקשה)
     if (password && password.trim() !== '') changes.push('Password has been changed');
 
     if (changes.length > 0) {
@@ -331,7 +336,7 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     res.json({ message: "User updated successfully", user: updatedUser });
 
   } catch (err) {
-    console.error(err); // זה ידפיס את השגיאה ללוג ב-Render
+    console.error(err); 
     if (err.code === '23505') {
         return res.status(400).json({ error: "Email already exists" });
     }
@@ -339,7 +344,6 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// מחיקת משתמש
 app.delete('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     try {
@@ -418,7 +422,6 @@ app.post('/assets', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error'); }
 });
 
-// --- Edit Items (PUT) ---
 app.put('/locations/:id', authenticateToken, async (req, res) => {
     try {
         const { name } = req.body;
@@ -446,7 +449,6 @@ app.put('/assets/:id', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send("Error updating asset"); }
 });
 
-// --- Delete Helpers ---
 const deleteItem = async (table, id, res) => {
     try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); } 
     catch (e) { res.status(400).json({ error: "Cannot delete: Item is in use." }); }
@@ -490,44 +492,29 @@ app.get('/tasks', authenticateToken, async (req, res) => {
     } catch (err) { console.error(err); res.sendStatus(500); }
 });
 
-// --- יצירת משימה חדשה (Create Task) - מעודכן ל-Cloudinary ולריבוי תמונות ---
-app.post('/tasks', authenticateToken, upload.array('task_images', 5), async (req, res) => {
+// ==========================================
+// 👇 יצירת משימה חדשה (המתוקן והגמיש ביותר!)
+// ==========================================
+app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   try {
-    // קבלת רשימת ה-URLים מ-Cloudinary (במקום קובץ בודד)
-    const imageUrls = req.files ? req.files.map(file => file.path) : [];
+    // 1. קבלת התמונות בצורה בטוחה (מערך או תמונה בודדת)
+    const files = req.files || [];
+    const imageUrls = files.map(file => file.path);
     
-    // שליפת הנתונים מהבקשה
+    console.log("📝 Creating Task:", { body: req.body, images: imageUrls });
+
     let { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id } = req.body;
     
-    // --- סניטציה (ניקוי נתונים) למניעת קריסות ---
+    // 2. תיקוני נתונים (סניטציה)
+    if (!location_id || location_id === 'undefined') return res.status(400).json({ error: "Location is required" });
+    if (!asset_id || asset_id === 'undefined' || asset_id === 'null') asset_id = null;
+    if (!due_date) due_date = new Date();
     
-    // 1. טיפול במיקום (חובה שיהיה מספר)
-    if (!location_id || location_id === '' || location_id === 'undefined' || location_id === 'null') {
-        return res.status(400).json({ error: "Location is required (חובה לבחור מיקום)" });
-    }
-    
-    // 2. טיפול בנכס (אם ריק - שיהיה NULL)
-    if (!asset_id || asset_id === '' || asset_id === 'undefined' || asset_id === 'null') {
-        asset_id = null;
-    }
-
-    // 3. טיפול בתאריך (אם ריק - ברירת מחדל להיום)
-    if (!due_date || due_date === '') {
-        due_date = new Date();
-    }
-
-    // 4. עובד משויך
-    const worker_id = (assigned_worker_id && assigned_worker_id !== '' && assigned_worker_id !== 'undefined') 
-                      ? assigned_worker_id 
-                      : req.user.id;
-
+    const worker_id = (assigned_worker_id && assigned_worker_id !== 'undefined') ? assigned_worker_id : req.user.id;
     const isRecurring = is_recurring === 'true';
-    
-    console.log("📝 Creating Task via Cloudinary:", { title, imageUrls }); // לוג לבדיקה
 
-    // --- משימה חד פעמית ---
+    // 3. יצירת משימה חד-פעמית
     if (!isRecurring) {
-        // שימי לב: שינינו את העמודה מ-creation_image_url ל-images
         await pool.query(
             `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
@@ -536,46 +523,33 @@ app.post('/tasks', authenticateToken, upload.array('task_images', 5), async (req
         return res.json({ message: "Task created successfully" });
     }
 
-    // --- משימות מחזוריות ---
+    // 4. יצירת משימות חוזרות
     const tasksToInsert = [];
     const start = new Date(due_date);
     const end = new Date(start);
-    end.setFullYear(end.getFullYear() + 1); // יוצר משימות לשנה קדימה
+    end.setFullYear(end.getFullYear() + 1);
     
-    // המרת ימים למספרים בצורה בטוחה
     let daysArray = [];
     if (selected_days) {
-        try {
-            daysArray = JSON.parse(selected_days).map(d => parseInt(d));
-        } catch (e) { console.error("Error parsing days", e); }
+        try { daysArray = JSON.parse(selected_days).map(d => parseInt(d)); } catch (e) {}
     }
-    
     const monthlyDate = parseInt(recurring_date) || 1;
 
-    // לולאה שעוברת יום-יום
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         let match = false;
-        
         if (recurring_type === 'weekly') {
             if (daysArray.includes(d.getDay())) match = true;
-        } 
-        else if (recurring_type === 'monthly') {
+        } else if (recurring_type === 'monthly') {
             if (d.getDate() === monthlyDate) match = true;
-        } 
-        else if (recurring_type === 'yearly') {
+        } else if (recurring_type === 'yearly') {
             if (d.getMonth() === start.getMonth() && d.getDate() === start.getDate()) match = true;
         }
 
-        if (match) {
-            tasksToInsert.push(new Date(d));
-        }
+        if (match) tasksToInsert.push(new Date(d));
     }
 
-    if (tasksToInsert.length === 0) {
-        return res.status(400).json({ error: "No dates matched the recurring pattern!" });
-    }
+    if (tasksToInsert.length === 0) return res.status(400).json({ error: "No dates matched!" });
 
-    // שמירה בבת אחת (כולל asset_id ומערך התמונות)
     for (const date of tasksToInsert) {
         await pool.query(
             `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
@@ -592,6 +566,7 @@ app.post('/tasks', authenticateToken, upload.array('task_images', 5), async (req
   }
 });
 
+// סיום משימה
 app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_image'), async (req, res) => {
     try {
         const { id } = req.params;
@@ -601,6 +576,7 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
             return res.status(400).json({ error: "Required image or note" });
         }
 
+        // תיקון: שימוש ב-Cloudinary Path
         const completionImageUrl = req.file ? req.file.path : null;
 
         await pool.query(
@@ -638,8 +614,6 @@ app.post('/tasks/:id/follow-up', authenticateToken, async (req, res) => {
         res.json({ success: true });
     } catch (err) { console.error(err); res.status(500).send('Error'); }
 });
-
-// --- IMPORT / EXPORT / DELETE-ALL ---
 
 app.delete('/tasks/delete-all', authenticateToken, async (req, res) => {
     if (req.user.role !== 'BIG_BOSS') return res.status(403).send("Access denied");
@@ -684,7 +658,6 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     }
 });
 
-// --- IMPORT & VALIDATION ENDPOINT (הגרסה החכמה והגמישה) ---
 app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     const { tasks, isDryRun } = req.body; 
     const client = await pool.connect();
@@ -695,33 +668,27 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
         const errors = []; 
         const validTasks = [];
 
-        // 1. טעינת נתוני עזר (ללא location_id בנכסים כדי למנוע קריסה)
         const usersRes = await client.query('SELECT id, full_name FROM users');
         const locationsRes = await client.query('SELECT id, name FROM locations');
-        const assetsRes = await client.query('SELECT id, name, code, category_id FROM assets'); // תיקון כאן
+        const assetsRes = await client.query('SELECT id, name, code, category_id FROM assets');
         
-        // יצירת מילונים לחיפוש מהיר (הופכים הכל לאותיות קטנות להשוואה קלה)
         const usersMap = new Map(usersRes.rows.map(u => [u.full_name.trim().toLowerCase(), u.id]));
         const locMap = new Map(locationsRes.rows.map(l => [l.name.trim().toLowerCase(), l.id]));
         const assetCodeMap = new Map(assetsRes.rows.map(a => [a.code.trim().toLowerCase(), a]));
         const assetNameMap = new Map(assetsRes.rows.map(a => [a.name.trim().toLowerCase(), a]));
 
-        // פונקציית עזר למציאת ערך לפי מספר אפשרויות של כותרות
         const getValue = (row, possibleKeys) => {
             for (const key of possibleKeys) {
-                // מחפש את המפתח בדיוק, או באותיות קטנות/גדולות
                 const foundKey = Object.keys(row).find(k => k.trim().toLowerCase() === key.toLowerCase());
                 if (foundKey && row[foundKey]) return row[foundKey];
             }
             return null;
         };
 
-        // 2. מעבר על השורות ובדיקה
         for (let i = 0; i < tasks.length; i++) {
             const row = tasks[i];
             const rowErrors = [];
             
-            // שליפת נתונים גמישה (תומך גם בעברית וגם באנגלית)
             const title = getValue(row, ['Title', 'Task Title', 'כותרת', 'שם המשימה']);
             const workerName = getValue(row, ['Worker Name', 'Worker', 'Assigned To', 'עובד', 'שם העובד']);
             const locName = getValue(row, ['Location Name', 'Location', 'מיקום']);
@@ -735,12 +702,10 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             let location_id = null;
             let asset_id = null;
 
-            // בדיקת כותרת (חובה)
             if (!title) {
                 rowErrors.push(`Row ${i + 1}: Missing 'Title' (Task Title)`);
             }
 
-            // בדיקת עובד
             if (workerName) {
                 const wName = workerName.toString().trim().toLowerCase();
                 if (usersMap.has(wName)) {
@@ -749,10 +714,9 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                     rowErrors.push(`Row ${i + 1}: Worker '${workerName}' not found in system.`);
                 }
             } else {
-                worker_id = req.user.id; // ברירת מחדל: אני
+                worker_id = req.user.id; 
             }
 
-            // בדיקת נכס
             if (assetCode) {
                 const aCode = assetCode.toString().trim().toLowerCase();
                 if (assetCodeMap.has(aCode)) {
@@ -770,7 +734,6 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                 }
             }
 
-            // בדיקת מיקום
             if (locName) {
                 const lName = locName.toString().trim().toLowerCase();
                 if (locMap.has(lName)) {
@@ -795,9 +758,8 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             }
         }
 
-        // 3. סיום: החזרת תשובה
         if (isDryRun) {
-            await client.query('ROLLBACK'); // לא שומר כלום בבדיקה
+            await client.query('ROLLBACK');
             if (errors.length > 0) {
                 return res.json({ success: false, errors, message: "Found blocking errors." });
             } else {
@@ -809,7 +771,6 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                 return res.status(400).json({ error: "Please fix errors.", details: errors });
             }
 
-            // שמירה בפועל
             for (const t of validTasks) {
                 await client.query(
                     `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id) 
@@ -824,7 +785,6 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     } catch (e) {
         await client.query('ROLLBACK');
         console.error(e);
-        // טיפול בשגיאת מיקום ספציפית אם עדיין קורית
         if (e.message.includes('location_id')) {
              res.status(500).json({ error: "Database Error: The system tried to access a missing location field. Check Server Logs." });
         } else {
@@ -835,12 +795,9 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     }
 });
 
-// --- 5. Get Tasks for Specific User (Manager View) ---
 app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
     try {
         const { userId } = req.params;
-        
-        // בדיקת תפקיד המשתמש הנצפה
         const userCheck = await pool.query('SELECT role FROM users WHERE id = $1', [userId]);
         if (userCheck.rows.length === 0) return res.status(404).send("User not found");
         
@@ -848,10 +805,8 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
         let whereClause = "";
 
         if (targetRole === 'MANAGER' || targetRole === 'BIG_BOSS') {
-            // אם צופים במנהל -> רואים את המשימות שלו ושל כל העובדים שתחתיו (רקורסיבי)
             whereClause = `WHERE t.worker_id = $1 OR t.worker_id IN (SELECT id FROM users WHERE parent_manager_id = $1)`;
         } else {
-            // אם צופים בעובד -> רואים רק את המשימות שלו
             whereClause = `WHERE t.worker_id = $1`;
         }
 
