@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, parseISO, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, Camera, ArrowRight, X, FileSpreadsheet, Check, Plus, User, MapPin, Tag, AlertTriangle, Box, Hash } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, Camera, ArrowRight, X, FileSpreadsheet, Check, Plus, User, MapPin, Tag, AlertTriangle, Box, Hash, Video, Image as ImageIcon } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
+import TaskCard from './TaskCard'; // Make sure TaskCard is imported correctly
 
 // --- הגדרות שפה ללוח שנה ---
 const getLocale = (lang) => {
@@ -34,8 +35,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const [showExcel, setShowExcel] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // בודק אם אנחנו נמצאים בתוך טאב צוות (לפי קיום המשתנה subordinates)
-  // אם subordinates קיים (גם אם הוא ריק), סימן שאנחנו במבט מנהל דרך TeamTab
+  // בודק אם אנחנו נמצאים בתוך טאב צוות
   const isTeamView = Array.isArray(subordinates);
 
   // --- סינון משימות ---
@@ -177,7 +177,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                     </button>
                 )}
                 
-                {/* 👇 כפתור קטן - מופיע רק במצב צוות (isTeamView) */}
                 {isTeamView && (
                     <button onClick={() => setShowCreateModal(true)} className="p-2 bg-[#714B67] text-white rounded-full hover:bg-purple-800 transition shadow-sm">
                         <Plus size={20} />
@@ -197,7 +196,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
               subordinates={subordinates}
               onRefresh={onRefresh} 
               onClose={() => setShowCreateModal(false)} 
-              lang={lang} // חשוב להעביר את השפה לטופס
+              lang={lang} 
           />
       )}
 
@@ -222,7 +221,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
 
       {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} token={token} user={user} onRefresh={onRefresh} t={t} />}
 
-      {/* 👇 כפתור צף גדול - מופיע רק אם אנחנו לא בתוך טאב צוות */}
       {!isTeamView && (
         <button 
             onClick={() => setShowCreateModal(true)} 
@@ -249,41 +247,7 @@ const ViewBtn = ({ active, onClick, label }) => (
     <button onClick={onClick} className={`px-6 py-2 text-sm rounded-lg transition-all ${active ? 'bg-white shadow text-purple-700 font-bold transform scale-105' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
 );
 
-// --- כרטיס משימה מעוצב ---
-const TaskCard = ({ task, onClick, t, statusColor = 'border-purple-500', compact = false }) => {
-    const displayName = task.asset_name || task.title;
-    return (
-        <div onClick={onClick} className={`bg-white p-3 rounded-xl shadow-sm border-r-4 ${statusColor} cursor-pointer hover:shadow-md transition-all flex flex-col gap-1 relative overflow-hidden`}>
-            <div className="flex justify-between items-start">
-                <div className="flex flex-col">
-                    <h4 className={`font-bold text-gray-800 ${compact ? 'text-sm' : 'text-base'}`}>
-                        {displayName} 
-                        {task.asset_code && <span className="text-gray-400 text-xs font-normal ml-2">#{task.asset_code}</span>}
-                    </h4>
-                    {!compact && (
-                        <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-0.5">
-                            {task.location_name && <span className="flex items-center gap-1"><MapPin size={10}/> {task.location_name}</span>}
-                            {task.category_name && <span className="flex items-center gap-1 bg-gray-50 px-1.5 rounded"><Tag size={10}/> {task.category_name}</span>}
-                        </div>
-                    )}
-                </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${task.urgency === 'High' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>
-                    {task.urgency === 'High' ? (t.urgent || "Urgent") : (t.normal || "Normal")}
-                </span>
-            </div>
-            {!compact && (
-                <div className="flex justify-between items-center mt-1 pt-1 border-t border-gray-50">
-                    <div className="flex items-center gap-2">
-                        {task.worker_name && <div className="flex items-center gap-1 text-xs text-gray-500"><User size={12}/> {task.worker_name}</div>}
-                    </div>
-                    <ArrowRight size={16} className="text-gray-300"/>
-                </div>
-            )}
-        </div>
-    );
-};
-
-// --- מודל פרטי משימה מורחב ---
+// --- מודל פרטי משימה מורחב (הגרסה המשופרת) ---
 const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
@@ -318,6 +282,10 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
         });
         alert(t.alert_created || "Created successfully!"); onRefresh(); onClose();
     };
+
+    // --- Media Helpers ---
+    const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.includes('video'));
+    const openMedia = (url) => window.open(url, '_blank');
 
     if(showSuccess) return <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]"><div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center"><Check size={40} className="text-green-600 mb-2"/><h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2></div></div>;
 
@@ -364,8 +332,29 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.manager_label || "Manager"}</span><span className="font-medium">{task.manager_name || 'System'}</span></div>
                     </div>
                     {task.description && <div className="bg-blue-50 p-3 rounded-lg border border-blue-100"><span className="block text-xs text-blue-600 font-bold mb-1">{t.manager_notes}:</span><p className="text-sm text-blue-900 whitespace-pre-wrap">{task.description}</p></div>}
-                    {task.creation_image_url && <div><span className="block text-xs text-gray-400 uppercase font-bold mb-2">{t.has_image}</span><img src={task.creation_image_url} className="w-full h-48 object-cover rounded-xl border" /></div>}
-                    {task.completion_note && <div className="bg-orange-50 p-3 rounded-lg border border-orange-100"><span className="block text-xs text-orange-600 font-bold mb-1">{t.worker_report}:</span><p className="text-sm text-orange-900">{task.completion_note}</p>{task.completion_image_url && <img src={task.completion_image_url} className="w-full h-32 object-cover rounded-lg mt-2 border" />}</div>}
+                    
+                    {/* 👇 גלריית תמונות/וידאו (חדש!) */}
+                    {task.images && task.images.length > 0 && (
+                        <div>
+                            <span className="block text-xs text-gray-400 uppercase font-bold mb-2">{t.has_image || "Media"}</span>
+                            <div className="grid grid-cols-2 gap-2">
+                                {task.images.map((url, i) => (
+                                    isVideo(url) ? (
+                                        <div key={i} className="relative group cursor-pointer" onClick={() => openMedia(url)}>
+                                            <video src={url} className="w-full h-32 object-cover rounded-lg border bg-black" />
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition">
+                                                <Video className="text-white opacity-80" size={24}/>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <img key={i} src={url} onClick={() => openMedia(url)} className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition" alt="task media" />
+                                    )
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {task.completion_note && <div className="bg-orange-50 p-3 rounded-lg border border-orange-100"><span className="block text-xs text-orange-600 font-bold mb-1">{t.worker_report}:</span><p className="text-sm text-orange-900">{task.completion_note}</p>{task.completion_image_url && <img src={task.completion_image_url} onClick={() => openMedia(task.completion_image_url)} className="w-full h-32 object-cover rounded-lg mt-2 border cursor-pointer" />}</div>}
                     
                     <div className="pt-4">
                         {canComplete && mode === 'view' && (

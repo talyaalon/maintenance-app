@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Calendar, Camera, FileText, Box, RefreshCw } from 'lucide-react';
+import { X, User, Calendar, Camera, FileText, Box, RefreshCw, Video } from 'lucide-react';
 
 const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang }) => {
   // --- סטייט לניהול התדירות והטופס ---
@@ -21,7 +21,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     recurring_month: 0 
   });
 
-  const [file, setFile] = useState(null); 
+  // 👇 שינוי 1: ניהול מערך של קבצים במקום קובץ בודד
+  const [selectedFiles, setSelectedFiles] = useState([]);
   
   // נתונים שיגיעו מהשרת
   const [locations, setLocations] = useState([]);
@@ -76,6 +77,14 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     }));
   };
 
+  // 👇 פונקציה לטיפול בבחירת קבצים מרובים
+  const handleFileChange = (e) => {
+      if (e.target.files) {
+          // המרת FileList למערך רגיל
+          setSelectedFiles(Array.from(e.target.files));
+      }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -106,8 +115,11 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         }
     }
 
-    if (file) {
-        data.append('task_image', file);
+    // 👇 שינוי 2: צירוף כל הקבצים שנבחרו ל-FormData
+    if (selectedFiles.length > 0) {
+        selectedFiles.forEach((file) => {
+            data.append('files', file); // השרת שלנו עם upload.any() יקבל את זה
+        });
     }
 
     try {
@@ -285,8 +297,22 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 />
             </div>
              <div>
-                <label className="text-sm font-bold text-gray-700 block mb-1 flex items-center gap-1"><Camera size={16}/> {t.add_image}</label>
-                <input type="file" accept="image/*" onChange={e => setFile(e.target.files[0])} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" />
+                <label className="text-sm font-bold text-gray-700 block mb-1 flex items-center gap-1">
+                    <Camera size={16}/> {t.add_image || "Add Photos/Video"}
+                </label>
+                {/* 👇 שינוי 3: Input שתומך ב-Multiple וב-Video */}
+                <input 
+                    type="file" 
+                    multiple 
+                    accept="image/*,video/*" 
+                    onChange={handleFileChange} 
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
+                />
+                {selectedFiles.length > 0 && (
+                    <p className="text-xs text-green-600 mt-1 font-semibold">
+                        {selectedFiles.length} files selected
+                    </p>
+                )}
             </div>
 
         </div>

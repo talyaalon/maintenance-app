@@ -1,14 +1,18 @@
 import React from 'react';
-import { Clock, MapPin, AlertCircle, CheckCircle, Box } from 'lucide-react';
+import { Clock, MapPin, Box, Image as ImageIcon, Video } from 'lucide-react';
 import { format, parseISO, isBefore, startOfDay } from 'date-fns';
 
 const TaskCard = ({ task, onClick, t, statusColor = 'border-purple-500', compact = false }) => {
   const isOverdue = task.status === 'PENDING' && isBefore(parseISO(task.due_date), startOfDay(new Date()));
   
-  // צבעים לפי דחיפות
   const urgencyColor = task.urgency === 'High' ? 'bg-red-100 text-red-700 border-red-200' 
                      : task.urgency === 'Low' ? 'bg-blue-50 text-blue-600 border-blue-100'
                      : 'bg-gray-100 text-gray-600 border-gray-200';
+
+  // בדיקה אם יש תמונות או וידאו למשימה
+  const hasMedia = task.images && task.images.length > 0;
+  const firstMedia = hasMedia ? task.images[0] : null;
+  const isVideo = firstMedia && (firstMedia.endsWith('.mp4') || firstMedia.endsWith('.mov') || firstMedia.includes('video'));
 
   return (
     <div onClick={onClick} className={`bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-all relative overflow-hidden group mb-3`}>
@@ -32,7 +36,24 @@ const TaskCard = ({ task, onClick, t, statusColor = 'border-purple-500', compact
             </div>
 
             {/* גוף המשימה */}
-            <h4 className="font-bold text-gray-800 text-lg leading-tight mb-2">{task.title}</h4>
+            <div className="flex justify-between items-start gap-2">
+                <h4 className="font-bold text-gray-800 text-lg leading-tight mb-2 flex-1">{task.title}</h4>
+                
+                {/* אייקון אם יש מדיה */}
+                {hasMedia && (
+                    <div className="text-gray-400">
+                        {isVideo ? <Video size={16}/> : <ImageIcon size={16}/>}
+                    </div>
+                )}
+            </div>
+
+            {/* תצוגה מקדימה של מדיה (אופציונלי - אם רוצים להציג תמונה קטנה בתוך הכרטיס) */}
+            {/* {hasMedia && !isVideo && (
+                <div className="mb-2 h-20 w-full overflow-hidden rounded-lg">
+                    <img src={firstMedia} alt="Preview" className="w-full h-full object-cover"/>
+                </div>
+            )}
+            */}
 
             {/* שורה תחתונה: מיקום ותאריך */}
             <div className="flex justify-between items-center text-sm text-gray-500 mt-3 border-t pt-2 border-dashed">

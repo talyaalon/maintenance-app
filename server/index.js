@@ -27,11 +27,13 @@ cloudinary.config({
   api_secret: '-7M6Z0dvS0fPFkQiEuWj66FWPXM'
 });
 
+// 👇 עדכון: תמיכה בוידאו וקבצים מרובים
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'maintenance_app',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+    resource_type: 'auto', // מאפשר העלאת וידאו ותמונות אוטומטית
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp', 'mp4', 'mov', 'avi', 'mkv'], // פורמטים מורחבים
   },
 });
 
@@ -201,7 +203,6 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         const { full_name, email, password, phone } = req.body;
         let profilePictureUrl = req.body.existing_picture; 
         
-        // תיקון: שימוש בנתיב של Cloudinary
         if (req.file) profilePictureUrl = req.file.path;
         
         const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
@@ -493,7 +494,7 @@ app.get('/tasks', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// 👇 יצירת משימה חדשה (המתוקן והגמיש ביותר!)
+// 👇 יצירת משימה חדשה (תומך ריבוי תמונות + וידאו)
 // ==========================================
 app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   try {
@@ -623,18 +624,24 @@ app.delete('/tasks/delete-all', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send("Error deleting tasks"); }
 });
 
+// ==========================================
+// 👇 ייצוא לאקסל: משופר עם סינונים ושם מנהל
+// ==========================================
 app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     try {
-        const { worker_id, start_date, end_date } = req.query;
+        const { worker_id, start_date, end_date, status } = req.query;
         
+        // שליפה מתוחכמת כולל שם המנהל (דרך טבלת users)
         let query = `
             SELECT t.id, t.title, t.description, t.urgency, t.status, t.due_date,
                    u.full_name as worker_name,
+                   m.full_name as manager_name,  -- הוספת שם המנהל
                    l.name as location_name,
                    a.name as asset_name, a.code as asset_code,
                    c.name as category_name
             FROM tasks t
             LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN users m ON u.parent_manager_id = m.id -- חיבור למציאת המנהל
             LEFT JOIN locations l ON t.location_id = l.id
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN categories c ON a.category_id = c.id
@@ -644,9 +651,26 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
         const params = [];
         let pIndex = 1;
 
-        if (worker_id) { query += ` AND t.worker_id = $${pIndex++}`; params.push(worker_id); }
-        if (start_date) { query += ` AND t.due_date >= $${pIndex++}`; params.push(start_date); }
-        if (end_date) { query += ` AND t.due_date <= $${pIndex++}`; params.push(end_date); }
+        if (worker_id && worker_id !== 'all') { 
+            query += ` AND t.worker_id = $${pIndex++}`; 
+            params.push(worker_id); 
+        }
+        
+        // סינון לפי תאריכים
+        if (start_date) { 
+            query += ` AND t.due_date >= $${pIndex++}`; 
+            params.push(start_date); 
+        }
+        if (end_date) { 
+            query += ` AND t.due_date <= $${pIndex++}`; 
+            params.push(end_date); 
+        }
+
+        // סינון לפי סטטוס (אם נבחר)
+        if (status && status !== 'all') {
+            query += ` AND t.status = $${pIndex++}`;
+            params.push(status);
+        }
 
         query += ` ORDER BY t.due_date DESC`;
 
@@ -814,11 +838,13 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
             SELECT t.*, 
                    l.name as location_name,
                    a.name as asset_name, 
+                   c.name as category_name,
                    u.full_name as worker_name,
                    creator.full_name as manager_name
             FROM tasks t
             LEFT JOIN locations l ON t.location_id = l.id
             LEFT JOIN assets a ON t.asset_id = a.id
+            LEFT JOIN categories c ON a.category_id = c.id
             LEFT JOIN users u ON t.worker_id = u.id
             LEFT JOIN users creator ON u.parent_manager_id = creator.id
             ${whereClause}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx'; 
-import { Download, Upload, FileSpreadsheet, Filter, Trash2, AlertTriangle, X, CheckCircle, Search, Plus, Play, Save } from 'lucide-react';
+import { Download, Upload, FileSpreadsheet, Filter, Trash2, AlertTriangle, X, CheckCircle, Search, Plus, Calendar, ListFilter } from 'lucide-react';
 
 const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
     const [activeTab, setActiveTab] = useState('export'); 
@@ -16,19 +16,23 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
         { id: 'status', label: t.status_label || 'Status' },
         { id: 'due_date', label: t.date_label || 'Due Date' },
         { id: 'worker_name', label: t.assigned_to || 'Worker Name' },
+        { id: 'manager_name', label: 'Manager Name' }, // ✅ שדה מנהל
         { id: 'location_name', label: t.location || 'Location' },
         { id: 'asset_code', label: 'Asset Code' },
         { id: 'asset_name', label: 'Asset Name' },
         { id: 'category_name', label: 'Category' },
-        { id: 'manager_name', label: 'Manager' },
         { id: 'completion_note', label: 'Completion Note' }
     ];
 
     const [availableFields, setAvailableFields] = useState(allFields);
     const [selectedFields, setSelectedFields] = useState([]);
+    
+    // 👇 פילטרים חדשים
     const [filterWorker, setFilterWorker] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [filterStatus, setFilterStatus] = useState(''); // סטטוס חדש
+
     const [isExporting, setIsExporting] = useState(false);
     const [isUpdateMode, setIsUpdateMode] = useState(false);
     const [exportFormat, setExportFormat] = useState('XLSX'); 
@@ -56,23 +60,15 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
         .catch(console.error);
     }, [token, user]);
 
-    // 👇 הלוגיקה החדשה: סינון הרשימה לפי היררכיה
     const getRelevantUsers = () => {
         if (!users.length) return [];
-        
-        // מנהל ראשי רואה את כולם
         if (user.role === 'BIG_BOSS') return users;
-
-        // מנהל רואה רק את עצמו ואת העובדים הישירים שלו
         if (user.role === 'MANAGER') {
             return users.filter(u => u.id === user.id || u.parent_manager_id === user.id);
         }
-
-        // עובד רואה רק את עצמו
         return users.filter(u => u.id === user.id);
     };
 
-    // משתנה עזר שמחזיק את הרשימה המסוננת לשימוש בטופס
     const relevantUsers = getRelevantUsers();
 
     const handleDownloadTemplate = () => {
@@ -127,8 +123,11 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
             } else if (filterWorker) {
                 params.append('worker_id', filterWorker);
             }
+            
+            // 👇 שליחת הפילטרים החדשים לשרת
             if (startDate) params.append('start_date', startDate);
             if (endDate) params.append('end_date', endDate);
+            if (filterStatus) params.append('status', filterStatus);
 
             const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/export/advanced?${params.toString()}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -194,12 +193,9 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
         reader.readAsBinaryString(file);
     };
 
-    // בדיקת הרשאות (מעודכנת לפי הרשימה המסוננת)
     const validatePermissions = (tasksData) => {
         const errors = [];
-        // אנו בודקים רק מול הרשימה הרלוונטית (relevantUsers)
         const allowedNames = new Set(relevantUsers.map(u => u.full_name.trim().toLowerCase()));
-        // מוסיפים גם את שם המשתמש הנוכחי ליתר ביטחון
         allowedNames.add(user.full_name.trim().toLowerCase());
 
         tasksData.forEach((row, index) => {
@@ -210,7 +206,6 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
 
             if (workerNameKey && row[workerNameKey]) {
                 const nameInFile = row[workerNameKey].toString().trim().toLowerCase();
-                // אם השם בקובץ לא נמצא ברשימה המורשית של המנהל - שגיאה
                 if (user.role !== 'BIG_BOSS' && !allowedNames.has(nameInFile)) {
                     errors.push(`Row ${index + 1}: Permission Denied. You cannot import tasks for "${row[workerNameKey]}". This user is not in your team.`);
                 }
@@ -273,7 +268,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
 
     return (
         <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-50 p-4 backdrop-blur-sm font-sans">
-            <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-[550px] max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-[600px] max-h-[90vh] flex flex-col overflow-hidden">
                 
                 {/* Header */}
                 <div className="bg-white border-b px-6 py-3 flex justify-between items-center shrink-0">
@@ -299,44 +294,73 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                     {activeTab === 'export' && (
                         <div className="flex flex-col h-full gap-4">
                             
-                            <div className="flex flex-wrap gap-6 items-start text-sm">
-                                <div className="flex items-center gap-2">
-                                    <input type="checkbox" id="update_data" checked={isUpdateMode} onChange={handleUpdateModeChange} className="w-4 h-4 text-[#714B67] focus:ring-[#714B67] border-gray-300 rounded cursor-pointer"/>
-                                    <label htmlFor="update_data" className="text-gray-700 font-medium cursor-pointer">
-                                        {t.export_for_update || "Update Data (Includes ID)"}
-                                    </label>
+                            {/* Top Controls Bar */}
+                            <div className="flex flex-wrap gap-4 items-center text-sm p-3 bg-white rounded-lg border shadow-sm">
+                                
+                                {/* 1. Checkbox & Format */}
+                                <div className="flex items-center gap-4 border-r pr-4">
+                                    <div className="flex items-center gap-2">
+                                        <input type="checkbox" id="update_data" checked={isUpdateMode} onChange={handleUpdateModeChange} className="w-4 h-4 text-[#714B67] focus:ring-[#714B67] border-gray-300 rounded cursor-pointer"/>
+                                        <label htmlFor="update_data" className="text-gray-700 font-medium cursor-pointer">
+                                            {t.export_for_update || "Update Mode"}
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <label className="flex items-center gap-1 cursor-pointer">
+                                            <input type="radio" name="format" checked={exportFormat === 'XLSX'} onChange={() => setExportFormat('XLSX')} className="text-[#714B67] focus:ring-[#714B67]"/>
+                                            <span className="text-gray-600">XLSX</span>
+                                        </label>
+                                        <label className="flex items-center gap-1 cursor-pointer">
+                                            <input type="radio" name="format" checked={exportFormat === 'CSV'} onChange={() => setExportFormat('CSV')} className="text-[#714B67] focus:ring-[#714B67]"/>
+                                            <span className="text-gray-600">CSV</span>
+                                        </label>
+                                    </div>
                                 </div>
 
-                                <div className="flex items-center gap-3">
-                                    <span className="font-bold text-gray-700">Format:</span>
-                                    <label className="flex items-center gap-1 cursor-pointer">
-                                        <input type="radio" name="format" checked={exportFormat === 'XLSX'} onChange={() => setExportFormat('XLSX')} className="text-[#714B67] focus:ring-[#714B67]"/>
-                                        <span className="text-gray-600">XLSX</span>
-                                    </label>
-                                    <label className="flex items-center gap-1 cursor-pointer">
-                                        <input type="radio" name="format" checked={exportFormat === 'CSV'} onChange={() => setExportFormat('CSV')} className="text-[#714B67] focus:ring-[#714B67]"/>
-                                        <span className="text-gray-600">CSV</span>
-                                    </label>
-                                </div>
-
-                                {/* בחירת עובד - משתמשים ברשימה המסוננת relevantUsers */}
+                                {/* 2. Employee Selection */}
                                 {user.role !== 'EMPLOYEE' && (
                                     <div className="flex items-center gap-2">
                                         <Filter size={14} className="text-gray-500"/>
-                                        <select className="border-none bg-transparent font-medium text-gray-600 focus:ring-0 cursor-pointer hover:text-[#714B67] py-0" 
+                                        <select className="border border-gray-200 rounded p-1 text-gray-700 text-xs focus:ring-[#714B67] focus:border-[#714B67]" 
                                             value={filterWorker} onChange={e => setFilterWorker(e.target.value)}>
-                                            <option value="">
-                                                {user.role === 'BIG_BOSS' ? "-- All Employees --" : "-- All My Employees --"}
-                                            </option>
-                                            {/* 👇 כאן השינוי - משתמשים ב-relevantUsers במקום ב-users */}
+                                            <option value="">{user.role === 'BIG_BOSS' ? "All Employees" : "My Team"}</option>
                                             {relevantUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                                         </select>
                                     </div>
                                 )}
+
+                                {/* 3. 👇 פילטרים חדשים: תאריכים וסטטוס */}
+                                <div className="flex items-center gap-2 border-l pl-4">
+                                    <div className="flex items-center gap-1">
+                                        <Calendar size={14} className="text-gray-500"/>
+                                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} 
+                                            className="border border-gray-200 rounded p-1 text-xs text-gray-700 outline-none focus:border-[#714B67] w-28" 
+                                            title="Start Date"
+                                        />
+                                        <span className="text-gray-400">-</span>
+                                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} 
+                                            className="border border-gray-200 rounded p-1 text-xs text-gray-700 outline-none focus:border-[#714B67] w-28" 
+                                            title="End Date"
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center gap-1 ml-2">
+                                        <ListFilter size={14} className="text-gray-500"/>
+                                        <select className="border border-gray-200 rounded p-1 text-gray-700 text-xs focus:ring-[#714B67] focus:border-[#714B67]" 
+                                            value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                                            <option value="">All Statuses</option>
+                                            <option value="PENDING">Pending (Not Performed)</option>
+                                            <option value="WAITING_APPROVAL">Waiting Approval</option>
+                                            <option value="COMPLETED">Completed</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                             </div>
 
+                            {/* Columns Selection Area */}
                             <div className="flex-1 flex gap-4 overflow-hidden min-h-0">
-                                {/* Left Column */}
+                                {/* Left Column: Available */}
                                 <div className="flex-1 flex flex-col min-h-0">
                                     <div className="mb-2">
                                         <h4 className="text-xs font-bold text-gray-800 mb-1 uppercase">Available fields</h4>
@@ -363,7 +387,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                                     </div>
                                 </div>
 
-                                {/* Right Column */}
+                                {/* Right Column: Selected */}
                                 <div className="flex-1 flex flex-col min-h-0">
                                     <div className="mb-2 h-[58px] flex items-end"> 
                                         <h4 className="text-xs font-bold text-gray-800 mb-1 uppercase">Fields to export</h4>
