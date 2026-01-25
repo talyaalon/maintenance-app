@@ -16,7 +16,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
         { id: 'status', label: t.status_label || 'Status' },
         { id: 'due_date', label: t.date_label || 'Due Date' },
         { id: 'worker_name', label: t.assigned_to || 'Worker Name' },
-        { id: 'manager_name', label: 'Manager Name' }, // ✅ שדה מנהל
+        { id: 'manager_name', label: 'Manager Name' }, 
         { id: 'location_name', label: t.location || 'Location' },
         { id: 'asset_code', label: 'Asset Code' },
         { id: 'asset_name', label: 'Asset Name' },
@@ -27,11 +27,10 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
     const [availableFields, setAvailableFields] = useState(allFields);
     const [selectedFields, setSelectedFields] = useState([]);
     
-    // 👇 פילטרים חדשים
     const [filterWorker, setFilterWorker] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [filterStatus, setFilterStatus] = useState(''); // סטטוס חדש
+    const [filterStatus, setFilterStatus] = useState(''); 
 
     const [isExporting, setIsExporting] = useState(false);
     const [isUpdateMode, setIsUpdateMode] = useState(false);
@@ -124,7 +123,6 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                 params.append('worker_id', filterWorker);
             }
             
-            // 👇 שליחת הפילטרים החדשים לשרת
             if (startDate) params.append('start_date', startDate);
             if (endDate) params.append('end_date', endDate);
             if (filterStatus) params.append('status', filterStatus);
@@ -195,8 +193,17 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
 
     const validatePermissions = (tasksData) => {
         const errors = [];
-        const allowedNames = new Set(relevantUsers.map(u => u.full_name.trim().toLowerCase()));
-        allowedNames.add(user.full_name.trim().toLowerCase());
+        
+        // 👇 תיקון קריטי: בדיקה ש-full_name קיים לפני שמפעילים עליו trim
+        const allowedNames = new Set(
+            relevantUsers
+                .map(u => (u.full_name ? String(u.full_name).trim().toLowerCase() : ""))
+                .filter(Boolean)
+        );
+        
+        if (user.full_name) {
+            allowedNames.add(String(user.full_name).trim().toLowerCase());
+        }
 
         tasksData.forEach((row, index) => {
             const workerNameKey = Object.keys(row).find(k => 
@@ -205,8 +212,10 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
             );
 
             if (workerNameKey && row[workerNameKey]) {
-                const nameInFile = row[workerNameKey].toString().trim().toLowerCase();
-                if (user.role !== 'BIG_BOSS' && !allowedNames.has(nameInFile)) {
+                // 👇 תיקון קריטי: המרה בטוחה ל-String לפני trim
+                const nameInFile = String(row[workerNameKey] || "").trim().toLowerCase();
+                
+                if (nameInFile && user.role !== 'BIG_BOSS' && !allowedNames.has(nameInFile)) {
                     errors.push(`Row ${index + 1}: Permission Denied. You cannot import tasks for "${row[workerNameKey]}". This user is not in your team.`);
                 }
             }
@@ -329,7 +338,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                                     </div>
                                 )}
 
-                                {/* 3. 👇 פילטרים חדשים: תאריכים וסטטוס */}
+                                {/* 3. פילטרים חדשים: תאריכים וסטטוס */}
                                 <div className="flex items-center gap-2 border-l pl-4">
                                     <div className="flex items-center gap-1">
                                         <Calendar size={14} className="text-gray-500"/>
