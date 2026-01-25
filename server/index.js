@@ -593,7 +593,7 @@ app.delete('/tasks/delete-all', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// 👇 ייצוא לאקסל (מעודכן: כולל תמונות)
+// 👇 ייצוא לאקסל
 // ==========================================
 app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     try {
@@ -601,7 +601,7 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
         
         let query = `
             SELECT t.id, t.title, t.description, t.urgency, t.status, t.due_date,
-                   t.images,  -- 👇 הוספת התמונות
+                   t.images, 
                    u.full_name as worker_name,
                    m.full_name as manager_name,
                    l.name as location_name,
@@ -649,7 +649,7 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// 👇 ייבוא מאקסל (מעודכן: תמיכה בתמונות)
+// 👇 ייבוא מאקסל (כולל עדכון סטטוס וכל השדות)
 // ==========================================
 app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     const { tasks, isDryRun } = req.body; 
@@ -682,6 +682,7 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             const row = tasks[i];
             const rowErrors = [];
             
+            const id = getValue(row, ['id', 'ID', 'מזהה']);
             const title = getValue(row, ['Title', 'Task Title', 'כותרת', 'שם המשימה']);
             const workerName = getValue(row, ['Worker Name', 'Worker', 'Assigned To', 'עובד', 'שם העובד']);
             const locName = getValue(row, ['Location Name', 'Location', 'מיקום']);
@@ -689,9 +690,9 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             const assetName = getValue(row, ['Asset Name', 'Asset', 'שם הנכס']);
             const desc = getValue(row, ['Description', 'תיאור']) || '';
             const urgencyRaw = getValue(row, ['Urgency', 'דחיפות']);
+            const statusRaw = getValue(row, ['Status', 'סטטוס']) || 'PENDING'; // 👇 קריאת סטטוס
             const dateRaw = getValue(row, ['Due Date', 'Date', 'תאריך', 'תאריך יעד']);
             
-            // 👇 קריאת תמונות (מחרוזת מופרדת בפסיקים)
             const imagesRaw = getValue(row, ['Images', 'Image URLs', 'Photos', 'תמונות', 'קישורי תמונות']);
             let images = [];
             if (imagesRaw) {
@@ -747,14 +748,16 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                 errors.push(...rowErrors);
             } else {
                 validTasks.push({
-                    title: title,
+                    id,
+                    title,
                     description: desc,
                     urgency: ['High', 'Urgent', 'גבוהה', 'דחוף'].includes(urgencyRaw) ? 'High' : 'Normal',
+                    status: statusRaw, // 👇 שמירת הסטטוס
                     due_date: dateRaw ? new Date(dateRaw) : new Date(),
                     worker_id,
                     location_id,
                     asset_id,
-                    images // 👇 הוספת התמונות לאובייקט
+                    images
                 });
             }
         }
@@ -764,7 +767,9 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             if (errors.length > 0) {
                 return res.json({ success: false, errors, message: "Found blocking errors." });
             } else {
-                return res.json({ success: true, message: "Everything seems valid." });
+                const updateCount = validTasks.filter(t => t.id).length;
+                const newCount = validTasks.length - updateCount;
+                return res.json({ success: true, message: `Ready to process: ${newCount} new tasks, ${updateCount} updates.` });
             }
         } else {
             if (errors.length > 0) {
@@ -773,14 +778,36 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             }
 
             for (const t of validTasks) {
-                await client.query(
-                    `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images) 
-                     VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8)`, // 👇 נוסף $8
-                    [t.title, t.description, t.urgency, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images]
-                );
+                if (t.id) {
+                    // 👇 UPDATE כולל סטטוס
+                    const check = await client.query('SELECT id FROM tasks WHERE id = $1', [t.id]);
+                    if (check.rows.length > 0) {
+                        await client.query(
+                            `UPDATE tasks SET 
+                                title = $1, description = $2, urgency = $3, due_date = $4, 
+                                worker_id = $5, asset_id = $6, location_id = $7, images = $8, status = $9
+                             WHERE id = $10`,
+                            [t.title, t.description, t.urgency, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images, t.status, t.id]
+                        );
+                    } else {
+                        // 👇 INSERT כולל סטטוס (אם ID לא קיים)
+                        await client.query(
+                            `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images) 
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                            [t.title, t.description, t.urgency, t.status, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images]
+                        );
+                    }
+                } else {
+                    // 👇 INSERT רגיל כולל סטטוס
+                    await client.query(
+                        `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images) 
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                        [t.title, t.description, t.urgency, t.status, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images]
+                    );
+                }
             }
             await client.query('COMMIT');
-            res.json({ success: true, message: `Successfully imported ${validTasks.length} tasks.` });
+            res.json({ success: true, message: `Successfully processed ${validTasks.length} tasks.` });
         }
 
     } catch (e) {
