@@ -5,16 +5,14 @@ import { format, isSameDay, parseISO, addDays, startOfDay, isBefore } from 'date
 import { CheckCircle, Clock, AlertCircle, Camera, ArrowRight, X, FileSpreadsheet, Check, Plus, User, MapPin, Tag, AlertTriangle, Box, Hash, Video, Image as ImageIcon } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
-import TaskCard from './TaskCard'; // Make sure TaskCard is imported correctly
+import TaskCard from './TaskCard';
 
-// --- הגדרות שפה ללוח שנה ---
 const getLocale = (lang) => {
     if (lang === 'he') return 'he-IL';
     if (lang === 'th') return 'th-TH';
     return 'en-US';
 };
 
-// --- עיצוב מותאם ללוח שנה ---
 const calendarStyles = `
   .react-calendar { width: 95%; max-width: 800px; margin: 0 auto; border: none; font-family: inherit; background: white; border-radius: 1.5rem; padding: 1.5rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
   .react-calendar__navigation button { font-size: 1.2rem; font-weight: bold; color: #4c1d95; }
@@ -35,10 +33,8 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const [showExcel, setShowExcel] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // בודק אם אנחנו נמצאים בתוך טאב צוות
   const isTeamView = Array.isArray(subordinates);
 
-  // --- סינון משימות ---
   const pendingTasks = tasks.filter(task => {
       if (task.status !== 'PENDING') return false;
       const taskDate = parseISO(task.due_date);
@@ -49,7 +45,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
   const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(parseISO(t.due_date), selectedDate));
 
-  // --- תצוגת משימות לביצוע ---
   const renderTodoView = () => {
       if (viewMode === 'daily') {
           return (
@@ -69,7 +64,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                               const isOverdue = isBefore(parseISO(task.due_date), startOfDay(new Date()));
                               return (
                                   <div key={task.id}>
-                                      {isOverdue && <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1"><AlertTriangle size={12}/> {t.overdue} {format(parseISO(task.due_date), 'dd/MM')}</div>}
+                                      {isOverdue && <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1"><AlertTriangle size={12}/> {t.overdue} {format(parseISO(task.due_date), 'dd/MM HH:mm')}</div>}
                                       <TaskCard task={task} t={t} onClick={() => setSelectedTask(task)} statusColor={isOverdue ? 'border-red-500' : (task.urgency === 'High' ? 'border-orange-500' : 'border-purple-500')} />
                                   </div>
                               )
@@ -167,7 +162,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
     <div className="p-4 pb-24 min-h-screen bg-gray-50 relative">
       <style>{calendarStyles}</style>
       
-      {/* --- כותרת ופעולות --- */}
       <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-black">{t.task_management_title}</h2>
           <div className="flex gap-2">
@@ -185,7 +179,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           </div>
       </div>
       
-      {/* מודלים */}
       {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
       
       {showCreateModal && (
@@ -200,7 +193,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           />
       )}
 
-      {/* טאבים ראשיים */}
       <div className="flex bg-white p-1.5 rounded-2xl shadow-sm mb-8 mx-auto max-w-3xl">
           <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={pendingTasks.length} />
           <TabButton active={mainTab === 'waiting'} onClick={() => setMainTab('waiting')} label={t.tab_waiting} icon={<AlertCircle size={18}/>} count={waitingTasks.length} color="orange" />
@@ -234,8 +226,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   );
 };
 
-// --- רכיבים קטנים ---
-
 const TabButton = ({ active, onClick, label, icon, count, color = 'purple' }) => (
     <button onClick={onClick} className={`flex-1 flex flex-col items-center py-3 rounded-xl transition-all ${active ? `bg-${color}-50 text-${color}-700 shadow-inner` : 'text-gray-400 hover:bg-gray-50'}`}>
         <div className={`flex items-center gap-2 mb-1 ${active ? 'font-bold' : ''}`}>{icon}<span className="text-sm">{label}</span></div>
@@ -247,7 +237,6 @@ const ViewBtn = ({ active, onClick, label }) => (
     <button onClick={onClick} className={`px-6 py-2 text-sm rounded-lg transition-all ${active ? 'bg-white shadow text-purple-700 font-bold transform scale-105' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
 );
 
-// --- מודל פרטי משימה מורחב (הגרסה המשופרת) ---
 const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
@@ -283,7 +272,6 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
         alert(t.alert_created || "Created successfully!"); onRefresh(); onClose();
     };
 
-    // --- Media Helpers ---
     const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.includes('video'));
     const openMedia = (url) => window.open(url, '_blank');
 
@@ -292,16 +280,18 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-[100] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
-                {/* Header */}
                 <div className="bg-gray-50 p-4 border-b flex justify-between items-start sticky top-0 bg-white z-10">
                     <div>
-                        <h2 className="text-xl font-bold text-gray-900">{task.title}</h2>
+                        {/* 👇 הוספת הקוד ליד הכותרת */}
+                        <h2 className="text-xl font-bold text-gray-900">
+                            {task.title}
+                            {task.asset_code && <span className="text-gray-400 font-normal ml-2 text-base"> - {task.asset_code}</span>}
+                        </h2>
                     </div>
                     <button onClick={onClose} className="bg-gray-100 p-2 rounded-full hover:bg-gray-200"><X size={20}/></button>
                 </div>
                 
                 <div className="p-6 space-y-6 pb-32">
-                    
                     {(task.asset_name || task.asset_code) && (
                         <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 shadow-sm">
                             <div className="flex items-center gap-2 mb-2">
@@ -323,7 +313,8 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     )}
 
                     <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
-                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.date_label}</span><span className="font-medium">{format(parseISO(task.due_date), 'dd/MM/yyyy')}</span></div>
+                        {/* 👇 תצוגת שעה */}
+                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.date_label}</span><span className="font-medium">{format(parseISO(task.due_date), 'dd/MM/yyyy HH:mm')}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.urgency_label || "Urgency"}</span><span className={`px-2 py-0.5 rounded text-xs font-bold ${task.urgency === 'High' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{task.urgency}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.location}</span><span className="font-medium">{task.location_name || '-'}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.category_label || "Category"}</span><span className="font-medium">{task.category_name || '-'}</span></div>
@@ -333,7 +324,6 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     </div>
                     {task.description && <div className="bg-blue-50 p-3 rounded-lg border border-blue-100"><span className="block text-xs text-blue-600 font-bold mb-1">{t.manager_notes}:</span><p className="text-sm text-blue-900 whitespace-pre-wrap">{task.description}</p></div>}
                     
-                    {/* 👇 גלריית תמונות/וידאו (חדש!) */}
                     {task.images && task.images.length > 0 && (
                         <div>
                             <span className="block text-xs text-gray-400 uppercase font-bold mb-2">{t.has_image || "Media"}</span>

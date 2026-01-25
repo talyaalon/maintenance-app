@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Calendar, Camera, FileText, Box, RefreshCw, Video } from 'lucide-react';
+import { X, User, Calendar, Camera, FileText, Box, RefreshCw, Video, Trash2 } from 'lucide-react';
 
 const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang }) => {
   // --- סטייט לניהול התדירות והטופס ---
@@ -7,13 +7,19 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   
   const currentUser = user;
 
+  // פונקציית עזר לקבלת תאריך ושעה נוכחיים בפורמט מתאים ל-input
+  const getCurrentDateTime = () => {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      return now.toISOString().slice(0, 16);
+  };
+
   const [formData, setFormData] = useState({
     title: '', 
     urgency: 'Normal', 
-    due_date: new Date().toISOString().split('T')[0], // תאריך ברירת מחדל להיום
+    due_date: getCurrentDateTime(), // שינוי: תאריך + שעה
     location_id: '', 
     asset_id: '', 
-    // בודקים אם currentUser קיים לפני שניגשים ל-id שלו
     assigned_worker_id: (currentUser && currentUser.role === 'EMPLOYEE') ? currentUser.id : '',
     description: '', 
     selected_days: [], 
@@ -21,7 +27,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     recurring_month: 0 
   });
 
-  // 👇 שינוי 1: ניהול מערך של קבצים במקום קובץ בודד
   const [selectedFiles, setSelectedFiles] = useState([]);
   
   // נתונים שיגיעו מהשרת
@@ -31,11 +36,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   const [assets, setAssets] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(''); 
 
-  // הגדרת ימים לפי שפה
   const daysEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const daysHe = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
-  
-  // בחירת המערך הנכון לפי השפה שנבחרה באפליקציה
   const currentDays = lang === 'he' ? daysHe : daysEn;
 
   // --- טעינת נתונים ---
@@ -51,7 +53,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
         .then(res => res.json()).then(setAssets).catch(err => console.error("Error assets", err));
 
-    // טעינת עובדים רק אם המשתמש הוא מנהל וקיים
     if (currentUser && currentUser.role !== 'EMPLOYEE') {
         if (subordinates && subordinates.length > 0) {
             setTeamMembers(subordinates);
@@ -77,12 +78,17 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     }));
   };
 
-  // 👇 פונקציה לטיפול בבחירת קבצים מרובים
+  // 👇 שינוי: הוספת קבצים לרשימה הקיימת במקום החלפה
   const handleFileChange = (e) => {
       if (e.target.files) {
-          // המרת FileList למערך רגיל
-          setSelectedFiles(Array.from(e.target.files));
+          const newFiles = Array.from(e.target.files);
+          setSelectedFiles(prev => [...prev, ...newFiles]);
       }
+  };
+
+  // פונקציה למחיקת קובץ שנבחר בטעות
+  const removeFile = (index) => {
+      setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
@@ -115,10 +121,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         }
     }
 
-    // 👇 שינוי 2: צירוף כל הקבצים שנבחרו ל-FormData
     if (selectedFiles.length > 0) {
         selectedFiles.forEach((file) => {
-            data.append('files', file); // השרת שלנו עם upload.any() יקבל את זה
+            data.append('files', file);
         });
     }
 
@@ -151,22 +156,16 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   };
 
   return (
-    // z-[100] מבטיח שהמודל יהיה מעל הכל, גם מעל הטאבים
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-60 p-4 backdrop-blur-sm">
-      
-      {/* w-[95%] מבטיח רווח בצדדים בפלאפון, max-h-[80vh] משאיר מקום למעלה ולמטה */}
       <div className="bg-white w-[95%] max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[80vh] animate-scale-in overflow-hidden">
         
-        {/* --- Header --- */}
         <div className="flex justify-between items-center p-4 border-b bg-gray-50 shrink-0">
             <h2 className="text-xl font-bold text-[#714B67]">{t.create_new_task || "Create Task"}</h2>
             <button onClick={handleClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={20}/></button>
         </div>
 
-        {/* --- Scrollable Content --- */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
             
-            {/* 1. מתי לבצע? */}
             <div className="bg-white p-4 rounded-xl border border-[#714B67] shadow-sm">
                 <label className="block text-sm font-bold text-[#714B67] mb-2 flex items-center gap-2">
                     <Calendar size={18}/> {t.frequency_label || "Frequency / Date"}
@@ -186,11 +185,11 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 <div className="animate-fade-in">
                     <div>
                         <label className="text-xs font-bold text-gray-500 mb-1 block">
-                            {frequency === 'Once' ? (t.pick_date || "Pick Date") : (t.start_date || "Start Date")}
+                            {frequency === 'Once' ? (t.pick_date || "Pick Date & Time") : (t.start_date || "Start Date")}
                         </label>
-                        {/* תיקון שדה התאריך: min-w-0 מונע גלישה */}
                         <div className="relative w-full">
-                            <input type="date" className="w-full p-2 border border-[#714B67] rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-purple-200 min-w-0" 
+                            {/* 👇 שינוי: datetime-local כדי לאפשר בחירת שעה */}
+                            <input type="datetime-local" className="w-full p-2 border border-[#714B67] rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-purple-200 min-w-0" 
                                 value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
                             />
                         </div>
@@ -199,7 +198,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                     {frequency === 'Weekly' && (
                         <div className="mt-3">
                             <label className="text-xs font-bold text-gray-500 mb-2 block">{t.pick_days || "Select Days"}</label>
-                            {/* רשת כפתורים מסודרת */}
                             <div className="grid grid-cols-7 gap-1 text-center">
                                 {currentDays.map((day, index) => (
                                     <button type="button" key={index} onClick={() => toggleDay(index)} 
@@ -230,7 +228,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 </div>
             </div>
 
-            {/* 2. פרטי המשימה */}
             <div>
                 <label className="text-sm font-bold text-gray-700 block mb-1">{t.task_title_label}</label>
                 <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition" 
@@ -258,21 +255,17 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                  </div>
             </div>
 
-            {/* בחירת עובד - Assign To */}
-            {/* 👇 התיקון לקריסה: בדיקה ש-currentUser קיים לפני הגישה אליו */}
             {currentUser && currentUser.role !== 'EMPLOYEE' && (
                 <div>
                     <label className="text-sm font-bold text-gray-700 block mb-1">{t.assign_to_label}</label>
                     <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
                         value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
-                        {/* שימוש בסימן שאלה כדי למנוע קריסה אם ה-id לא קיים לרגע */}
                         <option value={currentUser.id}>{t.assign_self}</option>
                         {teamMembers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                     </select>
                 </div>
             )}
 
-            {/* נכס */}
             <div className="border rounded-xl p-3 bg-gray-50">
                  <label className="text-xs font-bold text-gray-500 mb-2 block flex items-center gap-1"><Box size={14}/> {t.select_asset_title || "Asset (Optional)"}</label>
                  <div className="flex gap-2">
@@ -289,7 +282,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                  </div>
             </div>
 
-            {/* תיאור ותמונה */}
             <div>
                 <label className="text-sm font-bold text-gray-700 block mb-1">{t.description_label}</label>
                 <textarea className="w-full p-3 border rounded-lg bg-gray-50 h-20 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-[#714B67]" 
@@ -300,7 +292,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 <label className="text-sm font-bold text-gray-700 block mb-1 flex items-center gap-1">
                     <Camera size={16}/> {t.add_image || "Add Photos/Video"}
                 </label>
-                {/* 👇 שינוי 3: Input שתומך ב-Multiple וב-Video */}
                 <input 
                     type="file" 
                     multiple 
@@ -308,16 +299,22 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                     onChange={handleFileChange} 
                     className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
                 />
+                
+                {/* תצוגת הקבצים שנבחרו עם אפשרות מחיקה */}
                 {selectedFiles.length > 0 && (
-                    <p className="text-xs text-green-600 mt-1 font-semibold">
-                        {selectedFiles.length} files selected
-                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        {selectedFiles.map((f, i) => (
+                            <div key={i} className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs">
+                                <span className="truncate max-w-[150px]">{f.name}</span>
+                                <button onClick={() => removeFile(i)} className="text-red-500 hover:text-red-700"><X size={12}/></button>
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
 
         </div>
 
-        {/* --- Footer --- */}
         <div className="p-4 border-t bg-gray-50 shrink-0">
             <button onClick={handleSubmit} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition transform active:scale-95 text-lg">
                 {t.save_task_btn || "Create Task"}
