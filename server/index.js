@@ -143,13 +143,19 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// 👇 הפונקציה המעודכנת לתיקון בסיס הנתונים (כולל תיקון שעה)
 app.get('/fix-db', async (req, res) => {
     try {
         const client = await pool.connect();
         try {
+            // הוספת עמודות לתמונות אם חסרות
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS images TEXT[]');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_image_url TEXT');
-            res.send("✅ Database updated successfully! Columns 'images' and 'completion_image_url' added.");
+            
+            // 👇 השורה הקריטית: הופכת את התאריך לתאריך+שעה
+            await client.query('ALTER TABLE tasks ALTER COLUMN due_date TYPE TIMESTAMP WITHOUT TIME ZONE');
+            
+            res.send("✅ Database updated! 'due_date' is now TIMESTAMP (supports exact time).");
         } finally {
             client.release();
         }

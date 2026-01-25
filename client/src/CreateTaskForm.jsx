@@ -78,7 +78,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     }));
   };
 
-  // 👇 שינוי: הוספת קבצים לרשימה הקיימת במקום החלפה
+  // 👇 הפונקציה המעודכנת: מוסיפה קבצים לרשימה הקיימת
   const handleFileChange = (e) => {
       if (e.target.files) {
           const newFiles = Array.from(e.target.files);
@@ -190,7 +190,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                         <div className="relative w-full">
                             {/* 👇 שינוי: datetime-local כדי לאפשר בחירת שעה */}
                             <input type="datetime-local" className="w-full p-2 border border-[#714B67] rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-purple-200 min-w-0" 
-                                value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
+                             value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
                             />
                         </div>
                     </div>

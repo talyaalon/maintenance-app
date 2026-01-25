@@ -13,16 +13,17 @@ const getLocale = (lang) => {
     return 'en-US';
 };
 
+// 👇 עיצוב מעודכן: סגול נכון (#714B67) וגדלים מותאמים לנייד
 const calendarStyles = `
-  .react-calendar { width: 95%; max-width: 800px; margin: 0 auto; border: none; font-family: inherit; background: white; border-radius: 1.5rem; padding: 1.5rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
-  .react-calendar__navigation button { font-size: 1.2rem; font-weight: bold; color: #4c1d95; }
-  .react-calendar__month-view__weekdays { text-align: center; text-transform: uppercase; font-weight: bold; font-size: 0.85em; color: #6b7280; margin-bottom: 10px; }
-  .react-calendar__tile { height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 10px; border-radius: 12px; font-size: 1rem; }
-  .react-calendar__tile:hover { background-color: #f3f4f6; }
-  .react-calendar__tile--now { background: #f3e8ff !important; color: #714B67; font-weight: bold; border: 1px solid #d8b4fe; }
+  .react-calendar { width: 100%; border: none; font-family: inherit; background: white; border-radius: 1rem; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+  .react-calendar__navigation button { font-size: 1.1rem; font-weight: bold; color: #714B67; }
+  .react-calendar__month-view__weekdays { text-align: center; font-size: 0.8em; color: #6b7280; }
+  .react-calendar__tile { height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 5px; border-radius: 8px; font-size: 0.9rem; }
+  .react-calendar__tile:hover { background-color: #f9f9f9; }
+  .react-calendar__tile--now { background: #fdf4ff !important; color: #714B67; border: 1px solid #714B67; }
   .react-calendar__tile--active { background: #714B67 !important; color: white !important; }
-  .task-count-badge { font-size: 10px; background-color: #e5e7eb; color: #374151; padding: 2px 6px; border-radius: 99px; margin-top: 4px; font-weight: bold; }
-  .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.2); color: white; }
+  .task-count-badge { font-size: 9px; background-color: #e5e7eb; color: #374151; padding: 1px 5px; border-radius: 99px; margin-top: 2px; }
+  .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.3); color: white; }
 `;
 
 const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
