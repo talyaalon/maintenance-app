@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt'); // Add this line!
+const bcrypt = require('bcrypt');
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -7,12 +7,35 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const nodemailer = require('nodemailer');
 const xlsx = require('xlsx');
-const multer = require('multer');
 const fs = require('fs');
+
+// 👇 ודאי ש-multer מופיע רק פעם אחת כאן
+const multer = require('multer');
+
+// ייבוא Cloudinary
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
+
+// 👇 כאן את מדביקה את הפרטים שהעתקת מ-Cloudinary
+cloudinary.config({
+  cloud_name: 'dojnc3j0r',
+  api_key: '133411631835124',
+  api_secret: '-7M6Z0dvS0fPFkQiEuWj66FWPXM'
+});
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'maintenance_app', // שם התיקייה שתיווצר בתוך Cloudinary
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+  },
+});
+
+const upload = multer({ storage: storage });
 
 // --- הגדרת המייל (Brevo SMTP) ---
 console.log("📧 Configuring Email using Brevo SMTP...");
@@ -100,19 +123,7 @@ const sendWelcomeEmail = async (email, fullName, password, role, managerName) =>
     catch (error) { console.error("❌ Error sending email:", error); }
 };
 
-// --- הגדרת קבצים ---
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = 'uploads/';
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-const upload = multer({ storage: storage });
+
 
 app.use(cors());
 app.use(express.json());
@@ -479,10 +490,11 @@ app.get('/tasks', authenticateToken, async (req, res) => {
     } catch (err) { console.error(err); res.sendStatus(500); }
 });
 
-// --- יצירת משימה חדשה (Create Task) - גרסה מתוקנת וחסינה ---
-app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, res) => {
+// --- יצירת משימה חדשה (Create Task) - מעודכן ל-Cloudinary ולריבוי תמונות ---
+app.post('/tasks', authenticateToken, upload.array('task_images', 5), async (req, res) => {
   try {
-    const creationImageUrl = req.file ? `https://maintenance-app-h84v.onrender.com/uploads/${req.file.filename}` : null;
+    // קבלת רשימת ה-URLים מ-Cloudinary (במקום קובץ בודד)
+    const imageUrls = req.files ? req.files.map(file => file.path) : [];
     
     // שליפת הנתונים מהבקשה
     let { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id } = req.body;
@@ -490,12 +502,12 @@ app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, r
     // --- סניטציה (ניקוי נתונים) למניעת קריסות ---
     
     // 1. טיפול במיקום (חובה שיהיה מספר)
-    if (location_id === '' || location_id === 'undefined' || location_id === 'null') {
+    if (!location_id || location_id === '' || location_id === 'undefined' || location_id === 'null') {
         return res.status(400).json({ error: "Location is required (חובה לבחור מיקום)" });
     }
     
     // 2. טיפול בנכס (אם ריק - שיהיה NULL)
-    if (asset_id === '' || asset_id === 'undefined' || asset_id === 'null') {
+    if (!asset_id || asset_id === '' || asset_id === 'undefined' || asset_id === 'null') {
         asset_id = null;
     }
 
@@ -511,14 +523,15 @@ app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, r
 
     const isRecurring = is_recurring === 'true';
     
-    console.log("📝 Creating Task:", { title, location_id, asset_id, worker_id, due_date }); // לוג לבדיקה
+    console.log("📝 Creating Task via Cloudinary:", { title, imageUrls }); // לוג לבדיקה
 
     // --- משימה חד פעמית ---
     if (!isRecurring) {
+        // שימי לב: שינינו את העמודה מ-creation_image_url ל-images
         await pool.query(
-            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status, asset_id) 
+            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
-            [title, location_id, worker_id, urgency, due_date, description, creationImageUrl, asset_id]
+            [title, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id] 
         );
         return res.json({ message: "Task created successfully" });
     }
@@ -562,19 +575,19 @@ app.post('/tasks', authenticateToken, upload.single('task_image'), async (req, r
         return res.status(400).json({ error: "No dates matched the recurring pattern!" });
     }
 
-    // שמירה בבת אחת (כולל asset_id)
+    // שמירה בבת אחת (כולל asset_id ומערך התמונות)
     for (const date of tasksToInsert) {
         await pool.query(
-            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, creation_image_url, status, asset_id) 
+            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
-            [title + ' (Recurring)', location_id, worker_id, urgency, date, description, creationImageUrl, asset_id]
+            [title + ' (Recurring)', location_id, worker_id, urgency, date, description, imageUrls, asset_id]
         );
     }
     
     res.json({ message: `Created ${tasksToInsert.length} recurring tasks` });
 
   } catch (err) { 
-      console.error("❌ Error creating task:", err); // זה יציג את השגיאה המדויקת בלוגים של Render
+      console.error("❌ Error creating task:", err); 
       res.status(500).json({ error: "Server Error: " + err.message }); 
   }
 });
