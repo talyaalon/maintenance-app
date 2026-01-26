@@ -7,13 +7,7 @@ import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
 import TaskCard from './TaskCard';
 
-const getLocale = (lang) => {
-    if (lang === 'he') return 'he-IL';
-    if (lang === 'th') return 'th-TH';
-    return 'en-US';
-};
-
-// 👇 עיצוב מעודכן: סגול נכון (#714B67) וגדלים מותאמים לנייד
+// 👇 עיצוב מותאם ללוח שנה (סגול נכון + גודל מותאם למובייל)
 const calendarStyles = `
   .react-calendar { width: 100%; border: none; font-family: inherit; background: white; border-radius: 1rem; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
   .react-calendar__navigation button { font-size: 1.1rem; font-weight: bold; color: #714B67; }
@@ -50,9 +44,9 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       if (viewMode === 'daily') {
           return (
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto">
-                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-purple-100 text-center mb-6">
+                  <div className="bg-white p-4 rounded-2xl shadow-sm border border-purple-50 text-center mb-6">
                       <h3 className="text-xl font-bold text-gray-800">{t.tab_todo}</h3>
-                      <p className="text-purple-600 font-medium">{format(new Date(), 'dd/MM/yyyy')}</p>
+                      <p className="text-[#714B67] font-medium">{format(new Date(), 'dd/MM/yyyy')}</p>
                   </div>
                   {pendingTasks.length === 0 ? (
                       <div className="text-center py-10 opacity-70">
@@ -84,8 +78,8 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                       const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(parseISO(t.due_date), day));
                       const isToday = isSameDay(day, new Date());
                       return (
-                          <div key={day.toString()} className={`rounded-xl border transition-all ${isToday ? 'border-purple-300 shadow-md bg-purple-50' : 'border-gray-200 bg-white'}`}>
-                              <div className={`p-3 font-bold flex justify-between items-center ${isToday ? 'text-purple-800' : 'text-gray-600'}`}>
+                          <div key={day.toString()} className={`rounded-xl border transition-all ${isToday ? 'border-[#714B67] shadow-md bg-[#fdf4ff]' : 'border-gray-200 bg-white'}`}>
+                              <div className={`p-3 font-bold flex justify-between items-center ${isToday ? 'text-[#714B67]' : 'text-gray-600'}`}>
                                   <span>{format(day, 'EEEE')}</span>
                                   <span className="text-sm opacity-70">{format(day, 'dd/MM')}</span>
                               </div>
@@ -173,7 +167,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                 )}
                 
                 {isTeamView && (
-                    <button onClick={() => setShowCreateModal(true)} className="p-2 bg-[#714B67] text-white rounded-full hover:#5a3b52 transition shadow-sm">
+                    <button onClick={() => setShowCreateModal(true)} className="p-2 bg-[#714B67] text-white rounded-full hover:bg-[#5a3b52] transition shadow-sm">
                         <Plus size={20} />
                     </button>
                 )}
@@ -194,6 +188,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           />
       )}
 
+      {/* 👇 תיקון צבעי הטאבים */}
       <div className="flex bg-white p-1.5 rounded-2xl shadow-sm mb-8 mx-auto max-w-3xl">
           <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={pendingTasks.length} />
           <TabButton active={mainTab === 'waiting'} onClick={() => setMainTab('waiting')} label={t.tab_waiting} icon={<AlertCircle size={18}/>} count={waitingTasks.length} color="orange" />
@@ -217,7 +212,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       {!isTeamView && (
         <button 
             onClick={() => setShowCreateModal(true)} 
-            className="fixed bottom-24 right-6 w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:#5a3b52 transition transform hover:scale-105 active:scale-95"
+            className="fixed bottom-24 right-6 w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:bg-[#5a3b52] transition transform hover:scale-105 active:scale-95"
         >
             <Plus size={32} />
         </button>
@@ -227,20 +222,26 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   );
 };
 
+// 👇 תיקון כפתור הטאב - שימוש בצבע המדויק
 const TabButton = ({ active, onClick, label, icon, count, color = 'purple' }) => (
-    <button onClick={onClick} className={`flex-1 flex flex-col items-center py-3 rounded-xl transition-all ${active ? `bg-${color}-50 text-${color}-700 shadow-inner` : 'text-gray-400 hover:bg-gray-50'}`}>
+    <button onClick={onClick} className={`flex-1 flex flex-col items-center py-3 rounded-xl transition-all ${active ? (color === 'purple' ? 'bg-[#fdf4ff] text-[#714B67]' : `bg-${color}-50 text-${color}-700`) : 'text-gray-400 hover:bg-gray-50'}`}>
         <div className={`flex items-center gap-2 mb-1 ${active ? 'font-bold' : ''}`}>{icon}<span className="text-sm">{label}</span></div>
-        <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${active ? `bg-${color}-200 text-${color}-800` : 'bg-gray-100 text-gray-500'}`}>{count}</span>
+        <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${active ? (color === 'purple' ? 'bg-white border border-[#714B67] text-[#714B67]' : `bg-${color}-200 text-${color}-800`) : 'bg-gray-100 text-gray-500'}`}>{count}</span>
     </button>
 );
 
+// 👇 תיקון כפתורי התצוגה - שימוש בצבע המדויק
 const ViewBtn = ({ active, onClick, label }) => (
-    <button onClick={onClick} className={`px-6 py-2 text-sm rounded-lg transition-all ${active ? 'bg-white shadow text-purple-700 font-bold transform scale-105' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
+    <button onClick={onClick} className={`px-6 py-2 text-sm rounded-lg transition-all ${active ? 'bg-white shadow text-[#714B67] font-bold transform scale-105' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
 );
 
+// --- מודל פרטי משימה מעודכן (תומך בריבוי קבצים בסיום) ---
 const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const [note, setNote] = useState('');
-    const [file, setFile] = useState(null);
+    
+    // 👇 שינוי: תמיכה בריבוי קבצים (מערך)
+    const [selectedFiles, setSelectedFiles] = useState([]);
+    
     const [followUpDate, setFollowUpDate] = useState('');
     const [mode, setMode] = useState('view'); 
     const [showSuccess, setShowSuccess] = useState(false);
@@ -248,11 +249,26 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS') && task.status === 'WAITING_APPROVAL';
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
 
+    // 👇 פונקציית בחירת קבצים מרובים
+    const handleFileChange = (e) => {
+        if (e.target.files) {
+            setSelectedFiles(prev => [...prev, ...Array.from(e.target.files)]);
+        }
+    };
+
+    const removeFile = (index) => setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+
     const handleComplete = async () => {
-        if (!note && !file) return alert(t.alert_required || "Required field");
+        if (!note && selectedFiles.length === 0) return alert(t.alert_required || "Required field");
+        
         const formData = new FormData();
         formData.append('completion_note', note);
-        if (file) formData.append('completion_image', file);
+        
+        // 👇 הוספת כל הקבצים ל-FormData
+        selectedFiles.forEach(file => {
+            formData.append('files', file);
+        });
+
         try {
             const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/complete`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
             if(res.ok) { setShowSuccess(true); setTimeout(() => { setShowSuccess(false); onRefresh(); onClose(); }, 1500); }
@@ -283,7 +299,6 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
             <div className="bg-white w-full sm:w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
                 <div className="bg-gray-50 p-4 border-b flex justify-between items-start sticky top-0 bg-white z-10">
                     <div>
-                        {/* 👇 הוספת הקוד ליד הכותרת */}
                         <h2 className="text-xl font-bold text-gray-900">
                             {task.title}
                             {task.asset_code && <span className="text-gray-400 font-normal ml-2 text-base"> - {task.asset_code}</span>}
@@ -293,6 +308,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                 </div>
                 
                 <div className="p-6 space-y-6 pb-32">
+                    
                     {(task.asset_name || task.asset_code) && (
                         <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 shadow-sm">
                             <div className="flex items-center gap-2 mb-2">
@@ -314,7 +330,6 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     )}
 
                     <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
-                        {/* 👇 תצוגת שעה */}
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.date_label}</span><span className="font-medium">{format(parseISO(task.due_date), 'dd/MM/yyyy HH:mm')}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.urgency_label || "Urgency"}</span><span className={`px-2 py-0.5 rounded text-xs font-bold ${task.urgency === 'High' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{task.urgency}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.location}</span><span className="font-medium">{task.location_name || '-'}</span></div>
@@ -325,9 +340,10 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     </div>
                     {task.description && <div className="bg-blue-50 p-3 rounded-lg border border-blue-100"><span className="block text-xs text-blue-600 font-bold mb-1">{t.manager_notes}:</span><p className="text-sm text-blue-900 whitespace-pre-wrap">{task.description}</p></div>}
                     
+                    {/* גלריית תמונות יצירה */}
                     {task.images && task.images.length > 0 && (
                         <div>
-                            <span className="block text-xs text-gray-400 uppercase font-bold mb-2">{t.has_image || "Media"}</span>
+                            <span className="block text-xs text-gray-400 uppercase font-bold mb-2">{t.has_image || "Task Media"}</span>
                             <div className="grid grid-cols-2 gap-2">
                                 {task.images.map((url, i) => (
                                     isVideo(url) ? (
@@ -345,7 +361,32 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                         </div>
                     )}
 
-                    {task.completion_note && <div className="bg-orange-50 p-3 rounded-lg border border-orange-100"><span className="block text-xs text-orange-600 font-bold mb-1">{t.worker_report}:</span><p className="text-sm text-orange-900">{task.completion_note}</p>{task.completion_image_url && <img src={task.completion_image_url} onClick={() => openMedia(task.completion_image_url)} className="w-full h-32 object-cover rounded-lg mt-2 border cursor-pointer" />}</div>}
+                    {/* דוח ביצוע (כולל תמונות סיום) */}
+                    {task.completion_note && (
+                        <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
+                            <span className="block text-xs text-orange-600 font-bold mb-1">{t.worker_report}:</span>
+                            <p className="text-sm text-orange-900 mb-2">{task.completion_note}</p>
+                            
+                            {/* תמיכה בתמונות סיום מרובות (חדש) */}
+                            {task.completion_images && task.completion_images.length > 0 ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                    {task.completion_images.map((url, i) => (
+                                        isVideo(url) ? (
+                                            <div key={i} className="relative group cursor-pointer" onClick={() => openMedia(url)}>
+                                                <video src={url} className="w-full h-24 object-cover rounded-lg border bg-black" />
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/30"><Video className="text-white" size={20}/></div>
+                                            </div>
+                                        ) : (
+                                            <img key={i} src={url} onClick={() => openMedia(url)} className="w-full h-24 object-cover rounded-lg border cursor-pointer" />
+                                        )
+                                    ))}
+                                </div>
+                            ) : task.completion_image_url && (
+                                // תמיכה לאחור בגרסאות ישנות (תמונה בודדת)
+                                <img src={task.completion_image_url} onClick={() => openMedia(task.completion_image_url)} className="w-full h-32 object-cover rounded-lg mt-2 border cursor-pointer" />
+                            )}
+                        </div>
+                    )}
                     
                     <div className="pt-4">
                         {canComplete && mode === 'view' && (
@@ -354,14 +395,32 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                                 <button onClick={() => setMode('followup')} className="bg-blue-600 text-white py-3 rounded-xl font-bold shadow-md hover:bg-blue-700">{t.followup_task_btn}</button>
                             </div>
                         )}
+                        
+                        {/* 👇 אזור סיום המשימה - הוספת בחירה מרובה */}
                         {mode === 'complete' && (
                             <div className="space-y-3 bg-gray-50 p-4 rounded-xl">
                                 <h4 className="font-bold text-gray-700">{t.report_execution}</h4>
                                 <textarea placeholder={t.what_was_done} className="w-full p-3 border rounded-lg" value={note} onChange={e => setNote(e.target.value)} />
-                                <input type="file" onChange={e => setFile(e.target.files[0])} className="text-xs"/>
+                                
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 mb-1 flex items-center gap-1"><Camera size={14}/> {t.add_image || "Add Photos/Video"}</label>
+                                    <input type="file" multiple accept="image/*,video/*" onChange={handleFileChange} className="w-full text-xs" />
+                                    {selectedFiles.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            {selectedFiles.map((f, i) => (
+                                                <div key={i} className="flex items-center gap-1 bg-gray-200 px-2 py-1 rounded text-[10px]">
+                                                    <span className="truncate max-w-[100px]">{f.name}</span>
+                                                    <button onClick={() => removeFile(i)} className="text-red-500"><X size={10}/></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="flex gap-2"><button onClick={() => setMode('view')} className="flex-1 py-2 border rounded-lg bg-white">{t.cancel}</button><button onClick={handleComplete} className="flex-1 py-2 bg-green-600 text-white rounded-lg font-bold">{t.send_for_approval}</button></div>
                             </div>
                         )}
+
                         {mode === 'followup' && (
                             <div className="space-y-3 bg-gray-50 p-4 rounded-xl">
                                 <h4 className="font-bold text-gray-700">{t.followup_task_btn}</h4>
