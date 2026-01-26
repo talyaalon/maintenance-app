@@ -1,3 +1,5 @@
+import { requestForToken, onMessageListener } from './firebase';
+import { Toaster, toast } from 'react-hot-toast'; // אם אין לך react-hot-toast, תוכלי להשתמש ב-alert רגיל
 import React, { useEffect, useState } from 'react';
 import { LayoutDashboard, Users, UserCircle, Plus, Settings } from 'lucide-react'; 
 import Login from './Login';
@@ -71,6 +73,30 @@ function App() {
     // 3. ניקוי הטיימר ביציאה
     return () => clearInterval(interval);
   }, [user]);
+
+  // 👇 הוספת הקוד הזה בתוך App.jsx
+  
+  useEffect(() => {
+    // אנחנו מריצים את זה רק אם יש משתמש מחובר (user) ויש לו טוקן אימות (token)
+    if (user && token) {
+        
+        // 1. הפעלת הפונקציה שמבקשת אישור ושולחת את הטוקן לשרת
+        requestForToken(user.id, token);
+        
+        // 2. האזנה להודעות שנכנסות בזמן שהמשתמש בתוך האפליקציה
+        onMessageListener().then(payload => {
+            // כאן נקפיץ הודעה למשתמש
+            // אם אין לך ספריית הודעות, פשוט תשמשי ב-alert:
+            alert(`הודעה חדשה: ${payload.notification.title}\n${payload.notification.body}`);
+            
+            // אם בא לך משהו יפה יותר ואין לך toast, פשוט תשאירי את ה-alert למעלה
+            console.log("הודעה התקבלה:", payload);
+        }).catch(err => console.log('failed: ', err));
+    }
+  }, [user, token]); // הפונקציה תרוץ בכל פעם שהמשתמש מתחבר מחדש
+
+
+
 
   // לוגיקה לכיוון הטקסט (RTL/LTR)
   const isRTL = lang === 'he';
