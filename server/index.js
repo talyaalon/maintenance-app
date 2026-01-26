@@ -1,3 +1,10 @@
+// 👇 להוסיף בראש הקובץ, מתחת לשאר ה-require
+const admin = require('firebase-admin');
+const serviceAccount = require('./serviceAccountKey.json');
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 const express = require('express');
@@ -535,6 +542,28 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         );
     }
     
+    // 👇 קוד התראה לעובד - להדביק לפני res.json
+    try {
+        // 1. נבדוק מי העובד שקיבל את המשימה
+        const workerRes = await pool.query('SELECT device_token FROM users WHERE id = $1', [worker_id]);
+        const workerToken = workerRes.rows[0]?.device_token;
+
+        // 2. אם יש לו טוקן, נשלח לו הודעה
+        if (workerToken) {
+            await admin.messaging().send({
+                token: workerToken,
+                notification: {
+                    title: 'משימה חדשה! 📋',
+                    body: `הוקצתה לך משימה חדשה: ${title}`
+                },
+                webpush: { fcmOptions: { link: '/' } }
+            });
+            console.log("🔔 Notification sent to worker!");
+        }
+    } catch (err) {
+        console.error("⚠️ Failed to send notification:", err.message);
+    }
+
     res.json({ message: `Created ${tasksToInsert.length} recurring tasks` });
 
   } catch (err) { 
@@ -558,6 +587,36 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
             `UPDATE tasks SET status = 'WAITING_APPROVAL', completion_note = $1, completion_image_url = $2 WHERE id = $3`,
             [completion_note, completionImageUrl, id]
         );
+
+        // 👇 קוד התראה למנהל - להדביק לפני res.json
+        try {
+            // 1. נמצא מי המנהל של העובד
+            const managerQuery = `
+                SELECT m.device_token 
+                FROM tasks t
+                JOIN users w ON t.worker_id = w.id
+                JOIN users m ON w.parent_manager_id = m.id
+                WHERE t.id = $1
+            `;
+            const managerRes = await pool.query(managerQuery, [id]);
+            const managerToken = managerRes.rows[0]?.device_token;
+
+            // 2. נשלח למנהל הודעה
+            if (managerToken) {
+                await admin.messaging().send({
+                    token: managerToken,
+                    notification: {
+                        title: 'משימה ממתינה לאישור ✅',
+                        body: 'עובד סיים משימה. היכנס לאשר.'
+                    },
+                    webpush: { fcmOptions: { link: '/' } }
+                });
+                console.log("🔔 Notification sent to manager!");
+            }
+        } catch (err) {
+            console.error("⚠️ Failed to send notification:", err.message);
+        }
+        
         res.json({ success: true });
     } catch (err) { res.status(500).send('Error'); }
 });
