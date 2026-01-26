@@ -143,16 +143,19 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// 1. עדכון מסד הנתונים - הוספת עמודה לתמונות סיום מרובות
+// 👇 הפונקציה המעודכנת לתיקון בסיס הנתונים (כולל תיקון שעה)
 app.get('/fix-db', async (req, res) => {
     try {
         const client = await pool.connect();
         try {
+            // הוספת עמודות לתמונות אם חסרות
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS images TEXT[]');
-            // 👇 עמודה חדשה למערך תמונות סיום
-            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_images TEXT[]'); 
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_image_url TEXT');
+            
+            // 👇 השורה הקריטית: הופכת את התאריך לתאריך+שעה
             await client.query('ALTER TABLE tasks ALTER COLUMN due_date TYPE TIMESTAMP WITHOUT TIME ZONE');
-            res.send("✅ Database updated! Added 'completion_images' array support.");
+            
+            res.send("✅ Database updated! 'due_date' is now TIMESTAMP (supports exact time).");
         } finally {
             client.release();
         }
@@ -540,33 +543,24 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   }
 });
 
-// 2. פונקציית סיום משימה מעודכנת - תומכת בריבוי קבצים
-// 👇 שימי לב: שינינו ל-upload.any() במקום upload.single()
-app.put('/tasks/:id/complete', authenticateToken, upload.any(), async (req, res) => {
+app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_image'), async (req, res) => {
     try {
         const { id } = req.params;
         const { completion_note } = req.body;
         
-        // שמירת כל הקבצים שהועלו (תמונות + וידאו)
-        const files = req.files || [];
-        const completionImageUrls = files.map(file => file.path);
-
-        if (completionImageUrls.length === 0 && !completion_note) {
+        if (!req.file && !completion_note) {
             return res.status(400).json({ error: "Required image or note" });
         }
 
-        // שימוש בעמודה החדשה completion_images
+        const completionImageUrl = req.file ? req.file.path : null;
+
         await pool.query(
-            `UPDATE tasks SET status = 'WAITING_APPROVAL', completion_note = $1, completion_images = $2 WHERE id = $3`,
-            [completion_note, completionImageUrls, id]
+            `UPDATE tasks SET status = 'WAITING_APPROVAL', completion_note = $1, completion_image_url = $2 WHERE id = $3`,
+            [completion_note, completionImageUrl, id]
         );
         res.json({ success: true });
-    } catch (err) { 
-        console.error(err);
-        res.status(500).send('Error completing task'); 
-    }
+    } catch (err) { res.status(500).send('Error'); }
 });
-
 
 app.put('/tasks/:id/approve', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
