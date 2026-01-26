@@ -94,7 +94,7 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
 
           <button
             type="submit"
-            className="w-full py-3.5 bg-[#714B67] hover:bg-purple-800 text-white font-bold rounded-xl transition-all duration-200 shadow-lg mt-2 flex justify-center items-center gap-2"
+            className="w-full py-3.5 bg-[#714B67] hover:#5a3b52 text-white font-bold rounded-xl transition-all duration-200 shadow-lg mt-2 flex justify-center items-center gap-2"
           >
             {t.login_btn}
           </button>

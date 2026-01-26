@@ -138,7 +138,7 @@ const AddUserForm = ({ currentUser, onClose, t }) => {
 
           <div className="flex gap-2 mt-4">
             <button type="button" onClick={onClose} className="flex-1 py-2 border rounded hover:bg-gray-50">{t.cancel}</button>
-            <button type="submit" disabled={isSubmitting} className="flex-1 py-2 bg-purple-700 text-white rounded hover:bg-purple-800 disabled:opacity-50">
+            <button type="submit" disabled={isSubmitting} className="flex-1 py-2 bg-purple-700 text-white rounded hover:#5a3b52 disabled:opacity-50">
                 {isSubmitting ? (t.creating || 'Creating...') : (t.create_btn || 'Create')}
             </button>
           </div>

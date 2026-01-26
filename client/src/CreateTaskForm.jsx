@@ -316,7 +316,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         </div>
 
         <div className="p-4 border-t bg-gray-50 shrink-0">
-            <button onClick={handleSubmit} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:bg-purple-800 transition transform active:scale-95 text-lg">
+            <button onClick={handleSubmit} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:#5a3b52 transition transform active:scale-95 text-lg">
                 {t.save_task_btn || "Create Task"}
             </button>
         </div>

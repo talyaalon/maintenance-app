@@ -190,7 +190,7 @@ const ConfigurationTab = ({ token, t }) => {
                   <option value="">{t.select_category}...</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <button type="submit" className={`w-full py-2 rounded font-bold text-white shadow ${editAssetId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-[#714B67] hover:bg-purple-800'}`}>
+              <button type="submit" className={`w-full py-2 rounded font-bold text-white shadow ${editAssetId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-[#714B67] hover:#5a3b52'}`}>
                   {editAssetId ? "Update Asset" : t.save_asset_btn}
               </button>
            </form>

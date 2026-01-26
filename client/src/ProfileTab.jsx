@@ -176,7 +176,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
                     </button>
                 </>
             ) : (
-                <button type="button" onClick={() => setIsEditing(true)} className="w-full py-3 bg-[#714B67] text-white rounded-lg hover:bg-purple-800 transition flex justify-center gap-2 items-center">
+                <button type="button" onClick={() => setIsEditing(true)} className="w-full py-3 bg-[#714B67] text-white rounded-lg hover:#5a3b52 transition flex justify-center gap-2 items-center">
                       <Camera size={18} /> {t.edit_profile_btn || "Edit Profile"}
                 </button>
             )}

@@ -173,7 +173,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                 )}
                 
                 {isTeamView && (
-                    <button onClick={() => setShowCreateModal(true)} className="p-2 bg-[#714B67] text-white rounded-full hover:bg-purple-800 transition shadow-sm">
+                    <button onClick={() => setShowCreateModal(true)} className="p-2 bg-[#714B67] text-white rounded-full hover:#5a3b52 transition shadow-sm">
                         <Plus size={20} />
                     </button>
                 )}
@@ -217,7 +217,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       {!isTeamView && (
         <button 
             onClick={() => setShowCreateModal(true)} 
-            className="fixed bottom-24 right-6 w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:bg-purple-800 transition transform hover:scale-105 active:scale-95"
+            className="fixed bottom-24 right-6 w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:#5a3b52 transition transform hover:scale-105 active:scale-95"
         >
             <Plus size={32} />
         </button>
