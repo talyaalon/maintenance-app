@@ -150,24 +150,47 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// 👇 הפונקציה המעודכנת לתיקון בסיס הנתונים (כולל תיקון שעה)
+// פונקציה לעדכון ותיקון בסיס הנתונים
 app.get('/fix-db', async (req, res) => {
     try {
         const client = await pool.connect();
         try {
-            // הוספת עמודות לתמונות אם חסרות
-            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS images TEXT[]');
-            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_image_url TEXT');
+            console.log("🔧 Starting DB Fix...");
             
-            // 👇 השורה הקריטית: הופכת את התאריך לתאריך+שעה
+            // 1. עדכונים לטבלת המשימות (מה שעשינו קודם)
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS images TEXT[]');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_images TEXT[]'); 
             await client.query('ALTER TABLE tasks ALTER COLUMN due_date TYPE TIMESTAMP WITHOUT TIME ZONE');
             
-            res.send("✅ Database updated! 'due_date' is now TIMESTAMP (supports exact time).");
+            // 2. 👇 הנה השורה החדשה שלנו! הוספת עמודה לטוקן בטבלת משתמשים 👇
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token TEXT');
+            
+            console.log("✅ DB Fix Completed!");
+            res.send("✅ Database updated! Added 'completion_images' to tasks AND 'device_token' to users.");
+        } catch (dbError) {
+            console.error("❌ DB Fix Failed:", dbError);
+            res.status(500).send("DB Error: " + dbError.message);
         } finally {
             client.release();
         }
     } catch (e) {
-        res.status(500).send("❌ Error: " + e.message);
+        res.status(500).send("Connection Error: " + e.message);
+    }
+});
+
+// נתיב חדש: שמירת הטוקן של המכשיר
+app.post('/users/device-token', authenticateToken, async (req, res) => {
+    try {
+        const { device_token } = req.body;
+        if (!device_token) {
+            return res.status(400).json({ error: "Token is required" });
+        }
+        await pool.query('UPDATE users SET device_token = $1 WHERE id = $2', [device_token, req.user.id]);
+        console.log(`✅ Saved device token for user ${req.user.id}`); 
+        res.json({ success: true, message: "Token saved" });
+    } catch (e) { 
+        console.error("❌ Error saving device token:", e);
+        res.status(500).send('Error saving token'); 
     }
 });
 
