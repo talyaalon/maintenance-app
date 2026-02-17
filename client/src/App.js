@@ -182,7 +182,22 @@ function App() {
           </div>
       </header>
 
-      <main className="max-w-3xl mx-auto min-h-[80vh]">
+      <main className="max-w-3xl mx-auto min-h-[80vh] pb-24">
+          
+          {/* 👇 כפתור הפעלת התראות - חובה לאייפון 👇 */}
+          <div className="flex justify-center p-4">
+              <button 
+                  onClick={() => {
+                      const currentToken = localStorage.getItem('token');
+                      requestForToken(user.id, currentToken);
+                  }}
+                  className="bg-[#714B67] text-white px-6 py-3 rounded-xl font-bold shadow-lg animate-pulse"
+              >
+                  🔔 לחץ כאן לאישור קבלת התראות
+              </button>
+          </div>
+          {/* 👆 עד כאן הכפתור 👆 */}
+
           {renderContent()}
       </main>
 
