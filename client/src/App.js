@@ -77,23 +77,19 @@ function App() {
   // 👇 הוספת הקוד הזה בתוך App.jsx
   
   useEffect(() => {
-    // אנחנו מריצים את זה רק אם יש משתמש מחובר (user) ויש לו טוקן אימות (token)
+    // 1. קודם כל שולפים את הטוקן מהזיכרון של הדפדפן!
+    const token = localStorage.getItem('token');
+
+    // 2. עכשיו כשהוא מוגדר, אפשר לבדוק אם יש משתמש וטוקן
     if (user && token) {
-        
-        // 1. הפעלת הפונקציה שמבקשת אישור ושולחת את הטוקן לשרת
         requestForToken(user.id, token);
         
-        // 2. האזנה להודעות שנכנסות בזמן שהמשתמש בתוך האפליקציה
         onMessageListener().then(payload => {
-            // כאן נקפיץ הודעה למשתמש
-            // אם אין לך ספריית הודעות, פשוט תשמשי ב-alert:
             alert(`הודעה חדשה: ${payload.notification.title}\n${payload.notification.body}`);
-            
-            // אם בא לך משהו יפה יותר ואין לך toast, פשוט תשאירי את ה-alert למעלה
             console.log("הודעה התקבלה:", payload);
         }).catch(err => console.log('failed: ', err));
     }
-  }, [user, token]); // הפונקציה תרוץ בכל פעם שהמשתמש מתחבר מחדש
+  }, [user]); // שימי לב שמחקתי פה את המילה token מהסוגריים המרובעים!
 
 
 
