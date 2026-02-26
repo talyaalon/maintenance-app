@@ -1,9 +1,21 @@
 const admin = require("firebase-admin");
-const serviceAccount = require("./firebase-service-account.json"); // מוודא שהשם תואם לקובץ שגררת
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+try {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        // אם אנחנו בשרת של Render
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+        console.log("✅ Firebase initialized successfully (Render)");
+    } else {
+        // אם אנחנו במחשב המקומי שלך
+        const serviceAccount = require("./firebase-service-account.json");
+        admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+        console.log("✅ Firebase initialized successfully (Local)");
+    }
+} catch (error) {
+    // השורה הזו מצילה אותך! היא מונעת מהשרת לקרוס גם אם יש בעיה
+    console.log("⚠️ Firebase warning (Server is still running!):", error.message);
+}
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 const express = require('express');
