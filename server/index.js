@@ -430,15 +430,26 @@ app.get('/locations', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).send('Error'); }
 });
 
+// ==========================================
+// ניהול מיקומים (יצירה ועריכה) - מעודכן לשדות דינמיים
+// ==========================================
 app.post('/locations', authenticateToken, async (req, res) => {
   try { 
-      const { name } = req.body;
+      const { name, code, image_url, coordinates, dynamic_fields } = req.body;
+      
       const check = await pool.query('SELECT id FROM locations WHERE name = $1', [name]);
       if (check.rows.length > 0) return res.status(400).json({ error: "Location name already exists" });
 
-      const r = await pool.query('INSERT INTO locations (name, created_by) VALUES ($1, $2) RETURNING *', [name, req.user.id]); 
+      const r = await pool.query(
+          `INSERT INTO locations (name, created_by, code, image_url, coordinates, dynamic_fields) 
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`, 
+          [name, req.user.id, code || null, image_url || null, coordinates || null, dynamic_fields || '[]']
+      ); 
       res.json(r.rows[0]); 
-  } catch (e) { res.status(500).send('Error'); }
+  } catch (e) { 
+      console.error(e); 
+      res.status(500).send('Error saving location'); 
+  }
 });
 
 app.get('/categories', authenticateToken, async (req, res) => {
@@ -460,23 +471,44 @@ app.get('/assets', authenticateToken, async (req, res) => {
     try { const result = await pool.query('SELECT assets.*, categories.name as category_name FROM assets LEFT JOIN categories ON assets.category_id = categories.id ORDER BY assets.code'); res.json(result.rows); } catch (err) { res.status(500).send('Error'); }
 });
 
+// ==========================================
+// ניהול נכסים (יצירה ועריכה) - מעודכן לשיוך מיקום
+// ==========================================
 app.post('/assets', authenticateToken, async (req, res) => {
     try {
-        const { name, code, category_id } = req.body;
-        const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
-        if (check.rows.length > 0) return res.status(400).json({ error: "Asset code already exists" });
+        const { name, code, category_id, location_id } = req.body;
         
-        const result = await pool.query('INSERT INTO assets (name, code, category_id) VALUES ($1, $2, $3) RETURNING *', [name, code, category_id]);
+        if (code) {
+            const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
+            if (check.rows.length > 0) return res.status(400).json({ error: "Asset code already exists" });
+        }
+        
+        const result = await pool.query(
+            `INSERT INTO assets (name, code, category_id, location_id) 
+             VALUES ($1, $2, $3, $4) RETURNING *`, 
+            [name, code, category_id, location_id || null]
+        );
         res.json(result.rows[0]);
-    } catch (err) { res.status(500).send('Error'); }
+    } catch (err) { 
+        console.error(err); 
+        res.status(500).send('Error saving asset'); 
+    }
 });
 
 app.put('/locations/:id', authenticateToken, async (req, res) => {
-    try {
-        const { name } = req.body;
-        await pool.query('UPDATE locations SET name = $1 WHERE id = $2', [name, req.params.id]);
-        res.json({ success: true });
-    } catch (e) { res.status(500).send("Error updating location"); }
+  try {
+      const { name, code, image_url, coordinates, dynamic_fields } = req.body;
+      const r = await pool.query(
+          `UPDATE locations 
+           SET name = $1, code = $2, image_url = $3, coordinates = $4, dynamic_fields = $5
+           WHERE id = $6 RETURNING *`,
+          [name, code || null, image_url || null, coordinates || null, dynamic_fields || '[]', req.params.id]
+      );
+      res.json(r.rows[0]);
+  } catch (e) { 
+      console.error(e); 
+      res.status(500).send('Error updating location'); 
+  }
 });
 
 app.put('/categories/:id', authenticateToken, async (req, res) => {
@@ -486,16 +518,21 @@ app.put('/categories/:id', authenticateToken, async (req, res) => {
         res.json({ success: true });
     } catch (e) { res.status(500).send("Error updating category"); }
 });
-
 app.put('/assets/:id', authenticateToken, async (req, res) => {
     try {
-        const { name, code, category_id } = req.body;
-        await pool.query(
-            'UPDATE assets SET name=$1, code=$2, category_id=$3 WHERE id=$4',
-            [name, code, category_id, req.params.id]
+        const { name, category_id, location_id } = req.body;
+        // שימי לב: אנחנו לא מאפשרים עריכת "קוד" אחרי שנוצר כדי למנוע בלאגן במערכת
+        const result = await pool.query(
+            `UPDATE assets 
+             SET name = $1, category_id = $2, location_id = $3
+             WHERE id = $4 RETURNING *`,
+            [name, category_id, location_id || null, req.params.id]
         );
-        res.json({ success: true });
-    } catch (e) { res.status(500).send("Error updating asset"); }
+        res.json(result.rows[0]);
+    } catch (err) { 
+        console.error(err); 
+        res.status(500).send('Error updating asset'); 
+    }
 });
 
 const deleteItem = async (table, id, res) => {
