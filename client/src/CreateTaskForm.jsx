@@ -69,6 +69,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
       ? assets.filter(a => a.category_id === parseInt(selectedCategory))
       : [];
 
+  // 👇 סינון עובדים בלבד - לא מציג מנהלים ברשימת ההקצאה (סעיף 4.1)
+  const employeesOnly = teamMembers.filter(member => member.role === 'EMPLOYEE');
+
   const toggleDay = (dayIndex) => {
     setFormData(prev => ({ 
         ...prev, 
@@ -78,7 +81,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     }));
   };
 
-  // 👇 הפונקציה המעודכנת: מוסיפה קבצים לרשימה הקיימת
   const handleFileChange = (e) => {
       if (e.target.files) {
           const newFiles = Array.from(e.target.files);
@@ -86,7 +88,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
       }
   };
 
-  // פונקציה למחיקת קובץ שנבחר בטעות
   const removeFile = (index) => {
       setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
@@ -94,6 +95,12 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // 👇 בדיקת שדות חובה לפי סעיף 4.2 ו-4.3
+    if (!formData.title || !formData.due_date || !formData.location_id || !formData.assigned_worker_id) {
+        alert("עליך למלא את כל שדות החובה: תאריך, שם המשימה, מיקום, ובחירת עובד לביצוע.");
+        return; // ה-return הזה קריטי - הוא עוצר את הפונקציה ולא נותן למשימה להישמר!
+    }
+
     const data = new FormData();
     data.append('title', formData.title);
     data.append('urgency', formData.urgency);
@@ -168,7 +175,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             
             <div className="bg-white p-4 rounded-xl border border-[#714B67] shadow-sm">
                 <label className="block text-sm font-bold text-[#714B67] mb-2 flex items-center gap-2">
-                    <Calendar size={18}/> {t.frequency_label || "Frequency / Date"}
+                    <Calendar size={18}/> {t.frequency_label || "Frequency / Date"} 
+                    <span className="text-red-500 ml-1">*</span> {/* כוכבית חובה */}
                 </label>
                 
                 <select 
@@ -188,7 +196,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                             {frequency === 'Once' ? (t.pick_date || "Pick Date & Time") : (t.start_date || "Start Date")}
                         </label>
                         <div className="relative w-full">
-                            {/* 👇 שינוי: datetime-local כדי לאפשר בחירת שעה */}
                             <input type="datetime-local" className="w-full p-2 border border-[#714B67] rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-purple-200 min-w-0" 
                              value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
                             />
@@ -229,7 +236,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             </div>
 
             <div>
-                <label className="text-sm font-bold text-gray-700 block mb-1">{t.task_title_label}</label>
+                <label className="text-sm font-bold text-gray-700 block mb-1">
+                    {t.task_title_label} <span className="text-red-500 ml-1">*</span>
+                </label>
                 <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition" 
                     value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} 
                     placeholder={t.task_title_placeholder}
@@ -238,7 +247,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
             <div className="flex gap-3">
                  <div className="flex-1">
-                    <label className="text-sm font-bold text-gray-700 block mb-1">{t.location}</label>
+                    <label className="text-sm font-bold text-gray-700 block mb-1">
+                        {t.location} <span className="text-red-500 ml-1">*</span>
+                    </label>
                     <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
                         value={formData.location_id} onChange={e => setFormData({...formData, location_id: e.target.value})}>
                         <option value="">{t.select_location}</option>
@@ -257,11 +268,14 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
             {currentUser && currentUser.role !== 'EMPLOYEE' && (
                 <div>
-                    <label className="text-sm font-bold text-gray-700 block mb-1">{t.assign_to_label}</label>
+                    <label className="text-sm font-bold text-gray-700 block mb-1">
+                        {t.assign_to_label} <span className="text-red-500 ml-1">*</span>
+                    </label>
                     <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
                         value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
-                        <option value={currentUser.id}>{t.assign_self}</option>
-                        {teamMembers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                        <option value="">בחר עובד לביצוע המשימה...</option> {/* אופציית ברירת מחדל ריקה */}
+                        {/* שינוי: רינדור רק של עובדים ולא של כל הצוות */}
+                        {employeesOnly.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                     </select>
                 </div>
             )}
@@ -306,7 +320,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                         {selectedFiles.map((f, i) => (
                             <div key={i} className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs">
                                 <span className="truncate max-w-[150px]">{f.name}</span>
-                                <button onClick={() => removeFile(i)} className="text-red-500 hover:text-red-700"><X size={12}/></button>
+                                <button type="button" onClick={() => removeFile(i)} className="text-red-500 hover:text-red-700"><X size={12}/></button>
                             </div>
                         ))}
                     </div>

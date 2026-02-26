@@ -196,8 +196,15 @@ app.post('/users/device-token', authenticateToken, async (req, res) => {
 
 // Login
 app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
   try {
+    // 1. המרה לאותיות קטנות (מוודאים קודם שהמשתמש באמת שלח אימייל כדי למנוע קריסה)
+    const email = req.body.email ? req.body.email.toLowerCase() : '';
+    const { password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: "נא להזין אימייל וסיסמה" });
+    }
+
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) return res.status(400).json({ error: "משתמש לא נמצא" });
     
@@ -275,12 +282,26 @@ app.get('/users', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Server Error'); }
 });
 
+// Create User
 app.post('/users', authenticateToken, async (req, res) => {
   try {
-    const { full_name, email, password, role, phone, parent_manager_id } = req.body;
+    const { full_name, password, role, parent_manager_id } = req.body;
+    let { email, phone } = req.body;
     
+    // 1. המרת אימייל לאותיות קטנות
+    email = email ? email.toLowerCase() : '';
+
     if (!full_name || !email || !password || !role) {
         return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // 2. אימות מספר הטלפון (במידה והוזן)
+    if (phone) {
+        // רגקס (ביטוי רגולרי) שמוודא שיש רק בין 9 ל-15 ספרות
+        const phoneRegex = /^[0-9]{9,15}$/; 
+        if (!phoneRegex.test(phone)) {
+            return res.status(400).json({ error: "מספר הטלפון לא תקין. נא להזין ספרות בלבד (לפחות 9 ספרות)." });
+        }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
