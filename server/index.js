@@ -986,4 +986,27 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
     }
 });
 
+// 👇 נתיב שדרוג מסד הנתונים (להרצה חד-פעמית)
+app.get('/api/upgrade-db', async (req, res) => {
+    try {
+        // שדרוג טבלת קטגוריות
+        await pool.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS code VARCHAR(3);`);
+        
+        // שדרוג טבלת נכסים
+        await pool.query(`ALTER TABLE assets ADD COLUMN IF NOT EXISTS location_id INT;`);
+        await pool.query(`ALTER TABLE assets ADD COLUMN IF NOT EXISTS code VARCHAR(20);`);
+        
+        // שדרוג טבלת מיקומים (כולל שדות דינמיים וקואורדינטות)
+        await pool.query(`ALTER TABLE locations ADD COLUMN IF NOT EXISTS code VARCHAR(50);`);
+        await pool.query(`ALTER TABLE locations ADD COLUMN IF NOT EXISTS image_url TEXT;`);
+        await pool.query(`ALTER TABLE locations ADD COLUMN IF NOT EXISTS coordinates JSON;`);
+        await pool.query(`ALTER TABLE locations ADD COLUMN IF NOT EXISTS dynamic_fields JSONB DEFAULT '[]';`);
+        
+        res.send("✅ Database upgraded successfully! You are ready for the new Configuration Tab.");
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("Error upgrading DB: " + err.message);
+    }
+});
+
 app.listen(port, () => { console.log(`Server running on ${port}`); });
