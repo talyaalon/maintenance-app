@@ -91,9 +91,6 @@ function App() {
     }
   }, [user]); // שימי לב שמחקתי פה את המילה token מהסוגריים המרובעים!
 
-
-
-
   // לוגיקה לכיוון הטקסט (RTL/LTR)
   const isRTL = lang === 'he';
   const dir = isRTL ? 'rtl' : 'ltr';

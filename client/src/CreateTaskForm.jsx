@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { X, User, Calendar, Camera, FileText, Box, RefreshCw, Video, Trash2 } from 'lucide-react';
 
 const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang }) => {
-  // --- סטייט לניהול התדירות והטופס ---
-  const [frequency, setFrequency] = useState('Once'); // Once, Weekly, Monthly, Yearly
-  
+  const [frequency, setFrequency] = useState('Once'); 
   const currentUser = user;
 
-  // פונקציית עזר לקבלת תאריך ושעה נוכחיים בפורמט מתאים ל-input
+  // 👇 תיקון אותיות גדולות/קטנות לתפקידים
+  const userRole = currentUser?.role?.toUpperCase() || '';
+  const isEmployee = userRole === 'EMPLOYEE';
+  const isManager = currentUser && !isEmployee;
+
   const getCurrentDateTime = () => {
       const now = new Date();
       now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -17,10 +19,10 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   const [formData, setFormData] = useState({
     title: '', 
     urgency: 'Normal', 
-    due_date: getCurrentDateTime(), // שינוי: תאריך + שעה
+    due_date: getCurrentDateTime(), 
     location_id: '', 
     asset_id: '', 
-    assigned_worker_id: (currentUser && currentUser.role === 'EMPLOYEE') ? currentUser.id : '',
+    assigned_worker_id: isEmployee ? currentUser.id : '', // שיוך אוטומטי לעובד עצמו אם הוא עובד
     description: '', 
     selected_days: [], 
     recurring_date: 1, 
@@ -28,8 +30,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
-  
-  // נתונים שיגיעו מהשרת
   const [locations, setLocations] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -40,7 +40,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   const daysHe = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
   const currentDays = lang === 'he' ? daysHe : daysEn;
 
-  // --- טעינת נתונים ---
   useEffect(() => {
     const headers = { 'Authorization': `Bearer ${token}` };
 
@@ -53,7 +52,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
         .then(res => res.json()).then(setAssets).catch(err => console.error("Error assets", err));
 
-    if (currentUser && currentUser.role !== 'EMPLOYEE') {
+    if (isManager) {
         if (subordinates && subordinates.length > 0) {
             setTeamMembers(subordinates);
         } else {
@@ -63,14 +62,14 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 .catch(err => console.error("Error users", err));
         }
     }
-  }, [token, currentUser, subordinates]);
+  }, [token, isManager, subordinates]);
 
   const filteredAssets = selectedCategory 
       ? assets.filter(a => a.category_id === parseInt(selectedCategory))
       : [];
 
-  // 👇 סינון עובדים בלבד - לא מציג מנהלים ברשימת ההקצאה (סעיף 4.1)
-  const employeesOnly = teamMembers.filter(member => member.role === 'EMPLOYEE');
+  // 👇 סינון ודאי רק של עובדים (התעלמות מאותיות גדולות/קטנות)
+  const employeesOnly = teamMembers.filter(member => member?.role?.toUpperCase() === 'EMPLOYEE');
 
   const toggleDay = (dayIndex) => {
     setFormData(prev => ({ 
@@ -95,10 +94,10 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // 👇 בדיקת שדות חובה לפי סעיף 4.2 ו-4.3
-    if (!formData.title || !formData.due_date || !formData.location_id || !formData.assigned_worker_id) {
+    // 👇 וידוא שדות חובה (ודורש עובד רק אם זה מנהל)
+    if (!formData.title || !formData.due_date || !formData.location_id || (isManager && !formData.assigned_worker_id)) {
         alert("עליך למלא את כל שדות החובה: תאריך, שם המשימה, מיקום, ובחירת עובד לביצוע.");
-        return; // ה-return הזה קריטי - הוא עוצר את הפונקציה ולא נותן למשימה להישמר!
+        return; 
     }
 
     const data = new FormData();
@@ -176,7 +175,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             <div className="bg-white p-4 rounded-xl border border-[#714B67] shadow-sm">
                 <label className="block text-sm font-bold text-[#714B67] mb-2 flex items-center gap-2">
                     <Calendar size={18}/> {t.frequency_label || "Frequency / Date"} 
-                    <span className="text-red-500 ml-1">*</span> {/* כוכבית חובה */}
+                    <span className="text-red-500 ml-1">*</span>
                 </label>
                 
                 <select 
@@ -266,15 +265,15 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                  </div>
             </div>
 
-            {currentUser && currentUser.role !== 'EMPLOYEE' && (
+            {/* 👇 הצגת רשימת העובדים רק אם המשתמש הוא מנהל */}
+            {isManager && (
                 <div>
                     <label className="text-sm font-bold text-gray-700 block mb-1">
                         {t.assign_to_label} <span className="text-red-500 ml-1">*</span>
                     </label>
-                    <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
+                    <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
                         value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
-                        <option value="">בחר עובד לביצוע המשימה...</option> {/* אופציית ברירת מחדל ריקה */}
-                        {/* שינוי: רינדור רק של עובדים ולא של כל הצוות */}
+                        <option value="">בחר עובד לביצוע המשימה...</option>
                         {employeesOnly.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                     </select>
                 </div>
@@ -314,7 +313,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                     className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
                 />
                 
-                {/* תצוגת הקבצים שנבחרו עם אפשרות מחיקה */}
                 {selectedFiles.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                         {selectedFiles.map((f, i) => (
