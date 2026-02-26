@@ -1,6 +1,5 @@
-// 👇 להוסיף בראש הקובץ, מתחת לשאר ה-require
-const admin = require('firebase-admin');
-const serviceAccount = require('./serviceAccountKey.json');
+const admin = require("firebase-admin");
+const serviceAccount = require("./firebase-service-account.json"); // מוודא שהשם תואם לקובץ שגררת
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -543,56 +542,57 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
     const worker_id = (assigned_worker_id && assigned_worker_id !== 'undefined') ? assigned_worker_id : req.user.id;
     const isRecurring = is_recurring === 'true';
 
+    let createdCount = 1;
+
+    // 1. יצירת המשימות במסד הנתונים
     if (!isRecurring) {
         await pool.query(
             `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
             [title, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id] 
         );
-        return res.json({ message: "Task created successfully" });
-    }
+    } else {
+        const tasksToInsert = [];
+        const start = new Date(due_date);
+        const end = new Date(start);
+        end.setFullYear(end.getFullYear() + 1);
+        
+        let daysArray = [];
+        if (selected_days) {
+            try { daysArray = JSON.parse(selected_days).map(d => parseInt(d)); } catch (e) {}
+        }
+        const monthlyDate = parseInt(recurring_date) || 1;
 
-    const tasksToInsert = [];
-    const start = new Date(due_date);
-    const end = new Date(start);
-    end.setFullYear(end.getFullYear() + 1);
-    
-    let daysArray = [];
-    if (selected_days) {
-        try { daysArray = JSON.parse(selected_days).map(d => parseInt(d)); } catch (e) {}
-    }
-    const monthlyDate = parseInt(recurring_date) || 1;
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            let match = false;
+            if (recurring_type === 'weekly') {
+                if (daysArray.includes(d.getDay())) match = true;
+            } else if (recurring_type === 'monthly') {
+                if (d.getDate() === monthlyDate) match = true;
+            } else if (recurring_type === 'yearly') {
+                if (d.getMonth() === start.getMonth() && d.getDate() === start.getDate()) match = true;
+            }
 
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        let match = false;
-        if (recurring_type === 'weekly') {
-            if (daysArray.includes(d.getDay())) match = true;
-        } else if (recurring_type === 'monthly') {
-            if (d.getDate() === monthlyDate) match = true;
-        } else if (recurring_type === 'yearly') {
-            if (d.getMonth() === start.getMonth() && d.getDate() === start.getDate()) match = true;
+            if (match) tasksToInsert.push(new Date(d));
         }
 
-        if (match) tasksToInsert.push(new Date(d));
-    }
+        if (tasksToInsert.length === 0) return res.status(400).json({ error: "No dates matched!" });
 
-    if (tasksToInsert.length === 0) return res.status(400).json({ error: "No dates matched!" });
-
-    for (const date of tasksToInsert) {
-        await pool.query(
-            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
-            [title + ' (Recurring)', location_id, worker_id, urgency, date, description, imageUrls, asset_id]
-        );
+        for (const date of tasksToInsert) {
+            await pool.query(
+                `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
+                [title + ' (Recurring)', location_id, worker_id, urgency, date, description, imageUrls, asset_id]
+            );
+        }
+        createdCount = tasksToInsert.length;
     }
     
-    // 👇 קוד התראה לעובד - להדביק לפני res.json
+    // 2. 👇 שליחת ההתראה לעובד (עכשיו רץ תמיד!)
     try {
-        // 1. נבדוק מי העובד שקיבל את המשימה
         const workerRes = await pool.query('SELECT device_token FROM users WHERE id = $1', [worker_id]);
         const workerToken = workerRes.rows[0]?.device_token;
 
-        // 2. אם יש לו טוקן, נשלח לו הודעה
         if (workerToken) {
             await admin.messaging().send({
                 token: workerToken,
@@ -608,7 +608,8 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         console.error("⚠️ Failed to send notification:", err.message);
     }
 
-    res.json({ message: `Created ${tasksToInsert.length} recurring tasks` });
+    // 3. החזרת תשובה תקינה לאפליקציה (רק פעם אחת בסוף)
+    res.json({ message: isRecurring ? `Created ${createdCount} recurring tasks` : "Task created successfully" });
 
   } catch (err) { 
       console.error("❌ Error creating task:", err); 
