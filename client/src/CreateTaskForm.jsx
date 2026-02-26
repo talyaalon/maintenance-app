@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Calendar, Camera, FileText, Box, RefreshCw, Video, Trash2 } from 'lucide-react';
+import { X, Calendar, Camera, Box, Video } from 'lucide-react';
 
 const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang }) => {
   const [frequency, setFrequency] = useState('Once'); 
   const currentUser = user;
 
-  // 👇 תיקון אותיות גדולות/קטנות לתפקידים
-  const userRole = currentUser?.role?.toUpperCase() || '';
-  const isEmployee = userRole === 'EMPLOYEE';
+  // 👇 תיקון מקיף: מזהה מנהלים ועובדים בכל השפות והגדלים
+  const userRole = currentUser?.role ? String(currentUser.role).toUpperCase() : '';
+  const isEmployee = userRole === 'EMPLOYEE' || userRole === 'WORKER' || userRole === 'עובד';
+  // אם יש משתמש והוא לא עובד - הוא מנהל ויכול להקצות משימות
   const isManager = currentUser && !isEmployee;
 
   const getCurrentDateTime = () => {
@@ -22,7 +23,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     due_date: getCurrentDateTime(), 
     location_id: '', 
     asset_id: '', 
-    assigned_worker_id: isEmployee ? currentUser.id : '', // שיוך אוטומטי לעובד עצמו אם הוא עובד
+    assigned_worker_id: isEmployee ? currentUser?.id : '', 
     description: '', 
     selected_days: [], 
     recurring_date: 1, 
@@ -68,8 +69,14 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
       ? assets.filter(a => a.category_id === parseInt(selectedCategory))
       : [];
 
-  // 👇 סינון ודאי רק של עובדים (התעלמות מאותיות גדולות/קטנות)
-  const employeesOnly = teamMembers.filter(member => member?.role?.toUpperCase() === 'EMPLOYEE');
+  // 👇 סינון חכם של העובדים בלבד (בכל השפות)
+  const employeesOnly = teamMembers.filter(member => {
+      const r = member?.role ? String(member.role).toUpperCase() : '';
+      return r === 'EMPLOYEE' || r === 'WORKER' || r === 'עובד';
+  });
+  
+  // הגנה: אם אין עובדים, נציג את כל חברי הצוות כדי שהשדה לא יהיה ריק
+  const optionsToRender = employeesOnly.length > 0 ? employeesOnly : teamMembers;
 
   const toggleDay = (dayIndex) => {
     setFormData(prev => ({ 
@@ -94,7 +101,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // 👇 וידוא שדות חובה (ודורש עובד רק אם זה מנהל)
     if (!formData.title || !formData.due_date || !formData.location_id || (isManager && !formData.assigned_worker_id)) {
         alert("עליך למלא את כל שדות החובה: תאריך, שם המשימה, מיקום, ובחירת עובד לביצוע.");
         return; 
@@ -167,7 +173,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         
         <div className="flex justify-between items-center p-4 border-b bg-gray-50 shrink-0">
             <h2 className="text-xl font-bold text-[#714B67]">{t.create_new_task || "Create Task"}</h2>
-            <button onClick={handleClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={20}/></button>
+            <button type="button" onClick={handleClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={20}/></button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
@@ -274,7 +280,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                     <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
                         value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
                         <option value="">בחר עובד לביצוע המשימה...</option>
-                        {employeesOnly.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                        {optionsToRender.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                     </select>
                 </div>
             )}

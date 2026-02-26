@@ -134,7 +134,7 @@ function App() {
                         onUpdateUser={handleUserUpdate} 
                     />;
           default: 
-            return <TasksTab tasks={tasks} t={t} />;
+            return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
       }
   };
 
@@ -238,10 +238,11 @@ function App() {
       
       {isTaskFormOpen && <CreateTaskForm 
           onTaskCreated={() => { setIsTaskFormOpen(false); fetchTasks(); }} 
-          onCancel={() => setIsTaskFormOpen(false)} 
-          currentUser={user} 
+          onClose={() => setIsTaskFormOpen(false)} // שיניתי מ-onCancel ל-onClose שיתאים לטופס
+          user={user} // ✅ הנה התיקון! עכשיו זה פשוט user
           token={localStorage.getItem('token')}
           t={t} 
+          lang={lang} // כדאי להעביר גם שפה
       />}
       
       {isUserFormOpen && <AddUserForm 

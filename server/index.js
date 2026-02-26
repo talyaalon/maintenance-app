@@ -2,18 +2,20 @@ const admin = require("firebase-admin");
 
 try {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-        // אם אנחנו בשרת של Render
+        // שולפים את המפתח
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        
+        // 👇 זו השורת קסם שמתקנת את הבעיה של גוגל ורנדר!
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        
         admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
         console.log("✅ Firebase initialized successfully (Render)");
     } else {
-        // אם אנחנו במחשב המקומי שלך
         const serviceAccount = require("./firebase-service-account.json");
         admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
         console.log("✅ Firebase initialized successfully (Local)");
     }
 } catch (error) {
-    // השורה הזו מצילה אותך! היא מונעת מהשרת לקרוס גם אם יש בעיה
     console.log("⚠️ Firebase warning (Server is still running!):", error.message);
 }
 const bcrypt = require('bcrypt');
