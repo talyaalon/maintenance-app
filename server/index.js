@@ -577,6 +577,9 @@ app.get('/tasks', authenticateToken, async (req, res) => {
     } catch (err) { console.error(err); res.sendStatus(500); }
 });
 
+// ==========================================
+// 1. יצירת משימה בודדת מהאפליקציה (הקוד המקורי שלך!)
+// ==========================================
 app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   try {
     const files = req.files || [];
@@ -595,7 +598,7 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
     let createdCount = 1;
 
-    // 1. יצירת המשימות במסד הנתונים
+    // יצירת המשימות במסד הנתונים
     if (!isRecurring) {
         await pool.query(
             `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
@@ -639,7 +642,7 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         createdCount = tasksToInsert.length;
     }
     
-    // 2. 👇 שליחת ההתראה לעובד (עכשיו רץ תמיד!)
+    // שליחת ההתראה לעובד
     try {
         const workerRes = await pool.query('SELECT device_token FROM users WHERE id = $1', [worker_id]);
         const workerToken = workerRes.rows[0]?.device_token;
@@ -659,13 +662,101 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         console.error("⚠️ Failed to send notification:", err.message);
     }
 
-    // 3. החזרת תשובה תקינה לאפליקציה (רק פעם אחת בסוף)
     res.json({ message: isRecurring ? `Created ${createdCount} recurring tasks` : "Task created successfully" });
 
   } catch (err) { 
       console.error("❌ Error creating task:", err); 
       res.status(500).json({ error: "Server Error: " + err.message }); 
   }
+});
+
+// ==========================================
+// 2. יצירת משימות במאסה מתוך אקסל (הקוד החדש והחכם)
+// ==========================================
+app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
+    try {
+        const { tasks } = req.body;
+        if (!tasks || !Array.isArray(tasks)) return res.status(400).json({ error: "לא נשלחו משימות תקינות." });
+
+        let insertedCount = 0;
+        
+        // אובייקט חכם שיספור כמה משימות כל עובד קיבל (כדי לשלוח התראה מרוכזת)
+        const notificationsMap = {};
+
+        // עוברים על כל משימה מהאקסל המאומת
+        for (const task of tasks) {
+            // הוספת ספירה לעובד בשביל ההתראה
+            if (!notificationsMap[task.worker_id]) notificationsMap[task.worker_id] = 0;
+
+            if (!task.is_recurring) {
+                // משימה חד פעמית
+                await pool.query(
+                    `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id) 
+                     VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7)`,
+                    [task.title, task.location_id, task.worker_id, task.urgency, task.due_date, task.description, task.asset_id]
+                );
+                insertedCount++;
+                notificationsMap[task.worker_id]++;
+            } else {
+                // משימה מחזורית - השרת מייצר לבד תאריכים לשנה קדימה
+                const start = new Date(task.due_date);
+                const end = new Date(start);
+                end.setFullYear(end.getFullYear() + 1); // רץ שנה קדימה
+                
+                const tasksToInsert = [];
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    let match = false;
+                    if (task.recurring_type === 'weekly' && task.selected_days.includes(d.getDay())) match = true;
+                    if (task.recurring_type === 'monthly' && d.getDate() === task.recurring_date) match = true;
+                    if (task.recurring_type === 'yearly' && d.getMonth() === start.getMonth() && d.getDate() === start.getDate()) match = true;
+                    
+                    if (match) tasksToInsert.push(new Date(d));
+                }
+
+                // הכנסת כל הימים שנוצרו
+                for (const date of tasksToInsert) {
+                    await pool.query(
+                        `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id) 
+                         VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7)`,
+                        [task.title + ' (מחזורי)', task.location_id, task.worker_id, task.urgency, date.toISOString(), task.description, task.asset_id]
+                    );
+                }
+                insertedCount += tasksToInsert.length;
+                notificationsMap[task.worker_id] += tasksToInsert.length;
+            }
+        }
+
+        // 🎯 שליחת התראות פוש מרוכזות בסיום תהליך האקסל
+        try {
+            for (const worker_id in notificationsMap) {
+                const taskCount = notificationsMap[worker_id];
+                if (taskCount > 0) {
+                    const workerRes = await pool.query('SELECT device_token FROM users WHERE id = $1', [worker_id]);
+                    const workerToken = workerRes.rows[0]?.device_token;
+
+                    if (workerToken) {
+                        await admin.messaging().send({
+                            token: workerToken,
+                            notification: {
+                                title: 'ייבוא משימות הושלם! 🚀',
+                                body: `מנהל הקצה לך ${taskCount} משימות חדשות.`
+                            },
+                            webpush: { fcmOptions: { link: '/' } }
+                        });
+                        console.log(`🔔 Bulk Notification sent to worker ${worker_id} for ${taskCount} tasks`);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("⚠️ Failed to send bulk notifications:", err.message);
+        }
+
+        res.json({ success: true, message: `הוכנסו בהצלחה ${insertedCount} משימות.` });
+
+    } catch (err) {
+        console.error("Excel Bulk Insert Error:", err);
+        res.status(500).json({ error: "שגיאת שרת פנימית בזמן שמירת המשימות." });
+    }
 });
 
 app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_image'), async (req, res) => {
