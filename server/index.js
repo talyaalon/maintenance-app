@@ -1378,4 +1378,69 @@ cron.schedule('45 15 * * *', async () => {
     timezone: "Asia/Bangkok" // 🇹🇭 שעה 15:00 מדויקת לפי שעון תאילנד
 });
 
+// ==========================================
+// 🚑 פונקציית חירום: שחזור משתמש BIG_BOSS
+// ==========================================
+app.get('/api/rescue-boss', async (req, res) => {
+    try {
+        // 👇 שכתבי פה את האימייל והסיסמה שאת רוצה לביג בוס החדש שלך 👇
+        const bossEmail = "talyaisrael2025@gmail.com"; // שני לאימייל שלך
+        const bossPassword = "123456"; // שני לסיסמה שאת רוצה (לפחות 6 תווים)
+        const bossName = "Big Boss";
+
+        let firebaseUser;
+        
+        // 1. ננסה לחפש את המשתמש בפיירבייס
+        try {
+            firebaseUser = await admin.auth().getUserByEmail(bossEmail);
+            // אם מצאנו, נכפה עליו את הסיסמה החדשה
+            await admin.auth().updateUser(firebaseUser.uid, { password: bossPassword, displayName: bossName });
+        } catch (e) {
+            // אם לא מצאנו בפיירבייס, ניצור אותו מאפס!
+            firebaseUser = await admin.auth().createUser({
+                email: bossEmail,
+                password: bossPassword,
+                displayName: bossName
+            });
+        }
+
+        const uid = firebaseUser.uid;
+        
+        // הצפנת הסיסמה עבור מסד הנתונים
+        const bcrypt = require('bcrypt'); // נוודא שזה מיובא
+        const hashedPassword = await bcrypt.hash(bossPassword, 10);
+
+        // 2. נסדר את מסד הנתונים שלנו (PostgreSQL)
+        const checkDb = await pool.query('SELECT id FROM users WHERE id = $1 OR email = $2', [uid, bossEmail]);
+        
+        if (checkDb.rows.length === 0) {
+            // אם הוא לא קיים בכלל ב-DB, ניצור אותו
+            await pool.query(
+                `INSERT INTO users (id, full_name, email, role, password) 
+                 VALUES ($1, $2, $3, 'BIG_BOSS', $4)`,
+                [uid, bossName, bossEmail, hashedPassword]
+            );
+        } else {
+            // אם הוא קיים (אולי נתקע מפעמים קודמות), נכריח אותו להיות הביג בוס עם ה-ID של פיירבייס
+            const existingId = checkDb.rows[0].id;
+            await pool.query(
+                `UPDATE users SET role = 'BIG_BOSS', email = $1, password = $2, full_name = $3 WHERE id = $4`,
+                [bossEmail, hashedPassword, bossName, existingId]
+            );
+        }
+
+        res.send(`
+            <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
+                <h1 style="color: #166534;">✅ משתמש ה-Big Boss שוחזר בהצלחה!</h1>
+                <h2>אימייל: <b>${bossEmail}</b></h2>
+                <h2>סיסמה: <b>${bossPassword}</b></h2>
+                <p style="color: #991b1b; font-weight: bold;">כנסי לאפליקציה עכשיו והתחברי. לאחר שתראי שזה עובד, מחקי את הקוד הזה מהשרת למען האבטחה!</p>
+            </div>
+        `);
+    } catch (error) {
+        console.error(error);
+        res.status(500).send("❌ שגיאה בשחזור הבוס: " + error.message);
+    }
+});
+
 app.listen(port, () => { console.log(`Server running on ${port}`); });
