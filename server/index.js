@@ -1144,7 +1144,7 @@ const cron = require('node-cron');
 // 🚀 CRON JOB: דוח סוף יום אוטומטי ב-15:00
 // ==========================================
 // רץ כל יום בשעה 15:00 לפי שעון ירושלים
-cron.schedule('32 14 * * *', async () => {
+cron.schedule('40 14 * * *', async () => {
     console.log("⏰ [CRON] Starting Daily End-of-Day Task Check...");
 
     try {
