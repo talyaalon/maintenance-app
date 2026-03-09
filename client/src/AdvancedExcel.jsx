@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx'; 
 import { Download, Upload, FileSpreadsheet, Filter, Trash2, AlertTriangle, X, CheckCircle, Search, Plus, Calendar, ListFilter } from 'lucide-react';
 
-const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
+const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
     const [activeTab, setActiveTab] = useState('import'); 
     const [searchTerm, setSearchTerm] = useState(''); 
 
-    // --- SHARED STATE (Data for Validation & Filters) ---
     const [users, setUsers] = useState([]);
     const [locations, setLocations] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -82,24 +81,38 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
 
     const relevantUsers = getRelevantUsers();
 
-    // --- IMPORT LOGIC ---
+    // ==========================================
+    // בניית תבנית 3 השפות (עם דוגמאות מתוחכמות)
+    // ==========================================
     const handleDownloadTemplate = () => {
-        const templateData = [{
-            "שם העובד": user.full_name || "ישראל ישראלי", 
-            "מנהל ישיר": "שם המנהל",
-            "שם המשימה": "בדיקת מערכות",
-            "מיקום": "לובי",  
-            "תדירות": "שבועי", 
-            "תאריך או ימים": "1, 3, 5", 
-            "דחיפות": "רגילה", 
-            "קטגוריה": "", 
-            "נכס": "", 
-            "הערות": ""
-        }];
-        const worksheet = XLSX.utils.json_to_sheet(templateData);
+        const imgExample = "https://images.unsplash.com/photo-1581092160562-40aa08e78837, https://images.unsplash.com/photo-1581092335397-9583eb92d232";
+        
+        const dataHE = [
+            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "ניקיון יסודי חלונות", "מיקום": "לובי", "תדירות": "חד פעמי", "תאריך או ימים": "25/12/2026", "דחיפות": "רגילה", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": imgExample, "הערות": "תאריך מלא עם סלאש"},
+            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "בדיקת מזגנים", "מיקום": "לובי", "תדירות": "שבועי", "תאריך או ימים": "1, 3, 5", "דחיפות": "דחוף", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": "", "הערות": "ימים ראשון, שלישי וחמישי"},
+            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "הזמנת ציוד", "מיקום": "לובי", "תדירות": "חודשי", "תאריך או ימים": "1, 15", "דחיפות": "רגילה", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": "", "הערות": "ב-1 וב-15 לכל חודש"},
+            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "חידוש ביטוח מבנה", "מיקום": "לובי", "תדירות": "שנתי", "תאריך או ימים": "01-08", "דחיפות": "דחוף", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": imgExample, "הערות": "ב-1 לאוגוסט כל שנה, מופרד בקו"}
+        ];
+
+        const dataEN = [
+            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Clean Windows", "Location": "Lobby", "Frequency": "One-time", "Date or Days": "25/12/2026", "Urgency": "Normal", "Category": "", "Asset": "", "Images (URLs)": imgExample, "Notes": "Full date"},
+            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "AC Check", "Location": "Lobby", "Frequency": "Weekly", "Date or Days": "1, 3, 5", "Urgency": "High", "Category": "", "Asset": "", "Images (URLs)": "", "Notes": "Sun, Tue, Thu"},
+            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Order Supplies", "Location": "Lobby", "Frequency": "Monthly", "Date or Days": "1, 15", "Urgency": "Normal", "Category": "", "Asset": "", "Images (URLs)": "", "Notes": "1st and 15th"},
+            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Renew Insurance", "Location": "Lobby", "Frequency": "Yearly", "Date or Days": "01-08", "Urgency": "High", "Category": "", "Asset": "", "Images (URLs)": imgExample, "Notes": "Aug 1st"}
+        ];
+
+        const dataTH = [
+            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ทำความสะอาดหน้าต่าง", "สถานที่": "Lobby", "ความถี่": "ครั้งเดียว", "วันที่หรือวัน": "25/12/2026", "ความเร่งด่วน": "ปกติ", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": imgExample, "หมายเหตุ": "Full date"},
+            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ตรวจสอบแอร์", "สถานที่": "Lobby", "ความถี่": "รายสัปดาห์", "วันที่หรือวัน": "1, 3, 5", "ความเร่งด่วน": "ด่วน", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": "", "หมายเหตุ": "Sun, Tue, Thu"},
+            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "สั่งซื้ออุปกรณ์", "สถานที่": "Lobby", "ความถี่": "รายเดือน", "วันที่หรือวัน": "1, 15", "ความเร่งด่วน": "ปกติ", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": "", "หมายเหตุ": "1st and 15th"},
+            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ต่อประกัน", "สถานที่": "Lobby", "ความถี่": "รายปี", "วันที่หรือวัน": "01-08", "ความเร่งด่วน": "ด่วน", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": imgExample, "หมายเหตุ": "Aug 1st"}
+        ];
+
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "תבנית העלאה");
-        XLSX.writeFile(workbook, "Import_Template.xlsx");
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(dataHE), "עברית (Hebrew)");
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(dataEN), "English");
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(dataTH), "ภาษาไทย (Thai)");
+        XLSX.writeFile(workbook, "OpsManager_Smart_Template.xlsx");
     };
 
     const handleFileUpload = (e) => {
@@ -111,7 +124,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
         reader.onload = (evt) => {
             const bstr = evt.target.result;
             const wb = XLSX.read(bstr, { type: 'binary' });
-            const wsname = wb.SheetNames[0];
+            const wsname = wb.SheetNames[0]; // קורא תמיד מהגיליון הראשון (הפעיל)
             const ws = wb.Sheets[wsname];
             const data = XLSX.utils.sheet_to_json(ws, { defval: "", raw: false }); 
             if (data.length > 0) setPreviewData(data);
@@ -119,73 +132,140 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
         reader.readAsBinaryString(file);
     };
 
+    // ==========================================
+    // מנוע הולידציה המפלצתי (ההנדסה שביקשת)
+    // ==========================================
     const validateAndMapData = () => {
         const errors = [];
         const validMappedTasks = [];
-        const requiredCols = ['שם העובד', 'מנהל ישיר', 'שם המשימה', 'מיקום', 'תדירות', 'תאריך או ימים'];
-
+        
+        // זיהוי שפה לפי עמודת עובד
         if (previewData.length === 0) return { errors: ["הקובץ ריק."], mapped: [] };
-
         const fileCols = Object.keys(previewData[0]);
-        const missing = requiredCols.filter(col => !fileCols.includes(col));
-        if (missing.length > 0) return { errors: [`שגיאה קריטית: חסרות עמודות חובה (${missing.join(', ')})`], mapped: [] };
+        
+        const isHeb = fileCols.includes('שם העובד');
+        const isEng = fileCols.includes('Worker Name');
+        const isTha = fileCols.includes('ชื่อพนักงาน');
+
+        if (!isHeb && !isEng && !isTha) {
+            return { errors: ["שגיאה קריטית: עמודות חובה לא זוהו. אנא השתמש בתבנית שהורדת."], mapped: [] };
+        }
+
+        const keys = {
+            worker: isHeb ? 'שם העובד' : isEng ? 'Worker Name' : 'ชื่อพนักงาน',
+            manager: isHeb ? 'מנהל ישיר' : isEng ? 'Manager Name' : 'ชื่อผู้จัดการ',
+            title: isHeb ? 'שם המשימה' : isEng ? 'Task Title' : 'ชื่องาน',
+            location: isHeb ? 'מיקום' : isEng ? 'Location' : 'สถานที่',
+            freq: isHeb ? 'תדירות' : isEng ? 'Frequency' : 'ความถี่',
+            dates: isHeb ? 'תאריך או ימים' : isEng ? 'Date or Days' : 'วันที่หรือวัน',
+            urgency: isHeb ? 'דחיפות' : isEng ? 'Urgency' : 'ความเร่งด่วน',
+            cat: isHeb ? 'קטגוריה' : isEng ? 'Category' : 'หมวดหมู่',
+            asset: isHeb ? 'נכס' : isEng ? 'Asset' : 'ทรัพย์สิน',
+            images: isHeb ? 'תמונות (קישורים)' : isEng ? 'Images (URLs)' : 'รูปภาพ (ลิงก์)',
+            notes: isHeb ? 'הערות' : isEng ? 'Notes' : 'หมายเหตุ'
+        };
 
         previewData.forEach((row, index) => {
             const rowNum = index + 2;
-            const empName = String(row['שם העובד'] || '').trim();
-            const mgrName = String(row['מנהל ישיר'] || '').trim();
-            const taskName = String(row['שם המשימה'] || '').trim();
-            const locName = String(row['מיקום'] || '').trim();
-            const freq = String(row['תדירות'] || '').trim();
-            const datesValue = String(row['תאריך או ימים'] || '').trim();
+            const empName = String(row[keys.worker] || '').trim();
+            const mgrName = String(row[keys.manager] || '').trim();
+            const taskName = String(row[keys.title] || '').trim();
+            const locName = String(row[keys.location] || '').trim();
+            const freqValue = String(row[keys.freq] || '').trim().toLowerCase();
+            const datesValue = String(row[keys.dates] || '').trim();
+            const imagesStr = String(row[keys.images] || '').trim();
             
-            if (!empName || !mgrName || !taskName || !locName || !freq || !datesValue) {
+            if (!empName || !mgrName || !taskName || !locName || !freqValue || !datesValue) {
                 errors.push(`שורה ${rowNum}: אחד או יותר משדות החובה ריקים.`);
                 return;
             }
 
+            // 1. עובד מול מנהל
             const employee = users.find(u => u.full_name === empName && u.role === 'EMPLOYEE');
             const manager = users.find(u => u.full_name === mgrName && ['MANAGER', 'BIG_BOSS'].includes(u.role));
 
             if (!employee) errors.push(`שורה ${rowNum}: העובד "${empName}" לא קיים במערכת.`);
             if (!manager) errors.push(`שורה ${rowNum}: המנהל "${mgrName}" לא קיים.`);
             if (employee && manager && employee.parent_manager_id !== manager.id && manager.role !== 'BIG_BOSS') {
-                errors.push(`שורה ${rowNum}: העובד "${empName}" אינו מוגדר תחת המנהל "${mgrName}".`);
+                errors.push(`שורה ${rowNum}: סמכויות - העובד "${empName}" אינו מוגדר תחת המנהל "${mgrName}".`);
             }
 
             const location = locations.find(l => l.name === locName);
             if (!location) errors.push(`שורה ${rowNum}: המיקום "${locName}" לא מוגדר במערכת.`);
 
+            // 2. תרגום תדירויות ופיענוח תאריכים
             let recurringType = 'once';
-            let parsedDays = [];
-            let recurringDate = null;
-            let finalDate = new Date();
+            let parsedDays = []; // לשבועי
+            let monthlyDates = []; // לחודשי
+            let yearlyDates = []; // לשנתי
+            let finalDate = new Date(); // לחד פעמי
+            
+            const isOnce = ['חד פעמי', 'one-time', 'ครั้งเดียว'].includes(freqValue);
+            const isWeekly = ['שבועי', 'weekly', 'รายสัปดาห์'].includes(freqValue);
+            const isMonthly = ['חודשי', 'monthly', 'รายเดือน'].includes(freqValue);
+            const isYearly = ['שנתי', 'yearly', 'รายปี'].includes(freqValue);
 
-            if (freq === 'חד פעמי' || freq === 'שנתי') {
-                recurringType = freq === 'חד פעמי' ? 'once' : 'yearly';
-                const parsed = Date.parse(datesValue);
-                if (isNaN(parsed)) errors.push(`שורה ${rowNum}: תאריך לא חוקי. יש לכתוב בפורמט YYYY-MM-DD.`);
-                else finalDate = new Date(parsed);
+            const fullDateRegex = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/; // DD/MM/YYYY or DD-MM-YYYY
+            const shortDateRegex = /^(\d{1,2})[-/](\d{1,2})$/; // DD/MM or DD-MM
+
+            if (isOnce) {
+                recurringType = 'once';
+                const match = datesValue.match(fullDateRegex);
+                if (match) {
+                    finalDate = new Date(`${match[3]}-${match[2]}-${match[1]}T00:00:00`);
+                } else if (!isNaN(Date.parse(datesValue))) {
+                    finalDate = new Date(datesValue);
+                } else {
+                    errors.push(`שורה ${rowNum}: תאריך חד פעמי לא חוקי. השתמש בפורמט יום/חודש/שנה (למשל 25/12/2026 או 25-12-2026).`);
+                }
             } 
-            else if (freq === 'שבועי') {
+            else if (isWeekly) {
                 recurringType = 'weekly';
                 const days = datesValue.split(',').map(d => parseInt(d.trim()));
                 const invalidDays = days.filter(d => isNaN(d) || d < 1 || d > 7);
-                if (invalidDays.length > 0) errors.push(`שורה ${rowNum}: בתדירות שבועית מותר להזין רק ספרות 1 עד 7. שגיאות: ${invalidDays.join(', ')}`);
-                parsedDays = days.map(d => d === 1 ? 0 : d === 2 ? 1 : d === 3 ? 2 : d === 4 ? 3 : d === 5 ? 4 : d === 6 ? 5 : 6);
+                if (invalidDays.length > 0) {
+                    errors.push(`שורה ${rowNum}: במשימה שבועית מותר להזין רק ספרות 1 עד 7 מופרדות בפסיקים. (נמצא: ${invalidDays.join(',')})`);
+                } else {
+                    parsedDays = days.map(d => d === 1 ? 0 : d === 2 ? 1 : d === 3 ? 2 : d === 4 ? 3 : d === 5 ? 4 : d === 6 ? 5 : 6);
+                }
             } 
-            else if (freq === 'חודשי') {
+            else if (isMonthly) {
                 recurringType = 'monthly';
-                const day = parseInt(datesValue);
-                if (isNaN(day) || day < 1 || day > 31) errors.push(`שורה ${rowNum}: בתדירות חודשית יש להזין יום בין 1 ל-31.`);
-                recurringDate = day;
+                const days = datesValue.split(',').map(d => parseInt(d.trim()));
+                const invalidDays = days.filter(d => isNaN(d) || d < 1 || d > 31);
+                if (invalidDays.length > 0) {
+                    errors.push(`שורה ${rowNum}: במשימה חודשית יש להזין מספרים בין 1 ל-31 מופרדים בפסיקים.`);
+                } else {
+                    monthlyDates = days;
+                }
+            } 
+            else if (isYearly) {
+                recurringType = 'yearly';
+                const datesArr = datesValue.split(',').map(d => d.trim());
+                datesArr.forEach(d => {
+                    const match = d.match(shortDateRegex);
+                    if (match) {
+                        const day = match[1].padStart(2, '0');
+                        const month = match[2].padStart(2, '0');
+                        yearlyDates.push(`${day}/${month}`);
+                    } else {
+                        errors.push(`שורה ${rowNum}: תאריך שנתי לא חוקי ("${d}"). השתמש בפורמט יום/חודש (למשל 01/08 או 01-08).`);
+                    }
+                });
             } else {
-                errors.push(`שורה ${rowNum}: תדירות "${freq}" אינה חוקית.`);
+                errors.push(`שורה ${rowNum}: תדירות "${freqValue}" לא מוכרת.`);
             }
 
+            // 3. תמונות (פיצול לפסיקים)
+            let parsedImages = [];
+            if (imagesStr) {
+                parsedImages = imagesStr.split(',').map(img => img.trim()).filter(img => img.startsWith('http'));
+            }
+
+            // 4. קטגוריה ונכס
             let catId = null, assetId = null;
-            const catName = String(row['קטגוריה'] || '').trim();
-            const assetName = String(row['נכס'] || '').trim();
+            const catName = String(row[keys.cat] || '').trim();
+            const assetName = String(row[keys.asset] || '').trim();
 
             if (catName) {
                 const cat = categories.find(c => c.name === catName);
@@ -196,19 +276,25 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                 if (as) assetId = as.id; else errors.push(`שורה ${rowNum}: הנכס "${assetName}" לא נמצא תחת קטגוריה זו.`);
             }
 
+            // דחיפות
+            const urgencyVal = String(row[keys.urgency] || '').trim();
+            const isUrgent = ['דחוף', 'גבוהה', 'high', 'ด่วน'].includes(urgencyVal.toLowerCase());
+
             if (errors.length === 0) {
                 validMappedTasks.push({
                     title: taskName,
-                    urgency: (row['דחיפות'] || '').trim() === 'גבוהה' ? 'High' : 'Normal',
-                    description: (row['הערות'] || '').trim(),
+                    urgency: isUrgent ? 'High' : 'Normal',
+                    description: String(row[keys.notes] || '').trim(),
                     location_id: location?.id,
                     worker_id: employee?.id,
                     asset_id: assetId,
                     is_recurring: recurringType !== 'once',
                     recurring_type: recurringType !== 'once' ? recurringType : null,
                     due_date: finalDate.toISOString(),
-                    selected_days: parsedDays,
-                    recurring_date: recurringDate
+                    selected_days: parsedDays, // [0, 2, 4]
+                    monthly_dates: monthlyDates, // [1, 15]
+                    yearly_dates: yearlyDates, // ["01/08", "25/12"]
+                    images: parsedImages // ["http://..", "http://.."]
                 });
             }
         });
@@ -336,7 +422,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                 {/* Content */}
                 <div className="flex-1 overflow-hidden bg-gray-50 p-5">
                     
-                    {/* --- EXPORT VIEW (המקורי שלך, בשלמותו) --- */}
+                    {/* --- EXPORT VIEW --- */}
                     {activeTab === 'export' && (
                         <div className="flex flex-col h-full gap-4">
                             <div className="flex flex-wrap gap-4 items-center text-sm p-3 bg-white rounded-lg border shadow-sm">
@@ -426,7 +512,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                         </div>
                     )}
 
-                    {/* --- IMPORT VIEW (התצוגה החכמה החדשה) --- */}
+                    {/* --- IMPORT VIEW --- */}
                     {activeTab === 'import' && (
                         <div className="h-full flex flex-col gap-4">
                             <div className="bg-white p-6 rounded border border-dashed border-gray-300 flex flex-col items-center justify-center gap-2 hover:bg-gray-50 transition cursor-pointer relative flex-1">
@@ -435,11 +521,11 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                                 <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
                             </div>
 
-                            <div className="flex justify-between items-center">
-                                <button onClick={handleDownloadTemplate} className="text-[#714B67] text-xs font-bold hover:underline flex items-center gap-1">
-                                    <Download size={12}/> הורד תבנית לאקסל
+                            <div className="flex justify-between items-center bg-purple-50 p-3 rounded border border-purple-100">
+                                <span className="text-xs text-purple-800 font-medium">✨ תבנית מיוחדת ב-3 שפות קיימת להורדה, כולל עמודת תמונות ודוגמאות!</span>
+                                <button onClick={handleDownloadTemplate} className="bg-purple-600 text-white px-4 py-2 rounded text-xs font-bold hover:bg-purple-700 shadow-sm flex items-center gap-1 transition">
+                                    <Download size={14}/> הורד תבנית מתקדמת
                                 </button>
-                                {user.role === 'BIG_BOSS' && <button onClick={handleDeleteAll} className="text-red-500 text-xs hover:underline">Delete All Tasks</button>}
                             </div>
 
                             {validationStatus === 'valid' && (
@@ -479,14 +565,14 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user }) => {
                     ) : (
                         <>
                             {previewData.length > 0 && validationStatus !== 'valid' && (
-                                <button onClick={() => processFile(true)} disabled={isProcessing} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 transition text-sm">
+                                <button onClick={() => processFile(true)} disabled={isProcessing} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 transition text-sm flex items-center gap-2">
                                     {isProcessing ? "בודק..." : "1. בצע בדיקת תקינות"}
                                 </button>
                             )}
                             <button onClick={() => processFile(false)} disabled={validationStatus !== 'valid' || isProcessing} className="bg-green-600 text-white px-5 py-2 rounded font-bold hover:bg-green-700 transition shadow-sm disabled:opacity-50 disabled:bg-gray-300 text-sm">
                                 {isProcessing ? "מעלה..." : "2. העלה נתונים מאושרים"}
                             </button>
-                            <button onClick={onClose} className="bg-white border border-gray-300 text-gray-700 px-5 py-2 rounded hover:bg-gray-50 transition text-sm">Close</button>
+                            <button onClick={onClose} className="bg-white border border-gray-300 text-gray-700 px-5 py-2 rounded hover:bg-gray-50 transition text-sm">סגור</button>
                         </>
                     )}
                 </div>

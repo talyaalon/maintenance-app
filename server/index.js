@@ -673,52 +673,56 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 // ==========================================
 // 2. יצירת משימות במאסה מתוך אקסל (הקוד החדש והחכם)
 // ==========================================
+// ==========================================
+// יצירת משימות במאסה מתוך אקסל (תמיכה מלאה בתמונות ומערכי תאריכים)
+// ==========================================
 app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
     try {
         const { tasks } = req.body;
         if (!tasks || !Array.isArray(tasks)) return res.status(400).json({ error: "לא נשלחו משימות תקינות." });
 
         let insertedCount = 0;
-        
-        // אובייקט חכם שיספור כמה משימות כל עובד קיבל (כדי לשלוח התראה מרוכזת)
         const notificationsMap = {};
 
-        // עוברים על כל משימה מהאקסל המאומת
         for (const task of tasks) {
-            // הוספת ספירה לעובד בשביל ההתראה
             if (!notificationsMap[task.worker_id]) notificationsMap[task.worker_id] = 0;
 
             if (!task.is_recurring) {
-                // משימה חד פעמית
+                // משימה חד פעמית (כולל תמונות)
                 await pool.query(
-                    `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id) 
-                     VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7)`,
-                    [task.title, task.location_id, task.worker_id, task.urgency, task.due_date, task.description, task.asset_id]
+                    `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id, images) 
+                     VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8)`,
+                    [task.title, task.location_id, task.worker_id, task.urgency, task.due_date, task.description, task.asset_id, task.images]
                 );
                 insertedCount++;
                 notificationsMap[task.worker_id]++;
             } else {
-                // משימה מחזורית - השרת מייצר לבד תאריכים לשנה קדימה
+                // משימה מחזורית - רץ לשנה הקרובה
                 const start = new Date(task.due_date);
                 const end = new Date(start);
-                end.setFullYear(end.getFullYear() + 1); // רץ שנה קדימה
+                end.setFullYear(end.getFullYear() + 1); 
                 
                 const tasksToInsert = [];
                 for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                     let match = false;
+                    
                     if (task.recurring_type === 'weekly' && task.selected_days.includes(d.getDay())) match = true;
-                    if (task.recurring_type === 'monthly' && d.getDate() === task.recurring_date) match = true;
-                    if (task.recurring_type === 'yearly' && d.getMonth() === start.getMonth() && d.getDate() === start.getDate()) match = true;
+                    
+                    if (task.recurring_type === 'monthly' && task.monthly_dates.includes(d.getDate())) match = true;
+                    
+                    if (task.recurring_type === 'yearly') {
+                        const dayMonthStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        if (task.yearly_dates.includes(dayMonthStr)) match = true;
+                    }
                     
                     if (match) tasksToInsert.push(new Date(d));
                 }
 
-                // הכנסת כל הימים שנוצרו
                 for (const date of tasksToInsert) {
                     await pool.query(
-                        `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id) 
-                         VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7)`,
-                        [task.title + ' (מחזורי)', task.location_id, task.worker_id, task.urgency, date.toISOString(), task.description, task.asset_id]
+                        `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id, images) 
+                         VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8)`,
+                        [task.title + ' (מחזורי)', task.location_id, task.worker_id, task.urgency, date.toISOString(), task.description, task.asset_id, task.images]
                     );
                 }
                 insertedCount += tasksToInsert.length;
@@ -726,7 +730,7 @@ app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
             }
         }
 
-        // 🎯 שליחת התראות פוש מרוכזות בסיום תהליך האקסל
+        // שליחת התראה מרוכזת אחת לעובד על כל המאסה
         try {
             for (const worker_id in notificationsMap) {
                 const taskCount = notificationsMap[worker_id];
@@ -743,13 +747,10 @@ app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
                             },
                             webpush: { fcmOptions: { link: '/' } }
                         });
-                        console.log(`🔔 Bulk Notification sent to worker ${worker_id} for ${taskCount} tasks`);
                     }
                 }
             }
-        } catch (err) {
-            console.error("⚠️ Failed to send bulk notifications:", err.message);
-        }
+        } catch (err) { console.error("⚠️ Failed to send bulk notifications:", err.message); }
 
         res.json({ success: true, message: `הוכנסו בהצלחה ${insertedCount} משימות.` });
 
