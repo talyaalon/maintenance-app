@@ -347,15 +347,46 @@ app.post('/users', authenticateToken, async (req, res) => {
   }
 });
 
+// ==========================================
+// עריכת משתמש: סנכרון Firebase + שמירת היסטוריית שינויים ומיילים
+// ==========================================
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { full_name, email, phone, role, password } = req.body;
 
+    // 1. מביאים את המשתמש הישן (כדי לדעת מה השתנה בשביל המייל)
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
     const oldUser = oldUserRes.rows[0];
 
+    // ==========================================
+    // 2. עדכון שרת ההתחברות (Firebase Auth) - קריטי כדי שהכניסה תעבוד!
+    // ==========================================
+    const firebaseUpdateData = {
+        displayName: full_name,
+        email: email
+    };
+    
+    // מעדכנים סיסמה בפיירבייס רק אם הוזנה סיסמה חדשה
+    if (password && password.trim() !== '') {
+        if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters long for Firebase" });
+        firebaseUpdateData.password = password;
+    }
+
+    try {
+        await admin.auth().updateUser(id, firebaseUpdateData);
+    } catch (firebaseErr) {
+        console.error("Firebase update failed:", firebaseErr);
+        if (firebaseErr.code === 'auth/email-already-exists') {
+            return res.status(400).json({ error: "האימייל הזה כבר תפוס על ידי משתמש אחר במערכת." });
+        }
+        return res.status(500).json({ error: "שגיאה בעדכון פרטי ההתחברות של המשתמש." });
+    }
+
+    // ==========================================
+    // 3. עדכון מסד הנתונים (PostgreSQL) כולל הצפנת Bcrypt כמו שהיה לך
+    // ==========================================
     let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4';
     let params = [full_name, email, phone, role];
     let paramCount = 5;
@@ -373,12 +404,16 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     const result = await pool.query(query, params);
     const updatedUser = result.rows[0];
 
+    // ==========================================
+    // 4. מערכת הדיווח שלך: מעקב שינויים ושליחת מייל
+    // ==========================================
     let changes = [];
     if (oldUser.full_name !== updatedUser.full_name) changes.push(`Name changed to: <strong>${updatedUser.full_name}</strong>`);
     if (oldUser.email !== updatedUser.email) changes.push(`Email changed to: <strong>${updatedUser.email}</strong>`);
     if (oldUser.phone !== updatedUser.phone) changes.push(`Phone updated`);
     if (password && password.trim() !== '') changes.push('Password has been changed');
 
+    // שליחת המייל דרך הפונקציה המקורית שלך
     if (changes.length > 0) {
         sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes)
             .catch(err => console.error("Email send error:", err));
@@ -387,9 +422,10 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     res.json({ message: "User updated successfully", user: updatedUser });
 
   } catch (err) {
-    console.error(err); 
+    console.error("❌ Error updating user:", err); 
+    // תפיסת שגיאת כפילות אימייל של ה-DB שלך (קוד 23505)
     if (err.code === '23505') {
-        return res.status(400).json({ error: "Email already exists" });
+        return res.status(400).json({ error: "Email already exists in Database" });
     }
     res.status(500).send('Server Error');
   }
@@ -1217,7 +1253,7 @@ cron.schedule('05 15 * * *', async () => {
             if (emp.email) {
                 try {
                     await transporter.sendMail({
-                        from: '"OpsManager" <no-reply@opsmanager.com>',
+                        from: `"OpsManager" <${process.env.EMAIL_USER}>`,
                         to: emp.email,
                         subject: subject,
                         html: htmlBody
@@ -1310,7 +1346,7 @@ cron.schedule('05 15 * * *', async () => {
             if (leader.email) {
                 try {
                     await transporter.sendMail({
-                        from: '"OpsManager" <no-reply@opsmanager.com>',
+                        from: `"OpsManager" <${process.env.EMAIL_USER}>`,
                         to: leader.email,
                         subject: allTeamPerfect ? '🌟 דוח יומי: כל הצוות סיים בהצטיינות!' : '📊 דוח יומי: יש משימות פתוחות בצוות',
                         html: leaderHtml
