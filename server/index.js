@@ -1179,7 +1179,7 @@ const cron = require('node-cron');
 // ==========================================
 // 🚀 CRON JOB: דוח יומי חכם (15:00 שעון תאילנד)
 // ==========================================
-cron.schedule('45 15 * * *', async () => {
+cron.schedule('45 16 * * *', async () => {
     console.log("⏰ [CRON] Starting Daily 15:00 Task Check...");
     try {
         // 1. שולפים את כל המשתמשים כדי לדעת מי עובד, מי מנהל ומי ביג בוס
@@ -1253,7 +1253,7 @@ cron.schedule('45 15 * * *', async () => {
             if (emp.email) {
                 try {
                     await transporter.sendMail({
-                        from: `"OpsManager" <${process.env.EMAIL_USER}>`,
+                        from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', // 👈 שורת הקסם שלך!
                         to: emp.email,
                         subject: subject,
                         html: htmlBody
@@ -1346,7 +1346,7 @@ cron.schedule('45 15 * * *', async () => {
             if (leader.email) {
                 try {
                     await transporter.sendMail({
-                        from: `"OpsManager" <${process.env.EMAIL_USER}>`,
+                        from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', // 👈 שורת הקסם שלך!
                         to: leader.email,
                         subject: allTeamPerfect ? '🌟 דוח יומי: כל הצוות סיים בהצטיינות!' : '📊 דוח יומי: יש משימות פתוחות בצוות',
                         html: leaderHtml
@@ -1379,67 +1379,55 @@ cron.schedule('45 15 * * *', async () => {
 });
 
 // ==========================================
-// 🚑 פונקציית חירום: שחזור משתמש BIG_BOSS
+// 🚑 פונקציית חירום 2.0: שחזור משתמש BIG_BOSS נקי
 // ==========================================
 app.get('/api/rescue-boss', async (req, res) => {
     try {
-        // 👇 שכתבי פה את האימייל והסיסמה שאת רוצה לביג בוס החדש שלך 👇
-        const bossEmail = "talyaisrael2025@gmail.com"; // שני לאימייל שלך
-        const bossPassword = "123456"; // שני לסיסמה שאת רוצה (לפחות 6 תווים)
+        // 👇 שכתבי פה את האימייל והסיסמה - וודאי שאין רווחים מיותרים! 👇
+        const bossEmail = "talyaisrael2025@gmail.com"; 
+        const bossPassword = "123456"; 
         const bossName = "Big Boss";
 
-        let firebaseUser;
+        let uid;
         
-        // 1. ננסה לחפש את המשתמש בפיירבייס
+        // 1. פיירבייס: מוחקים את המשתמש אם הוא קיים (כדי להתחיל נקי), ואז יוצרים מחדש
         try {
-            firebaseUser = await admin.auth().getUserByEmail(bossEmail);
-            // אם מצאנו, נכפה עליו את הסיסמה החדשה
-            await admin.auth().updateUser(firebaseUser.uid, { password: bossPassword, displayName: bossName });
-        } catch (e) {
-            // אם לא מצאנו בפיירבייס, ניצור אותו מאפס!
-            firebaseUser = await admin.auth().createUser({
-                email: bossEmail,
-                password: bossPassword,
-                displayName: bossName
-            });
-        }
+            const existingUser = await admin.auth().getUserByEmail(bossEmail);
+            await admin.auth().deleteUser(existingUser.uid);
+        } catch (e) { /* מתעלמים אם הוא לא קיים */ }
 
-        const uid = firebaseUser.uid;
+        // יוצרים משתמש פיירבייס חדש ונוצץ
+        const newUser = await admin.auth().createUser({
+            email: bossEmail,
+            password: bossPassword,
+            displayName: bossName
+        });
+        uid = newUser.uid;
         
-        // הצפנת הסיסמה עבור מסד הנתונים
-        const bcrypt = require('bcrypt'); // נוודא שזה מיובא
+        // 2. מסד נתונים: מוחקים שאריות ישנות של המייל הזה
+        await pool.query('DELETE FROM users WHERE email = $1', [bossEmail]);
+        
+        // מצפינים את הסיסמה ומכניסים נקי למסד הנתונים עם ה-UID של פיירבייס
+        const bcrypt = require('bcrypt');
         const hashedPassword = await bcrypt.hash(bossPassword, 10);
 
-        // 2. נסדר את מסד הנתונים שלנו (PostgreSQL)
-        const checkDb = await pool.query('SELECT id FROM users WHERE id = $1 OR email = $2', [uid, bossEmail]);
-        
-        if (checkDb.rows.length === 0) {
-            // אם הוא לא קיים בכלל ב-DB, ניצור אותו
-            await pool.query(
-                `INSERT INTO users (id, full_name, email, role, password) 
-                 VALUES ($1, $2, $3, 'BIG_BOSS', $4)`,
-                [uid, bossName, bossEmail, hashedPassword]
-            );
-        } else {
-            // אם הוא קיים (אולי נתקע מפעמים קודמות), נכריח אותו להיות הביג בוס עם ה-ID של פיירבייס
-            const existingId = checkDb.rows[0].id;
-            await pool.query(
-                `UPDATE users SET role = 'BIG_BOSS', email = $1, password = $2, full_name = $3 WHERE id = $4`,
-                [bossEmail, hashedPassword, bossName, existingId]
-            );
-        }
+        await pool.query(
+            `INSERT INTO users (id, full_name, email, role, password) 
+             VALUES ($1, $2, $3, 'BIG_BOSS', $4)`,
+            [uid, bossName, bossEmail, hashedPassword]
+        );
 
         res.send(`
             <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
-                <h1 style="color: #166534;">✅ משתמש ה-Big Boss שוחזר בהצלחה!</h1>
-                <h2>אימייל: <b>${bossEmail}</b></h2>
+                <h1 style="color: #166534;">✅ משתמש ה-Big Boss נוצר מחדש בהצלחה!</h1>
+                <h2>אימייל להתחברות: <b>${bossEmail}</b></h2>
                 <h2>סיסמה: <b>${bossPassword}</b></h2>
-                <p style="color: #991b1b; font-weight: bold;">כנסי לאפליקציה עכשיו והתחברי. לאחר שתראי שזה עובד, מחקי את הקוד הזה מהשרת למען האבטחה!</p>
+                <p>כנסי עכשיו לאפליקציה וזה יעבוד.</p>
             </div>
         `);
     } catch (error) {
         console.error(error);
-        res.status(500).send("❌ שגיאה בשחזור הבוס: " + error.message);
+        res.status(500).send("❌ שגיאה: " + error.message);
     }
 });
 
