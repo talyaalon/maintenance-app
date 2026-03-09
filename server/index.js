@@ -1138,4 +1138,201 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
     }
 });
 
+const cron = require('node-cron');
+
+// ==========================================
+// 🚀 CRON JOB: דוח סוף יום אוטומטי ב-15:00
+// ==========================================
+// רץ כל יום בשעה 15:00 לפי שעון ירושלים
+cron.schedule('32 14 * * *', async () => {
+    console.log("⏰ [CRON] Starting Daily End-of-Day Task Check...");
+
+    try {
+        // 1. שליפת כל המשימות של היום יחד עם פרטי העובד והמנהל
+        // שימוש בפונקציות SQL כדי להביא רק את מה שהתאריך שלו הוא היום
+        const todayTasksRes = await pool.query(`
+            SELECT 
+                t.id as task_id, t.title, t.status, t.description, t.completion_note,
+                u.id as worker_id, u.full_name as worker_name, u.email as worker_email, u.device_token as worker_token,
+                m.id as manager_id, m.full_name as manager_name, m.email as manager_email, m.device_token as manager_token
+            FROM tasks t
+            JOIN users u ON t.worker_id = u.id
+            LEFT JOIN users m ON u.parent_manager_id = m.id
+            WHERE DATE(t.due_date) = CURRENT_DATE
+        `);
+
+        const tasks = todayTasksRes.rows;
+        if (tasks.length === 0) {
+            console.log("✅ [CRON] No tasks scheduled for today.");
+            return;
+        }
+
+        // 2. סידור הנתונים: קיבוץ לפי מנהלים -> ואז לפי עובדים
+        const managersReport = {}; // { manager_id: { manager_data, workers: { worker_id: { worker_data, tasks: [] } } } }
+
+        tasks.forEach(task => {
+            const mId = task.manager_id || 'system'; // אם אין מנהל, נשים תחת מערכת
+            if (!managersReport[mId]) {
+                managersReport[mId] = {
+                    email: task.manager_email,
+                    name: task.manager_name || 'System Admin',
+                    token: task.manager_token,
+                    workers: {}
+                };
+            }
+
+            const wId = task.worker_id;
+            if (!managersReport[mId].workers[wId]) {
+                managersReport[mId].workers[wId] = {
+                    name: task.worker_name,
+                    email: task.worker_email,
+                    token: task.worker_token,
+                    tasks: []
+                };
+            }
+            managersReport[mId].workers[wId].tasks.push(task);
+        });
+
+        // 3. עיבוד ושליחת דוחות לכל מנהל
+        for (const mId in managersReport) {
+            const manager = managersReport[mId];
+            if (!manager.email) continue;
+
+            let managerHtmlBody = `
+                <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; background-color: #f9fafb; padding: 20px;">
+                    <div style="max-w-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <div style="background-color: #714B67; color: white; padding: 20px; text-align: center;">
+                            <h1 style="margin: 0;">סיכום יום עסקים 📊</h1>
+                            <p style="margin: 5px 0 0 0;">שלום ${manager.name}, להלן סטטוס המשימות של הצוות שלך להיום.</p>
+                        </div>
+                        <div style="padding: 20px;">
+            `;
+
+            let allWorkersPerfect = true;
+
+            // מעבר על העובדים של המנהל הזה
+            for (const wId in manager.workers) {
+                const worker = manager.workers[wId];
+                const completedTasks = worker.tasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+                const pendingTasks = worker.tasks.filter(t => t.status === 'PENDING');
+                const isPerfect = pendingTasks.length === 0;
+                
+                if (!isPerfect) allWorkersPerfect = false;
+
+                // --- בניית בלוק לעובד ספציפי בתוך מייל המנהל ---
+                managerHtmlBody += `
+                    <div style="margin-bottom: 25px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                        <div style="background-color: ${isPerfect ? '#f0fdf4' : '#fef2f2'}; padding: 15px; border-bottom: 1px solid #e5e7eb;">
+                            <h3 style="margin: 0; color: ${isPerfect ? '#166534' : '#991b1b'};">
+                                ${isPerfect ? '🌟' : '⚠️'} ${worker.name} - ${isPerfect ? 'סיים/ה הכל בהצטיינות!' : 'יש משימות פתוחות'}
+                            </h3>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; color: #6b7280;">הושלמו ${completedTasks.length} מתוך ${worker.tasks.length} משימות.</p>
+                        </div>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                            <tr style="background-color: #f3f4f6; text-align: right;">
+                                <th style="padding: 10px; border-bottom: 1px solid #e5e7eb;">שם המשימה</th>
+                                <th style="padding: 10px; border-bottom: 1px solid #e5e7eb;">סטטוס</th>
+                                <th style="padding: 10px; border-bottom: 1px solid #e5e7eb;">הערות ביצוע</th>
+                            </tr>
+                `;
+
+                worker.tasks.forEach(t => {
+                    const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                    const badgeColor = isDone ? '#dcfce7' : '#fee2e2';
+                    const textColor = isDone ? '#166534' : '#991b1b';
+                    const statusText = isDone ? 'בוצע ✔️' : 'לא בוצע ❌';
+                    
+                    managerHtmlBody += `
+                        <tr>
+                            <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;"><strong>${t.title}</strong></td>
+                            <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+                                <span style="background-color: ${badgeColor}; color: ${textColor}; padding: 4px 8px; border-radius: 99px; font-weight: bold; font-size: 12px;">${statusText}</span>
+                            </td>
+                            <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">${t.completion_note || '-'}</td>
+                        </tr>
+                    `;
+                });
+
+                managerHtmlBody += `</table></div>`;
+
+                // ==========================================
+                // 🔔 פעולות מול העובד העצמו (התראות ומייל)
+                // ==========================================
+                if (!isPerfect) {
+                    // שליחת מייל נזיפה/תזכורת לעובד
+                    const workerHtmlBody = `
+                        <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; padding: 20px;">
+                            <h2 style="color: #991b1b;">שלום ${worker.name}, נותרו לך משימות פתוחות להיום! ⏰</h2>
+                            <p>שעת סיום היום הגיעה, אך נראה שטרם סיימת או דיווחת על המשימות הבאות:</p>
+                            <ul>
+                                ${pendingTasks.map(t => `<li style="margin-bottom: 8px;"><strong>${t.title}</strong></li>`).join('')}
+                            </ul>
+                            <p>אנא היכנס/י לאפליקציה ועדכן/י סטטוס בהקדם.</p>
+                            <a href="https://air-manage-app.netlify.app/" style="display: inline-block; background-color: #714B67; color: white; padding: 10px 20px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 15px;">כניסה לאפליקציה</a>
+                        </div>
+                    `;
+
+                    // שליחת מייל לעובד
+                    if (worker.email) {
+                        transporter.sendMail({
+                            from: '"OpsManager System" <no-reply@yourdomain.com>', // החליפי למייל שלך
+                            to: worker.email,
+                            subject: '⚠️ תזכורת: משימות פתוחות להיום',
+                            html: workerHtmlBody
+                        }).catch(e => console.log("Failed sending email to worker:", e.message));
+                    }
+
+                    // שליחת התראת פוש לעובד
+                    if (worker.token) {
+                        admin.messaging().send({
+                            token: worker.token,
+                            notification: { title: 'נותרו משימות להיום! ⏰', body: `יש לך ${pendingTasks.length} משימות שטרם דווחו. היכנס עכשיו לעדכן.` }
+                        }).catch(e => console.log("Failed push to worker:", e.message));
+                    }
+                }
+            } // סיום ריצה על העובדים
+
+            managerHtmlBody += `
+                        </div>
+                        <div style="background-color: #f3f4f6; text-align: center; padding: 15px; font-size: 12px; color: #9ca3af;">
+                            נשלח אוטומטית ממערכת OpsManager
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // ==========================================
+            // 🔔 פעולות מול המנהל
+            // ==========================================
+            // שליחת המייל המסוכם למנהל
+            transporter.sendMail({
+                from: '"OpsManager System" <no-reply@yourdomain.com>', // החליפי למייל שלך
+                to: manager.email,
+                subject: allWorkersPerfect ? '🌟 סיכום יומי: כל הצוות סיים בהצטיינות!' : '📊 סיכום יומי: דוח ביצועי צוות',
+                html: managerHtmlBody
+            }).catch(e => console.log("Failed sending email to manager:", e.message));
+
+            // התראת פוש למנהל
+            if (manager.token) {
+                admin.messaging().send({
+                    token: manager.token,
+                    notification: {
+                        title: allWorkersPerfect ? 'כל המשימות בוצעו! 🏆' : 'דוח יומי מוכן 📊',
+                        body: allWorkersPerfect ? 'כל העובדים שלך סיימו את המשימות להיום.' : 'חלק מהעובדים טרם סיימו. נשלח אליך דוח מפורט למייל.'
+                    }
+                }).catch(e => console.log("Failed push to manager:", e.message));
+            }
+        } // סיום ריצה על מנהלים
+
+        console.log("✅ [CRON] Daily End-of-Day job completed successfully.");
+
+    } catch (error) {
+        console.error("❌ [CRON] Failed to execute daily task check:", error);
+    }
+}, {
+    scheduled: true,
+    timezone: "Asia/Bangkok" // מבטיח שזה יקרה ב-15:00 שעון ישראל, ולא משנה איפה השרת מאוחסן!
+});
+
+
 app.listen(port, () => { console.log(`Server running on ${port}`); });
