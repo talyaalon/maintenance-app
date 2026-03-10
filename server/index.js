@@ -1384,7 +1384,7 @@ cron.schedule('30 10 * * *', async () => {
 app.get('/api/rescue-boss', async (req, res) => {
     try {
         // 👇 הקלידי פה את המייל המדויק שהגדרת עכשיו בפיירבייס 👇
-        const bossEmail = "admin@mycompany.com"; 
+        const bossEmail = "talyaisrael2025@gmail.com"; 
         const bossName = "Big Boss";
 
         // יצירת סיסמה וירטואלית למסד הנתונים (פיירבייס מנהל את ההתחברות האמיתית)
