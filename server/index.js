@@ -1179,7 +1179,7 @@ const cron = require('node-cron');
 // ==========================================
 // 🚀 CRON JOB: דוח יומי חכם (15:00 שעון תאילנד)
 // ==========================================
-cron.schedule('45 16 * * *', async () => {
+cron.schedule('30 10 * * *', async () => {
     console.log("⏰ [CRON] Starting Daily 15:00 Task Check...");
     try {
         // 1. שולפים את כל המשתמשים כדי לדעת מי עובד, מי מנהל ומי ביג בוס
@@ -1379,38 +1379,34 @@ cron.schedule('45 16 * * *', async () => {
 });
 
 // ==========================================
-// 🚑 פונקציית חירום 3.0: סנכרון הבוס מה-UID של פיירבייס
+// 🚑 פונקציית חירום 4.0: סנכרון הבוס (מותאם למסד נתונים מספרי)
 // ==========================================
 app.get('/api/rescue-boss', async (req, res) => {
     try {
-        // 👇 1. הדביקי פה את ה-UID שהעתקת מפיירבייס! 👇
-        const firebaseUid = "hmUYXez50DTUs1vOxBB509ZV59G2"; 
-        
-        // 👇 2. הקלידי פה את המייל המדויק שהגדרת עכשיו בפיירבייס 👇
-        const bossEmail = "talyaisrael2025@gmail.com"; 
-        
+        // 👇 הקלידי פה את המייל המדויק שהגדרת עכשיו בפיירבייס 👇
+        const bossEmail = "admin@mycompany.com"; 
         const bossName = "Big Boss";
 
-        // יצירת סיסמה וירטואלית למסד הנתונים (פיירבייס מנהל את הסיסמה האמיתית שהזנת לו)
+        // יצירת סיסמה וירטואלית למסד הנתונים (פיירבייס מנהל את ההתחברות האמיתית)
         const bcrypt = require('bcrypt');
         const dummyPassword = await bcrypt.hash("123456", 10);
 
         // מחיקת שאריות ישנות מהמסד כדי למנוע התנגשות
-        await pool.query('DELETE FROM users WHERE email = $1 OR id = $2', [bossEmail, firebaseUid]);
+        await pool.query('DELETE FROM users WHERE email = $1', [bossEmail]);
         
-        // יצירת הבוס במסד הנתונים שלנו מחובר בדיוק ל-UID של פיירבייס!
+        // יצירת הבוס - הפעם אנחנו לא נותנים לו ID, המסד ימציא לו מספר לבד!
         await pool.query(
-            `INSERT INTO users (id, full_name, email, role, password) 
-             VALUES ($1, $2, $3, 'BIG_BOSS', $4)`,
-            [firebaseUid, bossName, bossEmail, dummyPassword]
+            `INSERT INTO users (full_name, email, role, password) 
+             VALUES ($1, $2, 'BIG_BOSS', $3)`,
+            [bossName, bossEmail, dummyPassword]
         );
 
         res.send(`
             <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
-                <h1 style="color: #166534;">✅ משתמש ה-Big Boss סונכרן בהצלחה!</h1>
+                <h1 style="color: #166534;">✅ משתמש ה-Big Boss נוצר בהצלחה במסד הנתונים!</h1>
                 <h2>אימייל להתחברות: <b>${bossEmail}</b></h2>
                 <p style="color: #4b5563;">(השתמשי בסיסמה שהגדרת ידנית בפיירבייס)</p>
-                <p>כנסי עכשיו לאפליקציה, זה יעבוד ב-100%.</p>
+                <p>הכתר חזר אלייך. כנסי עכשיו לאפליקציה ותתחברי.</p>
             </div>
         `);
     } catch (error) {
