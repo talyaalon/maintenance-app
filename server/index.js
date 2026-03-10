@@ -1379,55 +1379,43 @@ cron.schedule('45 16 * * *', async () => {
 });
 
 // ==========================================
-// 🚑 פונקציית חירום 2.0: שחזור משתמש BIG_BOSS נקי
+// 🚑 פונקציית חירום 3.0: סנכרון הבוס מה-UID של פיירבייס
 // ==========================================
 app.get('/api/rescue-boss', async (req, res) => {
     try {
-        // 👇 שכתבי פה את האימייל והסיסמה - וודאי שאין רווחים מיותרים! 👇
+        // 👇 1. הדביקי פה את ה-UID שהעתקת מפיירבייס! 👇
+        const firebaseUid = "hmUYXez50DTUs1vOxBB509ZV59G2"; 
+        
+        // 👇 2. הקלידי פה את המייל המדויק שהגדרת עכשיו בפיירבייס 👇
         const bossEmail = "talyaisrael2025@gmail.com"; 
-        const bossPassword = "123456"; 
+        
         const bossName = "Big Boss";
 
-        let uid;
-        
-        // 1. פיירבייס: מוחקים את המשתמש אם הוא קיים (כדי להתחיל נקי), ואז יוצרים מחדש
-        try {
-            const existingUser = await admin.auth().getUserByEmail(bossEmail);
-            await admin.auth().deleteUser(existingUser.uid);
-        } catch (e) { /* מתעלמים אם הוא לא קיים */ }
-
-        // יוצרים משתמש פיירבייס חדש ונוצץ
-        const newUser = await admin.auth().createUser({
-            email: bossEmail,
-            password: bossPassword,
-            displayName: bossName
-        });
-        uid = newUser.uid;
-        
-        // 2. מסד נתונים: מוחקים שאריות ישנות של המייל הזה
-        await pool.query('DELETE FROM users WHERE email = $1', [bossEmail]);
-        
-        // מצפינים את הסיסמה ומכניסים נקי למסד הנתונים עם ה-UID של פיירבייס
+        // יצירת סיסמה וירטואלית למסד הנתונים (פיירבייס מנהל את הסיסמה האמיתית שהזנת לו)
         const bcrypt = require('bcrypt');
-        const hashedPassword = await bcrypt.hash(bossPassword, 10);
+        const dummyPassword = await bcrypt.hash("123456", 10);
 
+        // מחיקת שאריות ישנות מהמסד כדי למנוע התנגשות
+        await pool.query('DELETE FROM users WHERE email = $1 OR id = $2', [bossEmail, firebaseUid]);
+        
+        // יצירת הבוס במסד הנתונים שלנו מחובר בדיוק ל-UID של פיירבייס!
         await pool.query(
             `INSERT INTO users (id, full_name, email, role, password) 
              VALUES ($1, $2, $3, 'BIG_BOSS', $4)`,
-            [uid, bossName, bossEmail, hashedPassword]
+            [firebaseUid, bossName, bossEmail, dummyPassword]
         );
 
         res.send(`
             <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
-                <h1 style="color: #166534;">✅ משתמש ה-Big Boss נוצר מחדש בהצלחה!</h1>
+                <h1 style="color: #166534;">✅ משתמש ה-Big Boss סונכרן בהצלחה!</h1>
                 <h2>אימייל להתחברות: <b>${bossEmail}</b></h2>
-                <h2>סיסמה: <b>${bossPassword}</b></h2>
-                <p>כנסי עכשיו לאפליקציה וזה יעבוד.</p>
+                <p style="color: #4b5563;">(השתמשי בסיסמה שהגדרת ידנית בפיירבייס)</p>
+                <p>כנסי עכשיו לאפליקציה, זה יעבוד ב-100%.</p>
             </div>
         `);
     } catch (error) {
         console.error(error);
-        res.status(500).send("❌ שגיאה: " + error.message);
+        res.status(500).send("❌ שגיאת שרת פנימית: " + error.message);
     }
 });
 
