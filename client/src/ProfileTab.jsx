@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { Camera, Save, X, LogOut, Eye, EyeOff } from 'lucide-react'; // הסרתי את Phone מהייבוא כי מחקנו אותו
+import { Camera, Save, X, LogOut, Eye, EyeOff, Globe } from 'lucide-react'; 
 
 const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
   const [formData, setFormData] = useState({
-    full_name: user.name || '',
+    full_name: user.name || user.full_name || '',
     email: user.email || '', 
     phone: user.phone || '',
     password: '', 
+    preferred_language: user.preferred_language || 'he' // 👈 הוספנו את השפה לסטייט!
   });
 
   const [previewImage, setPreviewImage] = useState(user.profile_picture_url);
@@ -30,6 +31,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
     dataToSend.append('full_name', formData.full_name);
     dataToSend.append('email', formData.email);
     dataToSend.append('phone', formData.phone);
+    dataToSend.append('preferred_language', formData.preferred_language); // 👈 שולחים את השפה לשרת!
     
     if (formData.password) {
         dataToSend.append('password', formData.password);
@@ -42,6 +44,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
     }
 
     try {
+      // שימי לב: אצלך זה /users/profile, וודאי שהשרת מאזין לזה, או שני ל /users/${user.id}
       const res = await fetch('https://maintenance-app-h84v.onrender.com/users/profile', {
         method: 'PUT',
         headers: {
@@ -73,18 +76,16 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
       {/* אזור תמונת הפרופיל */}
       <div className="relative mb-6 group flex flex-col items-center">
         <div className="relative">
-            {/* עיגול התמונה */}
             <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-purple-100 flex items-center justify-center">
                 {previewImage ? (
                     <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
                     <span className="text-4xl font-bold text-purple-600">
-                        {user.name?.charAt(0).toUpperCase()}
+                        {(formData.full_name || user.name || '?').charAt(0).toUpperCase()}
                     </span>
                 )}
             </div>
             
-            {/* כפתור המצלמה - ממוקם מחוץ לעיגול כדי שלא ייחתך */}
             {isEditing && (
                 <label className="absolute bottom-0 right-0 translate-y-1/4 translate-x-1/4 bg-purple-600 p-2 rounded-full text-white cursor-pointer hover:bg-purple-700 shadow-md transition-transform transform hover:scale-110 z-20">
                     <Camera size={18} />
@@ -102,7 +103,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
       <form onSubmit={handleSave} className="w-full bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
         
         <div>
-            <label className="block text-sm font-medium text-gray-500 mb-1">{t.full_name_label}</label>
+            <label className="block text-sm font-medium text-gray-500 mb-1">{t.full_name_label || 'Full Name'}</label>
             <input 
                 type="text" 
                 className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none disabled:bg-gray-100 disabled:text-gray-400"
@@ -113,7 +114,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         </div>
 
         <div>
-            <label className="block text-sm font-medium text-gray-500 mb-1">{t.email_label}</label>
+            <label className="block text-sm font-medium text-gray-500 mb-1">{t.email_label || 'Email'}</label>
             <input 
                 type="email" 
                 className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none disabled:bg-gray-100 disabled:text-gray-400"
@@ -124,7 +125,6 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             />
         </div>
 
-        {/* --- שדה טלפון (נקי) --- */}
         <div>
             <label className="block text-sm font-medium text-gray-500 mb-1">
                 {t.phone_label || "Phone Number"}
@@ -140,9 +140,29 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             />
         </div>
 
+        {/* 🌍 הוספת שדה בחירת שפה */}
+        <div className="animate-fade-in relative">
+            <label className="block text-sm font-medium text-gray-500 mb-1">
+                {t.preferred_language || "Preferred Notifications Language"}
+            </label>
+            <div className="relative">
+                <Globe className={`absolute top-1/2 transform -translate-y-1/2 text-gray-400 ${lang === 'he' ? 'right-3' : 'left-3'}`} size={18} />
+                <select
+                    className={`w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-purple-200 outline-none disabled:bg-gray-100 disabled:text-gray-400 ${lang === 'he' ? 'pr-10' : 'pl-10'}`}
+                    value={formData.preferred_language}
+                    onChange={e => setFormData({...formData, preferred_language: e.target.value})}
+                    disabled={!isEditing}
+                >
+                    <option value="he">עברית (Hebrew)</option>
+                    <option value="en">English</option>
+                    <option value="th">ภาษาไทย (Thai)</option>
+                </select>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">* {t.lang_note || "Daily reports will be sent in this language"}</p>
+        </div>
+
         {isEditing && (
             <div className="animate-fade-in relative">
-                {/* --- סיסמה (נקיה) --- */}
                 <label className="block text-sm font-medium text-gray-500 mb-1">{t.password_placeholder || "New Password"}</label>
                 <div className="relative">
                     <input 
@@ -176,7 +196,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
                     </button>
                 </>
             ) : (
-                <button type="button" onClick={() => setIsEditing(true)} className="w-full py-3 bg-[#714B67] text-white rounded-lg hover:#5a3b52 transition flex justify-center gap-2 items-center">
+                <button type="button" onClick={() => setIsEditing(true)} className="w-full py-3 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] transition flex justify-center gap-2 items-center">
                       <Camera size={18} /> {t.edit_profile_btn || "Edit Profile"}
                 </button>
             )}

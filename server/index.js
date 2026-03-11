@@ -74,7 +74,7 @@ transporter.verify((error, success) => {
 });
 
 const sendUpdateEmail = async (email, fullName, changes) => {
-    const appLink = "https://maintenance-management-app.netlify.app";
+    const appLink = "https://air-manage-app.netlify.app";
     let changesHtml = '<ul style="padding-left: 20px; color: #333;">';
     changes.forEach(change => { changesHtml += `<li style="margin-bottom: 5px;">${change}</li>`; });
     changesHtml += '</ul>';
@@ -346,31 +346,24 @@ app.post('/users', authenticateToken, async (req, res) => {
     res.status(500).send('Server Error');
   }
 });
-
+ 
 // ==========================================
-// עריכת משתמש: סנכרון Firebase + שמירת היסטוריית שינויים ומיילים
+// עריכת משתמש (כולל שמירת העדפת שפה, סנכרון Firebase ומעקב שינויים)
 // ==========================================
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, email, phone, role, password } = req.body;
+    const { full_name, email, phone, role, password, preferred_language } = req.body;
 
-    // 1. מביאים את המשתמש הישן (כדי לדעת מה השתנה בשביל המייל)
+    // שליפת משתמש ישן למעקב שינויים
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
     const oldUser = oldUserRes.rows[0];
 
-    // ==========================================
-    // 2. עדכון שרת ההתחברות (Firebase Auth) - קריטי כדי שהכניסה תעבוד!
-    // ==========================================
-    const firebaseUpdateData = {
-        displayName: full_name,
-        email: email
-    };
-    
-    // מעדכנים סיסמה בפיירבייס רק אם הוזנה סיסמה חדשה
+    // 1. עדכון Firebase Auth 
+    const firebaseUpdateData = { displayName: full_name, email: email };
     if (password && password.trim() !== '') {
-        if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters long for Firebase" });
+        if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
         firebaseUpdateData.password = password;
     }
 
@@ -378,20 +371,18 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         await admin.auth().updateUser(id, firebaseUpdateData);
     } catch (firebaseErr) {
         console.error("Firebase update failed:", firebaseErr);
-        if (firebaseErr.code === 'auth/email-already-exists') {
-            return res.status(400).json({ error: "האימייל הזה כבר תפוס על ידי משתמש אחר במערכת." });
-        }
-        return res.status(500).json({ error: "שגיאה בעדכון פרטי ההתחברות של המשתמש." });
+        if (firebaseErr.code === 'auth/email-already-exists') return res.status(400).json({ error: "האימייל הזה כבר תפוס על ידי משתמש אחר." });
+        return res.status(500).json({ error: "שגיאה בעדכון פרטי ההתחברות." });
     }
 
-    // ==========================================
-    // 3. עדכון מסד הנתונים (PostgreSQL) כולל הצפנת Bcrypt כמו שהיה לך
-    // ==========================================
-    let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4';
-    let params = [full_name, email, phone, role];
-    let paramCount = 5;
+    // 2. עדכון מסד הנתונים (כולל השפה!)
+    const lang = preferred_language || oldUser.preferred_language || 'he';
+    let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4, preferred_language=$5';
+    let params = [full_name, email, phone, role, lang];
+    let paramCount = 6;
 
     if (password && password.trim() !== '') {
+        const bcrypt = require('bcrypt');
         const hashedPassword = await bcrypt.hash(password, 10);
         query += `, password=$${paramCount}`; 
         params.push(hashedPassword);
@@ -404,29 +395,24 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     const result = await pool.query(query, params);
     const updatedUser = result.rows[0];
 
-    // ==========================================
-    // 4. מערכת הדיווח שלך: מעקב שינויים ושליחת מייל
-    // ==========================================
+    // 3. דיווח שינויים במייל
     let changes = [];
     if (oldUser.full_name !== updatedUser.full_name) changes.push(`Name changed to: <strong>${updatedUser.full_name}</strong>`);
     if (oldUser.email !== updatedUser.email) changes.push(`Email changed to: <strong>${updatedUser.email}</strong>`);
     if (oldUser.phone !== updatedUser.phone) changes.push(`Phone updated`);
+    if (oldUser.preferred_language !== updatedUser.preferred_language) changes.push(`Language changed to: <strong>${updatedUser.preferred_language}</strong>`);
     if (password && password.trim() !== '') changes.push('Password has been changed');
 
-    // שליחת המייל דרך הפונקציה המקורית שלך
     if (changes.length > 0) {
-        sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes)
-            .catch(err => console.error("Email send error:", err));
+        // שלחנו את הפונקציה המקורית שלך לשליחת מייל עדכון
+        sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes).catch(err => console.error("Email send error:", err));
     }
     
     res.json({ message: "User updated successfully", user: updatedUser });
 
   } catch (err) {
     console.error("❌ Error updating user:", err); 
-    // תפיסת שגיאת כפילות אימייל של ה-DB שלך (קוד 23505)
-    if (err.code === '23505') {
-        return res.status(400).json({ error: "Email already exists in Database" });
-    }
+    if (err.code === '23505') return res.status(400).json({ error: "Email already exists in Database" });
     res.status(500).send('Server Error');
   }
 });
@@ -1177,206 +1163,247 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
 const cron = require('node-cron');
 
 // ==========================================
-// 🚀 CRON JOB: דוח יומי חכם (15:00 שעון תאילנד)
+// 🚀 CRON JOB: דוח יומי (תמיכה במובייל + 3 שפות)
 // ==========================================
-cron.schedule('30 10 * * *', async () => {
-    console.log("⏰ [CRON] Starting Daily 15:00 Task Check...");
-    try {
-        // 1. שולפים את כל המשתמשים כדי לדעת מי עובד, מי מנהל ומי ביג בוס
-        const usersRes = await pool.query("SELECT id, full_name, email, role, parent_manager_id, device_token FROM users");
-        const allUsers = usersRes.rows;
+cron.schedule('40 13 * * *', async () => {
+    console.log("⏰ [CRON] Starting Daily Task Check...");
 
-        // 2. שולפים את המשימות של *היום בלבד*
+    // מילון תרגומים חכם
+    const dict = {
+        he: {
+            dir: 'rtl', align: 'right',
+            perf_subj: '🌟 אלופה! סיימת את כל המשימות',
+            pend_subj: '⚠️ דוח יומי: עליך להשלים משימות פתוחות',
+            w_perf_title: 'כל הכבוד סיימת הכל! 🎉',
+            w_pend_title: 'לא סיימת את המשימות להיום! ⏰',
+            w_perf_body: 'להלן הסיכום שלך להיום:',
+            w_pend_body: 'פירוט המשימות שביצעת ואלו שעליך להשלים בדחיפות:',
+            m_perf_subj: '🌟 סיכום יומי: כל הצוות סיים בהצטיינות!',
+            m_pend_subj: '📊 סיכום יומי: יש משימות פתוחות בצוות',
+            m_title: 'דוח ביצועי צוות יומי 📊',
+            m_desc: 'להלן סטטוס המשימות של העובדים להיום.',
+            btn_app: 'לכניסה לאפליקציה לחץ כאן',
+            th_task: 'משימה', th_status: 'סטטוס', th_note: 'הערות ביצוע',
+            status_done: 'בוצע ✔️', status_not: 'לא בוצע ❌',
+            perf_badge: 'סיים/ה הכל!', pend_badge: 'יש משימות פתוחות',
+            out_of: 'מתוך',
+            push_w_perf_title: 'סיימת הכל! 🏆', push_w_perf_body: 'כל הכבוד! הסיכום היומי נשלח למייל.',
+            push_w_pend_title: 'יש משימות פתוחות! ⏰', push_w_pend_body: 'נותרו לך משימות להשלים.',
+            push_m_perf_title: 'הצוות סיים הכל! 🏆', push_m_perf_body: 'כל העובדים סיימו את המשימות.',
+            push_m_pend_title: 'דוח יומי מוכן 📊', push_m_pend_body: 'לצוות שלך יש משימות פתוחות. הדוח נשלח למייל.'
+        },
+        en: {
+            dir: 'ltr', align: 'left',
+            perf_subj: '🌟 Awesome! All tasks completed',
+            pend_subj: '⚠️ Daily Report: Pending tasks to complete',
+            w_perf_title: 'Great job, you finished everything! 🎉',
+            w_pend_title: 'You have pending tasks today! ⏰',
+            w_perf_body: 'Here is your summary for today:',
+            w_pend_body: 'Details of your tasks and what needs urgent completion:',
+            m_perf_subj: '🌟 Daily Summary: Entire team excelled!',
+            m_pend_subj: '📊 Daily Summary: Pending tasks in your team',
+            m_title: 'Daily Team Performance 📊',
+            m_desc: 'Here is the task status of your employees for today.',
+            btn_app: 'Click here to open the app',
+            th_task: 'Task', th_status: 'Status', th_note: 'Notes',
+            status_done: 'Done ✔️', status_not: 'Pending ❌',
+            perf_badge: 'Finished all!', pend_badge: 'Pending tasks',
+            out_of: 'out of',
+            push_w_perf_title: 'All done! 🏆', push_w_perf_body: 'Great job! Daily summary sent to email.',
+            push_w_pend_title: 'Pending tasks! ⏰', push_w_pend_body: 'You have tasks left to complete.',
+            push_m_perf_title: 'Team finished! 🏆', push_m_perf_body: 'All employees completed their tasks.',
+            push_m_pend_title: 'Daily Report 📊', push_m_pend_body: 'Your team has pending tasks. Report sent to email.'
+        },
+        th: {
+            dir: 'ltr', align: 'left',
+            perf_subj: '🌟 ยอดเยี่ยม! ทำภารกิจเสร็จสิ้นทั้งหมด',
+            pend_subj: '⚠️ รายงานประจำวัน: มีภารกิจที่ต้องทำ',
+            w_perf_title: 'ทำได้ดีมาก คุณทำเสร็จหมดแล้ว! 🎉',
+            w_pend_title: 'คุณมีภารกิจค้างอยู่สำหรับวันนี้! ⏰',
+            w_perf_body: 'นี่คือสรุปของคุณสำหรับวันนี้:',
+            w_pend_body: 'รายละเอียดภารกิจและสิ่งที่ต้องทำด่วน:',
+            m_perf_subj: '🌟 สรุปประจำวัน: ทีมทำงานยอดเยี่ยม!',
+            m_pend_subj: '📊 สรุปประจำวัน: มีภารกิจค้างในทีม',
+            m_title: 'ผลงานทีมประจำวัน 📊',
+            m_desc: 'สถานะภารกิจของพนักงานสำหรับวันนี้.',
+            btn_app: 'คลิกที่นี่เพื่อเปิดแอป',
+            th_task: 'งาน', th_status: 'สถานะ', th_note: 'หมายเหตุ',
+            status_done: 'เสร็จ ✔️', status_not: 'รอดำเนินการ ❌',
+            perf_badge: 'เสร็จหมด!', pend_badge: 'มีงานค้าง',
+            out_of: 'จาก',
+            push_w_perf_title: 'เสร็จหมด! 🏆', push_w_perf_body: 'ยอดเยี่ยม! ส่งสรุปไปที่อีเมลแล้ว.',
+            push_w_pend_title: 'มีงานค้าง! ⏰', push_w_pend_body: 'คุณมีงานที่ต้องทำต่อ.',
+            push_m_perf_title: 'ทีมเสร็จงาน! 🏆', push_m_perf_body: 'พนักงานทุกคนทำงานเสร็จแล้ว.',
+            push_m_pend_title: 'รายงานประจำวัน 📊', push_m_pend_body: 'ทีมของคุณมีงานค้าง ส่งรายงานไปที่อีเมลแล้ว.'
+        }
+    };
+
+    try {
+        const usersRes = await pool.query("SELECT id, full_name, email, role, parent_manager_id, device_token, preferred_language FROM users");
+        const allUsers = usersRes.rows;
         const tasksRes = await pool.query("SELECT * FROM tasks WHERE DATE(due_date) = CURRENT_DATE");
         const todayTasks = tasksRes.rows;
 
-        if (todayTasks.length === 0) {
-            console.log("✅ [CRON] No tasks for today.");
-            return;
-        }
+        if (todayTasks.length === 0) return;
 
-        // 3. מקבצים את המשימות פר עובד (ורק למי שמוגדר כ-EMPLOYEE!)
         const employeeTasks = {};
-        const employees = allUsers.filter(u => u.role === 'EMPLOYEE');
-        
-        employees.forEach(emp => {
+        allUsers.filter(u => u.role === 'EMPLOYEE').forEach(emp => {
             const myTasks = todayTasks.filter(t => t.worker_id === emp.id);
-            if (myTasks.length > 0) {
-                employeeTasks[emp.id] = { user: emp, tasks: myTasks };
-            }
+            if (myTasks.length > 0) employeeTasks[emp.id] = { user: emp, tasks: myTasks };
         });
 
-        // ==========================================
-        // 🔔 שלב א': טיפול בעובדים (אימייל + פוש)
-        // ==========================================
+        // HTML Base (Responsive Mobile First)
+        const getEmailTemplate = (langDict, content) => `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin:0; padding:10px; background-color:#f4f4f5; font-family:Helvetica, Arial, sans-serif; -webkit-text-size-adjust:none;">
+            <div style="max-width:500px; margin:0 auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.05); direction:${langDict.dir}; text-align:${langDict.align};">
+                ${content}
+            </div>
+        </body>
+        </html>`;
+
+        // ==============================
+        // 1. WORKERS
+        // ==============================
         for (const empId in employeeTasks) {
             const { user: emp, tasks: wTasks } = employeeTasks[empId];
+            const l = dict[emp.preferred_language] || dict['he']; // שליפת השפה של העובד
+            
             const completed = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
             const pending = wTasks.filter(t => t.status === 'PENDING');
             const isPerfect = pending.length === 0;
 
-            // בניית טבלה אישית לעובד
             let tableHtml = `
-            <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;">
-                <tr style="background-color: #f3f4f6; text-align: right;">
-                    <th style="padding: 10px; border: 1px solid #ddd;">שם המשימה</th>
-                    <th style="padding: 10px; border: 1px solid #ddd;">סטטוס</th>
-                </tr>
-            `;
+            <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:13px;">
+                <tr style="background:#f3f4f6; text-align:${l.align};">
+                    <th style="padding:8px 6px; border-bottom:1px solid #e5e7eb;">${l.th_task}</th>
+                    <th style="padding:8px 6px; border-bottom:1px solid #e5e7eb;">${l.th_status}</th>
+                </tr>`;
+            
             wTasks.forEach(t => {
                 const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
                 tableHtml += `
                 <tr>
-                    <td style="padding: 10px; border: 1px solid #ddd;"><strong>${t.title}</strong></td>
-                    <td style="padding: 10px; border: 1px solid #ddd; color: ${isDone ? '#166534' : '#991b1b'}; font-weight: bold; background-color: ${isDone ? '#dcfce7' : '#fee2e2'};">
-                        ${isDone ? 'בוצע ✔️' : 'לא בוצע ❌'}
+                    <td style="padding:8px 6px; border-bottom:1px solid #e5e7eb; color:#374151;">${t.title}</td>
+                    <td style="padding:8px 6px; border-bottom:1px solid #e5e7eb; font-size:11px;">
+                        <span style="background:${isDone ? '#dcfce7' : '#fee2e2'}; color:${isDone ? '#166534' : '#991b1b'}; padding:3px 6px; border-radius:12px; white-space:nowrap;">
+                            ${isDone ? l.status_done : l.status_not}
+                        </span>
                     </td>
                 </tr>`;
             });
             tableHtml += `</table>`;
 
-            const subject = isPerfect ? '🌟 אלופה! סיימת את כל המשימות להיום' : '⚠️ דוח יומי: עליך להשלים משימות פתוחות';
-            const bodyTitle = isPerfect 
-                ? `<h2 style="color: #166534;">כל הכבוד ${emp.full_name}! סיימת את כל המשימות! 🎉</h2><p>להלן הסיכום שלך להיום:</p>` 
-                : `<h2 style="color: #991b1b;">שלום ${emp.full_name}, לא סיימת את המשימות שלך להיום! ⏰</h2><p>להלן פירוט המשימות שביצעת ואלו שעליך להשלים בדחיפות:</p>`;
-
-            const htmlBody = `
-                <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; padding: 20px;">
-                    ${bodyTitle}
+            const htmlBody = getEmailTemplate(l, `
+                <div style="padding:15px;">
+                    <h3 style="margin:0 0 5px 0; font-size:16px; color:${isPerfect ? '#166534' : '#991b1b'};">${isPerfect ? l.w_perf_title : l.w_pend_title}</h3>
+                    <p style="margin:0; font-size:13px; color:#4b5563;">${emp.full_name}, ${isPerfect ? l.w_perf_body : l.w_pend_body}</p>
                     ${tableHtml}
-                    <br/>
-                    <a href="https://air-manage-app.netlify.app/" style="display: inline-block; background-color: #714B67; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">לכניסה לאפליקציה לחץ כאן</a>
+                    <div style="text-align:center; margin-top:20px;">
+                        <a href="https://air-manage-app.netlify.app/" style="display:inline-block; background:#714B67; color:#fff; padding:10px 20px; text-decoration:none; border-radius:6px; font-size:14px; font-weight:bold;">${l.btn_app}</a>
+                    </div>
                 </div>
-            `;
+            `);
 
-            // שליחת מייל לעובד באופן מאובטח (await)
             if (emp.email) {
-                try {
-                    await transporter.sendMail({
-                        from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', // 👈 שורת הקסם שלך!
-                        to: emp.email,
-                        subject: subject,
-                        html: htmlBody
-                    });
-                    console.log(`📧 Email sent to Employee: ${emp.full_name}`);
-                } catch(e) { console.error(`❌ Failed email to ${emp.email}:`, e.message); }
+                transporter.sendMail({
+                    from: '"OpsManager App" <maintenance.app.tkp@gmail.com>',
+                    to: emp.email,
+                    subject: isPerfect ? l.perf_subj : l.pend_subj,
+                    html: htmlBody
+                }).catch(e => console.log(e));
             }
-
-            // שליחת התראת פוש לעובד
             if (emp.device_token) {
-                try {
-                    await admin.messaging().send({
-                        token: emp.device_token,
-                        notification: { 
-                            title: isPerfect ? 'סיימת הכל! 🏆' : 'יש משימות פתוחות! ⏰', 
-                            body: isPerfect ? 'כל הכבוד! הסיכום היומי נשלח למייל.' : `נותרו לך ${pending.length} משימות להשלים.`
-                        }
-                    });
-                } catch(e) { console.error(`❌ Failed push to ${emp.full_name}:`, e.message); }
+                admin.messaging().send({
+                    token: emp.device_token,
+                    notification: { title: isPerfect ? l.push_w_perf_title : l.push_w_pend_title, body: isPerfect ? l.push_w_perf_body : l.push_w_pend_body }
+                }).catch(e => console.log(e));
             }
         }
 
-        // ==========================================
-        // 👑 שלב ב': טיפול במנהלים וב-BIG BOSS
-        // ==========================================
+        // ==============================
+        // 2. MANAGERS
+        // ==============================
         const leaders = allUsers.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
-
         for (const leader of leaders) {
-            // ביג בוס מקבל את כולם. מנהל רגיל מקבל רק את מי שתחתיו.
             const relevantEmps = leader.role === 'BIG_BOSS' 
                 ? Object.values(employeeTasks) 
                 : Object.values(employeeTasks).filter(e => e.user.parent_manager_id === leader.id);
 
-            if (relevantEmps.length === 0) continue; // אין משימות לצוות הזה היום
+            if (relevantEmps.length === 0) continue;
 
+            const l = dict[leader.preferred_language] || dict['he']; // שפת המנהל!
             let allTeamPerfect = true;
-            let leaderHtml = `
-                <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; padding: 20px; background: #f9fafb;">
-                    <div style="background-color: #714B67; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-                        <h1 style="margin:0;">דוח ביצועי צוות יומי 📊</h1>
-                        <p style="margin:5px 0 0 0;">שלום ${leader.full_name}, להלן סטטוס המשימות של העובדים שלך להיום.</p>
-                    </div>
-                    <div style="background: white; padding: 20px; border-radius: 0 0 8px 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            
+            let leaderContent = `
+                <div style="background:#714B67; color:#fff; padding:15px;">
+                    <h2 style="margin:0; font-size:16px;">${l.m_title}</h2>
+                    <p style="margin:4px 0 0 0; font-size:13px; opacity:0.9;">${leader.full_name}, ${l.m_desc}</p>
+                </div>
+                <div style="padding:10px;">
             `;
 
             relevantEmps.forEach(empData => {
                 const { user: emp, tasks: wTasks } = empData;
                 const completed = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
-                const pending = wTasks.filter(t => t.status === 'PENDING');
-                const isPerfect = pending.length === 0;
-
+                const isPerfect = completed.length === wTasks.length;
                 if (!isPerfect) allTeamPerfect = false;
 
-                leaderHtml += `
-                    <div style="margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-                        <div style="background-color: ${isPerfect ? '#f0fdf4' : '#fef2f2'}; padding: 12px; border-bottom: 1px solid #e5e7eb;">
-                            <h3 style="margin: 0; color: ${isPerfect ? '#166534' : '#991b1b'};">
-                                ${isPerfect ? '🌟' : '⚠️'} ${emp.full_name} - ${isPerfect ? 'סיים/ה את כל המשימות!' : 'יש משימות פתוחות'}
-                            </h3>
-                            <p style="margin: 4px 0 0 0; font-size: 13px; color: #6b7280;">בוצעו ${completed.length} מתוך ${wTasks.length}</p>
+                leaderContent += `
+                    <div style="margin-bottom:12px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden;">
+                        <div style="background:${isPerfect ? '#f0fdf4' : '#fef2f2'}; padding:8px 10px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:bold; font-size:14px; color:${isPerfect ? '#166534' : '#991b1b'};">${isPerfect ? '🌟' : '⚠️'} ${emp.full_name}</span>
+                            <span style="font-size:11px; color:#6b7280; background:#fff; padding:2px 6px; border-radius:10px; border:1px solid #ddd;">${completed.length} ${l.out_of} ${wTasks.length}</span>
                         </div>
-                        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                            <tr style="background-color: #f3f4f6; text-align: right;">
-                                <th style="padding: 8px; border-bottom: 1px solid #e5e7eb;">משימה</th>
-                                <th style="padding: 8px; border-bottom: 1px solid #e5e7eb;">סטטוס</th>
-                                <th style="padding: 8px; border-bottom: 1px solid #e5e7eb;">הערות ביצוע</th>
+                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                            <tr style="background:#f9fafb; text-align:${l.align}; color:#4b5563;">
+                                <th style="padding:6px; border-bottom:1px solid #eee;">${l.th_task}</th>
+                                <th style="padding:6px; border-bottom:1px solid #eee;">${l.th_status}</th>
                             </tr>
                 `;
 
                 wTasks.forEach(t => {
                     const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
-                    leaderHtml += `
+                    leaderContent += `
                         <tr>
-                            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;"><strong>${t.title}</strong></td>
-                            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
-                                <span style="background-color: ${isDone ? '#dcfce7' : '#fee2e2'}; color: ${isDone ? '#166534' : '#991b1b'}; padding: 4px 8px; border-radius: 99px; font-weight: bold; font-size: 12px;">
-                                    ${isDone ? 'בוצע ✔️' : 'לא בוצע ❌'}
+                            <td style="padding:6px; border-bottom:1px solid #eee;">${t.title}</td>
+                            <td style="padding:6px; border-bottom:1px solid #eee;">
+                                <span style="background:${isDone ? '#dcfce7' : '#fee2e2'}; color:${isDone ? '#166534' : '#991b1b'}; padding:2px 4px; border-radius:4px; white-space:nowrap; font-size:10px;">
+                                    ${isDone ? l.status_done : l.status_not}
                                 </span>
                             </td>
-                            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">${t.completion_note || '-'}</td>
                         </tr>
                     `;
                 });
-                leaderHtml += `</table></div>`;
+                leaderContent += `</table></div>`;
             });
 
-            leaderHtml += `</div></div>`;
+            leaderContent += `</div>`;
+            const leaderHtml = getEmailTemplate(l, leaderContent);
 
-            // שליחת מייל למנהל/ביג בוס
             if (leader.email) {
-                try {
-                    await transporter.sendMail({
-                        from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', // 👈 שורת הקסם שלך!
-                        to: leader.email,
-                        subject: allTeamPerfect ? '🌟 דוח יומי: כל הצוות סיים בהצטיינות!' : '📊 דוח יומי: יש משימות פתוחות בצוות',
-                        html: leaderHtml
-                    });
-                    console.log(`📧 Email sent to Manager/BigBoss: ${leader.full_name}`);
-                } catch(e) { console.error(`❌ Failed email to ${leader.email}:`, e.message); }
+                transporter.sendMail({
+                    from: '"OpsManager App" <maintenance.app.tkp@gmail.com>',
+                    to: leader.email,
+                    subject: allTeamPerfect ? l.m_perf_subj : l.m_pend_subj,
+                    html: leaderHtml
+                }).catch(e => console.log(e));
             }
-
-            // שליחת התראת פוש למנהל
             if (leader.device_token) {
-                try {
-                    await admin.messaging().send({
-                        token: leader.device_token,
-                        notification: { 
-                            title: allTeamPerfect ? 'הצוות סיים הכל! 🏆' : 'דוח יומי מוכן 📊', 
-                            body: allTeamPerfect ? 'כל העובדים סיימו את המשימות.' : 'לצוות שלך יש משימות פתוחות. הדוח נשלח למייל.'
-                        }
-                    });
-                } catch(e) { console.error(`❌ Failed push to ${leader.full_name}:`, e.message); }
+                admin.messaging().send({
+                    token: leader.device_token,
+                    notification: { title: allTeamPerfect ? l.push_m_perf_title : l.push_m_pend_title, body: allTeamPerfect ? l.push_m_perf_body : l.push_m_pend_body }
+                }).catch(e => console.log(e));
             }
         }
-
-        console.log("✅ [CRON] Daily End-of-Day job completed successfully.");
-    } catch (error) {
-        console.error("❌ [CRON] Failed to execute daily task check:", error);
-    }
-}, {
-    scheduled: true,
-    timezone: "Asia/Bangkok" // 🇹🇭 שעה 15:00 מדויקת לפי שעון תאילנד
-});
+        console.log("✅ [CRON] Daily Check completed.");
+    } catch (error) { console.error("❌ [CRON] Failed:", error); }
+}, { scheduled: true, timezone: "Asia/Bangkok" });
 
 // ==========================================
 // 🚑 פונקציית חירום 4.0: סנכרון הבוס (מותאם למסד נתונים מספרי)
