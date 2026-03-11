@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User } from 'lucide-react';
-
+import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp } from 'lucide-react';
 // שימי לב: הוספנו את user ל-props!
 const ConfigurationTab = ({ token, t, user }) => { 
   const [activeSubTab, setActiveSubTab] = useState('tree'); 
