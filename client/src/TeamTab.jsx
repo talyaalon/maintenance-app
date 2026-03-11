@@ -13,9 +13,17 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
     const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
 
-    // --- משתנים להוספת משתמש חדש ---
+    // --- משתנים להוספת משתמש חדש (כולל שפה!) ---
     const [showAddModal, setShowAddModal] = useState(false);
-    const [addForm, setAddForm] = useState({ full_name: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '' });
+    const [addForm, setAddForm] = useState({ 
+        full_name: '', 
+        email: '', 
+        password: '', 
+        phone: '', 
+        role: 'EMPLOYEE', 
+        parent_manager_id: '',
+        preferred_language: 'he' // 🌍 ברירת מחדל בעת היצירה
+    });
 
     // רשימת המנהלים הפעילים לבחירה בטופס
     const activeManagers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
@@ -48,7 +56,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             if (res.ok) {
                 alert(t.alert_created || "User created successfully! Email sent.");
                 setShowAddModal(false);
-                setAddForm({ full_name: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '' });
+                setAddForm({ full_name: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '', preferred_language: 'he' });
                 fetchTeam(); // רענון הרשימה מיד אחרי ההוספה
             } else {
                 if (data.error === "Email already exists") {
@@ -252,13 +260,12 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                 <div className="flex justify-center items-center h-full text-purple-600 font-bold">Loading Employee View...</div>
                             ) : (
                                 <div className="pointer-events-auto h-full"> 
-                                    {/* 👇 התיקון כאן: אנחנו מסננים ושולחים רק את העובדים של המנהל הנוכחי */}
                                     <TasksTab 
                                         tasks={memberTasks} 
                                         t={t} 
                                         token={token}
                                         user={selectedMember} 
-                                        subordinates={team.filter(u => u.parent_manager_id === selectedMember.id)} // שולחים את הרשימה המסוננת
+                                        subordinates={team.filter(u => u.parent_manager_id === selectedMember.id)}
                                         onRefresh={() => handleMemberClick(selectedMember)} 
                                         lang={lang}
                                     />
@@ -335,9 +342,20 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                         </div>
                         <form onSubmit={handleAddUser} className="space-y-3">
                             <input className="w-full p-3 border rounded-xl" placeholder={t.full_name_label || "Name"} value={addForm.full_name} onChange={e => setAddForm({...addForm, full_name: e.target.value})} required />
-                            <input className="w-full p-3 border rounded-xl" placeholder={t.email_label || "Email"} type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} required />
-                            <input className="w-full p-3 border rounded-xl" placeholder={t.password_placeholder || "Password"} value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} required />
-                            <input className="w-full p-3 border rounded-xl" placeholder={t.phone_label || "Phone (Optional)"} value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} />
+                            <input className="w-full p-3 border rounded-xl" placeholder={t.email_label || "Email"} type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} required dir="ltr" />
+                            <input className="w-full p-3 border rounded-xl" placeholder={t.password_placeholder || "Password"} value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} required dir="ltr" />
+                            <input className="w-full p-3 border rounded-xl" placeholder={t.phone_label || "Phone (Optional)"} value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} dir="ltr" />
+                            
+                            {/* 🌍 שדה בחירת שפה שהוספנו */}
+                            <select 
+                                className="w-full p-3 border rounded-xl bg-white focus:ring-2 focus:ring-[#714B67] outline-none"
+                                value={addForm.preferred_language}
+                                onChange={e => setAddForm({...addForm, preferred_language: e.target.value})}
+                            >
+                                <option value="he">עברית (Hebrew)</option>
+                                <option value="en">English</option>
+                                <option value="th">ภาษาไทย (Thai)</option>
+                            </select>
                             
                             {user.role === 'BIG_BOSS' && (
                                 <div className="space-y-3">
@@ -350,8 +368,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                             parent_manager_id: '' 
                                         })}
                                     >
-                                        <option value="EMPLOYEE">Employee</option>
-                                        <option value="MANAGER">Manager</option>
+                                        <option value="EMPLOYEE">{t.role_employee || "Employee"}</option>
+                                        <option value="MANAGER">{t.role_manager || "Manager"}</option>
                                     </select>
                                     
                                     {addForm.role === 'EMPLOYEE' && (
@@ -361,7 +379,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                             onChange={e => setAddForm({...addForm, parent_manager_id: e.target.value})}
                                             required={addForm.role === 'EMPLOYEE'} 
                                         >
-                                            <option value="">Select Manager...</option>
+                                            <option value="">{t.select_manager || "Select Manager..."}</option>
                                             {activeManagers.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>)}
                                         </select>
                                     )}

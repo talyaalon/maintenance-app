@@ -1247,7 +1247,7 @@ const cron = require('node-cron');
 // ==========================================
 // 🚀 CRON JOB: דוח יומי (תמיכה במובייל + 3 שפות)
 // ==========================================
-cron.schedule('10 14 * * *', async () => {
+cron.schedule('10 15 * * *', async () => {
     console.log("⏰ [CRON] Starting Daily Task Check...");
 
     // מילון תרגומים חכם
