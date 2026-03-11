@@ -60,18 +60,23 @@ const ConfigurationTab = ({ token, t }) => {
   };
 
   // --- לוגיקת קטגוריות ונכסים (עץ) ---
+// --- לוגיקת יצירת קוד נכס (מתוקן) ---
   const generateAssetCode = (categoryId) => {
       const category = categories.find(c => c.id === parseInt(categoryId));
       if (!category) return '';
       const catCode = (category.code || 'GEN').toUpperCase();
       
-      const categoryAssets = assets.filter(a => a.category_id === parseInt(categoryId));
+      // התיקון: אנחנו מחפשים *רק* נכסים שמתחילים בקידומת של הקטגוריה הזו!
+      const relevantAssets = assets.filter(a => a.code && a.code.startsWith(catCode + '-'));
       let maxNum = 0;
       
-      categoryAssets.forEach(a => {
-          if (a.code && a.code.startsWith(catCode + '-')) {
-              const numPart = parseInt(a.code.split('-')[1]);
-              if (!isNaN(numPart) && numPart > maxNum) maxNum = numPart;
+      relevantAssets.forEach(a => {
+          const parts = a.code.split('-');
+          if (parts.length === 2) {
+              const numPart = parseInt(parts[1]);
+              if (!isNaN(numPart) && numPart > maxNum) {
+                  maxNum = numPart;
+              }
           }
       });
       

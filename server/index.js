@@ -294,13 +294,12 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// ==========================================
+ // ==========================================
 // עריכת פרופיל אישי (כולל תמונה ושפה)
 // ==========================================
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
         const id = req.user.id;
-        // 👇 הוספנו לפה את משיכת השפה
         const { full_name, email, phone, password, preferred_language } = req.body;
         
         let profile_picture_url = req.body.existing_picture || null;
@@ -308,10 +307,10 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
             profile_picture_url = `/uploads/${req.file.filename}`;
         }
 
-        // הגדרת אנגלית כברירת מחדל אם לא נבחרה שפה!
+        // הגדרת השפה (אם לא נבחרה - ברירת מחדל אנגלית)
         const lang = preferred_language || 'en';
 
-        // 1. עדכון פיירבייס
+        // 1. עדכון פיירבייס (חובה בתוך Try..Catch משלו כדי לא להפיל את כל השרת)
         const firebaseUpdateData = { displayName: full_name, email: email };
         if (password && password.trim() !== '') {
             if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
@@ -321,11 +320,14 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         try {
             await admin.auth().updateUser(id, firebaseUpdateData);
         } catch (firebaseErr) {
-            if (firebaseErr.code === 'auth/email-already-exists') return res.status(400).json({ error: "Email already taken" });
-            return res.status(500).json({ error: "Firebase update failed" });
+            console.error("Firebase error in profile update:", firebaseErr);
+            if (firebaseErr.code === 'auth/email-already-exists') {
+                return res.status(400).json({ error: "Email already taken" });
+            }
+            // במקרה של שגיאת פיירבייס אחרת, אנחנו לא רוצים לקרוס לגמרי, אז נמשיך הלאה.
         }
 
-        // 2. עדכון מסד הנתונים (כולל שפה!)
+        // 2. עדכון מסד הנתונים (PostgreSQL)
         let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, profile_picture_url=$4, preferred_language=$5';
         let params = [full_name, email, phone, profile_picture_url, lang];
         let paramCount = 6;
@@ -342,12 +344,21 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         params.push(id);
 
         const result = await pool.query(query, params);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "User not found in database" });
+        }
+
+        // 3. הצלחה! מחזירים את המשתמש המעודכן חזרה לאפליקציה (כדי שתוכל לסגור את החלון)
         res.json({ message: "Profile updated successfully", user: result.rows[0] });
 
     } catch (err) {
         console.error("❌ Error updating profile:", err);
-        if (err.code === '23505') return res.status(400).json({ error: "Email already exists" });
-        res.status(500).json({ error: 'Server Error' }); // החזרת JSON תקין למנוע קריסה
+        // תפיסת כפילות אימייל ברמת מסד הנתונים
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Email already exists" });
+        }
+        res.status(500).json({ error: 'Server Error: ' + err.message }); 
     }
 });
 
@@ -1247,7 +1258,7 @@ const cron = require('node-cron');
 // ==========================================
 // 🚀 CRON JOB: דוח יומי (תמיכה במובייל + 3 שפות)
 // ==========================================
-cron.schedule('10 15 * * *', async () => {
+cron.schedule('30 15 * * *', async () => {
     console.log("⏰ [CRON] Starting Daily Task Check...");
 
     // מילון תרגומים חכם
