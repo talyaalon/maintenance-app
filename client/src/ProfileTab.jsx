@@ -10,7 +10,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
     email: user.email || '', 
     phone: user.phone || '',
     password: '', 
-    preferred_language: user.preferred_language || 'he' // 👈 הוספנו את השפה לסטייט!
+    preferred_language: user.preferred_language || 'en' // 👈 הוספנו את השפה לסטייט!
   });
 
   const [previewImage, setPreviewImage] = useState(user.profile_picture_url);

@@ -74,7 +74,7 @@ transporter.verify((error, success) => {
 });
 
 const sendUpdateEmail = async (email, fullName, changes) => {
-    const appLink = "https://air-manage-app.netlify.app";
+    const appLink = "https://air-manage-app.netlify.app/";
     let changesHtml = '<ul style="padding-left: 20px; color: #333;">';
     changes.forEach(change => { changesHtml += `<li style="margin-bottom: 5px;">${change}</li>`; });
     changesHtml += '</ul>';
@@ -104,38 +104,96 @@ const sendUpdateEmail = async (email, fullName, changes) => {
     catch (error) { console.error('Error sending update email:', error); }
 };
 
-const sendWelcomeEmail = async (email, fullName, password, role, managerName) => {
-    const appLink = "https://maintenance-management-app.netlify.app";
-    let titleText = 'Welcome to the team! 🛠️', descriptionText = 'Your account has been created.';
+// ==========================================
+// 📧 שליחת מייל למשתמש חדש (מותאם לשפות ולתפקידים)
+// ==========================================
+const sendWelcomeEmail = async (email, fullName, password, role, lang = 'he') => {
+    const appLink = "https://air-manage-app.netlify.app/"; // 👈 הקישור החדש שלך!
+
+    // המילון הפנימי של השרת
+    const dict = {
+        en: {
+            dir: 'ltr', align: 'left',
+            subject: 'Login Details - OpsManager App',
+            app_name: 'Maintenance Management',
+            hello: 'Hello',
+            title_emp: 'Welcome to the team! 🛠️',
+            desc_emp: 'Your account has been created.',
+            title_mgr: 'Welcome to the Management Team! 💼',
+            desc_mgr: 'A manager account has been created for you with extended permissions.',
+            email_label: 'Email:',
+            pass_label: 'Password:',
+            btn: 'Login to App'
+        },
+        he: {
+            dir: 'rtl', align: 'right',
+            subject: 'פרטי התחברות - אפליקציית מנהל התפעול',
+            app_name: 'מערכת ניהול משימות',
+            hello: 'שלום',
+            title_emp: 'ברוכים הבאים לצוות! 🛠️',
+            desc_emp: 'החשבון שלך נוצר בהצלחה.',
+            title_mgr: 'ברוכים הבאים לצוות ההנהלה! 💼',
+            desc_mgr: 'נוצר עבורך חשבון מנהל עם הרשאות מורחבות במערכת.',
+            email_label: 'אימייל:',
+            pass_label: 'סיסמה:',
+            btn: 'לכניסה לאפליקציה לחץ כאן'
+        },
+        th: {
+            dir: 'ltr', align: 'left',
+            subject: 'รายละเอียดการเข้าสู่ระบบ - แอป OpsManager',
+            app_name: 'ระบบการจัดการงาน',
+            hello: 'สวัสดี',
+            title_emp: 'ยินดีต้อนรับสู่ทีม! 🛠️',
+            desc_emp: 'บัญชีของคุณถูกสร้างขึ้นแล้ว',
+            title_mgr: 'ยินดีต้อนรับสู่ทีมผู้บริหาร! 💼',
+            desc_mgr: 'บัญชีผู้จัดการของคุณถูกสร้างขึ้นพร้อมสิทธิ์เพิ่มเติม',
+            email_label: 'อีเมล:',
+            pass_label: 'รหัสผ่าน:',
+            btn: 'เข้าสู่ระบบแอป'
+        }
+    };
+
+    // שליפת השפה (אם משום מה חסר, ברירת המחדל היא אנגלית)
+    const l = dict[lang] || dict['en'];
+
+    // הגדרת הטקסטים לפי התפקיד (מנהל או עובד)
+    let titleText = l.title_emp;
+    let descriptionText = l.desc_emp;
+    
     if (role === 'MANAGER' || role === 'BIG_BOSS') {
-        titleText = `Welcome to the Management Team! 💼`;
-        descriptionText = `A manager account has been created for you with extended permissions.`;
+        titleText = l.title_mgr;
+        descriptionText = l.desc_mgr;
     }
 
     const mailOptions = {
       from: '"OpsManager App" <maintenance.app.tkp@gmail.com>',
       to: email,
-      subject: 'Login Details - OpsManager App',
+      subject: l.subject,
       html: `
-        <div dir="ltr" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;">
-          <h1 style="color:#714B67;text-align:center;">Maintenance Management</h1>
+        <div dir="${l.dir}" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;text-align:${l.align};">
+          <h1 style="color:#714B67;text-align:center;">${l.app_name}</h1>
           <div style="background:white;padding:20px;border-radius:8px;">
-            <h2>Hello ${fullName},</h2>
+            <h2>${l.hello} ${fullName},</h2>
             <h3 style="color:#714B67;">${titleText}</h3>
             <p>${descriptionText}</p>
-            <div style="background:#f3f4f6;padding:15px;border-radius:8px;margin:20px 0;border-left:4px solid #714B67;">
-              <p><strong>📧 Email:</strong> ${email}</p>
-              <p><strong>🔑 Password:</strong> ${password}</p>
+            <div style="background:#f3f4f6;padding:15px;border-radius:8px;margin:20px 0;border-${l.align === 'right' ? 'right' : 'left'}:4px solid #714B67;">
+              <p><strong>📧 ${l.email_label}</strong> <span dir="ltr">${email}</span></p>
+              <p><strong>🔑 ${l.pass_label}</strong> <span dir="ltr">${password}</span></p>
             </div>
             <div style="text-align:center;margin-top:30px;">
-              <a href="${appLink}" style="background:#714B67;color:white;padding:12px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">Login to App</a>
+              <a href="${appLink}" style="background:#714B67;color:white;padding:12px 25px;text-decoration:none;border-radius:25px;font-weight:bold;display:inline-block;">${l.btn}</a>
             </div>
           </div>
         </div>
       `
     };
-    try { await transporter.sendMail(mailOptions); } 
-    catch (error) { console.error("❌ Error sending email:", error); }
+
+    try { 
+        await transporter.sendMail(mailOptions); 
+        console.log(`📧 Welcome email sent to ${email} in ${lang}`);
+    } catch (error) { 
+        console.error("❌ Error sending welcome email:", error); 
+    }
 };
 
 app.use(cors());
@@ -236,42 +294,61 @@ app.post('/login', async (req, res) => {
   }
 });
 
+// ==========================================
+// עריכת פרופיל אישי (כולל תמונה ושפה)
+// ==========================================
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
-        const userId = req.user.id;
-        const { full_name, email, password, phone } = req.body;
-        let profilePictureUrl = req.body.existing_picture; 
+        const id = req.user.id;
+        // 👇 הוספנו לפה את משיכת השפה
+        const { full_name, email, phone, password, preferred_language } = req.body;
         
-        if (req.file) profilePictureUrl = req.file.path;
-        
-        const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
-        const oldUser = oldUserRes.rows[0];
+        let profile_picture_url = req.body.existing_picture || null;
+        if (req.file) {
+            profile_picture_url = `/uploads/${req.file.filename}`;
+        }
 
-        let query, params;
-        let changes = [];
+        // הגדרת אנגלית כברירת מחדל אם לא נבחרה שפה!
+        const lang = preferred_language || 'en';
 
-        if (full_name !== oldUser.full_name) changes.push(`שמך שונה ל: <strong>${full_name}</strong>`);
-        if (email !== oldUser.email) changes.push(`כתובת האימייל שונתה ל: <strong>${email}</strong>`);
-        if (password && password.trim() !== '') changes.push('הסיסמה שלך שונתה');
-        if (phone && phone !== oldUser.phone) changes.push('מספר הטלפון עודכן');
-        if (req.file) changes.push('תמונת הפרופיל הוחלפה');
+        // 1. עדכון פיירבייס
+        const firebaseUpdateData = { displayName: full_name, email: email };
+        if (password && password.trim() !== '') {
+            if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+            firebaseUpdateData.password = password;
+        }
+
+        try {
+            await admin.auth().updateUser(id, firebaseUpdateData);
+        } catch (firebaseErr) {
+            if (firebaseErr.code === 'auth/email-already-exists') return res.status(400).json({ error: "Email already taken" });
+            return res.status(500).json({ error: "Firebase update failed" });
+        }
+
+        // 2. עדכון מסד הנתונים (כולל שפה!)
+        let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, profile_picture_url=$4, preferred_language=$5';
+        let params = [full_name, email, phone, profile_picture_url, lang];
+        let paramCount = 6;
 
         if (password && password.trim() !== '') {
-            query = `UPDATE users SET full_name = $1, email = $2, password = $3, profile_picture_url = $4, phone = $5 WHERE id = $6 RETURNING *`;
-            params = [full_name, email, password, profilePictureUrl, phone, userId];
-        } else {
-            query = `UPDATE users SET full_name = $1, email = $2, profile_picture_url = $3, phone = $4 WHERE id = $5 RETURNING *`;
-            params = [full_name, email, profilePictureUrl, phone, userId];
+            const bcrypt = require('bcrypt');
+            const hashedPassword = await bcrypt.hash(password, 10);
+            query += `, password=$${paramCount}`; 
+            params.push(hashedPassword);
+            paramCount++;
         }
-        const result = await pool.query(query, params);
-        const updatedUser = result.rows[0];
 
-        if (changes.length > 0) {
-            sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes);
-        }
-        
-        res.json({ success: true, user: updatedUser });
-    } catch (err) { res.status(500).send("Update failed"); }
+        query += ` WHERE id=$${paramCount} RETURNING *`;
+        params.push(id);
+
+        const result = await pool.query(query, params);
+        res.json({ message: "Profile updated successfully", user: result.rows[0] });
+
+    } catch (err) {
+        console.error("❌ Error updating profile:", err);
+        if (err.code === '23505') return res.status(400).json({ error: "Email already exists" });
+        res.status(500).json({ error: 'Server Error' }); // החזרת JSON תקין למנוע קריסה
+    }
 });
 
 app.get('/users', authenticateToken, async (req, res) => {
@@ -298,7 +375,8 @@ app.get('/users', authenticateToken, async (req, res) => {
 // Create User
 app.post('/users', authenticateToken, async (req, res) => {
   try {
-    const { full_name, password, role, parent_manager_id } = req.body;
+    // 🌍 הוספנו פה את preferred_language
+    const { full_name, password, role, parent_manager_id, preferred_language } = req.body;
     let { email, phone } = req.body;
     
     // 1. המרת אימייל לאותיות קטנות
@@ -310,13 +388,13 @@ app.post('/users', authenticateToken, async (req, res) => {
 
     // 2. אימות מספר הטלפון (במידה והוזן)
     if (phone) {
-        // רגקס (ביטוי רגולרי) שמוודא שיש רק בין 9 ל-15 ספרות
         const phoneRegex = /^[0-9]{9,15}$/; 
         if (!phoneRegex.test(phone)) {
             return res.status(400).json({ error: "מספר הטלפון לא תקין. נא להזין ספרות בלבד (לפחות 9 ספרות)." });
         }
     }
 
+    const bcrypt = require('bcrypt'); // למקרה שזה לא יובא למעלה
     const hashedPassword = await bcrypt.hash(password, 10);
     
     let assignedManager = parent_manager_id;
@@ -324,14 +402,18 @@ app.post('/users', authenticateToken, async (req, res) => {
         assignedManager = req.user.id;
     }
 
+    const lang = preferred_language || 'he'; // שפה
+
+    // 🌍 הוספת השפה לשאילתת יצירת המשתמש
     const newUser = await pool.query(
-      `INSERT INTO users (full_name, email, password, role, phone, parent_manager_id) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, full_name, email, role, phone`,
-      [full_name, email, hashedPassword, role, phone, assignedManager]
+      `INSERT INTO users (full_name, email, password, role, phone, parent_manager_id, preferred_language) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, full_name, email, role, phone, preferred_language`,
+      [full_name, email, hashedPassword, role, phone, assignedManager, lang]
     );
     
     try {
-        await sendWelcomeEmail(email, full_name, password, role);
+        // העברת השפה לפונקציית שליחת המייל!
+        await sendWelcomeEmail(email, full_name, password, role, lang);
     } catch (emailError) {
         console.error("Error sending welcome email:", emailError);
     }
@@ -1165,7 +1247,7 @@ const cron = require('node-cron');
 // ==========================================
 // 🚀 CRON JOB: דוח יומי (תמיכה במובייל + 3 שפות)
 // ==========================================
-cron.schedule('40 13 * * *', async () => {
+cron.schedule('10 14 * * *', async () => {
     console.log("⏰ [CRON] Starting Daily Task Check...");
 
     // מילון תרגומים חכם
@@ -1341,11 +1423,20 @@ cron.schedule('40 13 * * *', async () => {
             let allTeamPerfect = true;
             
             let leaderContent = `
-                <div style="background:#714B67; color:#fff; padding:15px;">
-                    <h2 style="margin:0; font-size:16px;">${l.m_title}</h2>
-                    <p style="margin:4px 0 0 0; font-size:13px; opacity:0.9;">${leader.full_name}, ${l.m_desc}</p>
+                <div style="background:${isPerfect ? '#f0fdf4' : '#fef2f2'}; padding:8px 10px; border-bottom:1px solid #e5e7eb;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                            <td align="${l.align}" style="font-weight:bold; font-size:14px; color:${isPerfect ? '#166534' : '#991b1b'};">
+                                ${isPerfect ? '🌟' : '⚠️'} ${emp.full_name}
+                            </td>
+                            <td align="${l.align === 'right' ? 'left' : 'right'}" style="width:1%; white-space:nowrap;">
+                                <span style="font-size:11px; color:#6b7280; background:#fff; padding:3px 8px; border-radius:12px; border:1px solid #ddd; font-weight:bold;">
+                                    ${completed.length} ${l.out_of} ${wTasks.length}
+                                </span>
+                            </td>
+                        </tr>
+                    </table>
                 </div>
-                <div style="padding:10px;">
             `;
 
             relevantEmps.forEach(empData => {

@@ -229,6 +229,34 @@ export const translations = {
     error_email_exists: "This email is already registered",
     error_missing_fields: "Please fill in all required fields",
 
+    // --- Notification Language ---
+    preferred_language: "Preferred Notifications Language",
+    lang_note: "Daily reports and alerts will be sent in this language",
+
+    // --- Emails (New User, Updates, Reports) ---
+    email_hello: "Hello",
+    email_new_user_subject: "Login Details - OpsManager App",
+    email_welcome_title: "Welcome to Maintenance Management",
+    email_new_user_desc: "An account has been created for you. Here are your login details:",
+    email_login_btn: "Login to App",
+    email_update_subject: "Profile Update Notification",
+    email_update_title: "Your profile has been updated",
+    email_update_desc: "The following changes were made to your account:",
+    email_report_perfect_subj: "🌟 Awesome! All tasks completed",
+    email_report_pending_subj: "⚠️ Daily Report: Pending tasks",
+    email_report_perfect_title: "Great job, you finished everything! 🎉",
+    email_report_pending_title: "You have pending tasks today! ⏰",
+    email_report_body_perfect: "Here is your summary for today:",
+    email_report_body_pending: "Details of your tasks and what needs urgent completion:",
+    email_manager_perfect_subj: "🌟 Daily Summary: Entire team excelled!",
+    email_manager_pending_subj: "📊 Daily Summary: Pending tasks in your team",
+    email_manager_title: "Daily Team Performance 📊",
+    email_manager_desc: "Here is the task status of your employees for today.",
+    email_table_task: "Task",
+    email_table_status: "Status",
+    email_status_done: "Done ✔️",
+    email_status_not_done: "Pending ❌",
+
     // --- Profile Tab ---
     edit_profile_btn: "Edit Profile",
     password_security_note: "Old password hidden for security"
@@ -463,6 +491,34 @@ export const translations = {
     new_password: "סיסמה חדשה",
     error_email_exists: "כתובת האימייל הזו כבר רשומה במערכת",
     error_missing_fields: "נא למלא את כל שדות החובה",
+
+    // --- Notification Language ---
+    preferred_language: "שפת התראות ודוחות מועדפת",
+    lang_note: "הדוחות היומיים וההתראות לנייד יישלחו בשפה זו",
+
+    // --- אימיילים (משתמש חדש, עדכונים, דוחות) ---
+    email_hello: "שלום",
+    email_new_user_subject: "פרטי התחברות - אפליקציית מנהל התפעול",
+    email_welcome_title: "ברוכים הבאים למערכת הניהול",
+    email_new_user_desc: "נוצר עבורך חשבון חדש במערכת. להלן פרטי ההתחברות שלך:",
+    email_login_btn: "לכניסה לאפליקציה לחץ כאן",
+    email_update_subject: "התראת עדכון פרטי פרופיל",
+    email_update_title: "הפרופיל שלך עודכן",
+    email_update_desc: "השינויים הבאים בוצעו בחשבון שלך:",
+    email_report_perfect_subj: "🌟 אלופה! סיימת את כל המשימות",
+    email_report_pending_subj: "⚠️ דוח יומי: עליך להשלים משימות פתוחות",
+    email_report_perfect_title: "כל הכבוד סיימת הכל! 🎉",
+    email_report_pending_title: "לא סיימת את המשימות להיום! ⏰",
+    email_report_body_perfect: "להלן הסיכום שלך להיום:",
+    email_report_body_pending: "פירוט המשימות שביצעת ואלו שעליך להשלים בדחיפות:",
+    email_manager_perfect_subj: "🌟 סיכום יומי: כל הצוות סיים בהצטיינות!",
+    email_manager_pending_subj: "📊 סיכום יומי: יש משימות פתוחות בצוות",
+    email_manager_title: "דוח ביצועי צוות יומי 📊",
+    email_manager_desc: "להלן סטטוס המשימות של העובדים להיום.",
+    email_table_task: "משימה",
+    email_table_status: "סטטוס",
+    email_status_done: "בוצע ✔️",
+    email_status_not_done: "לא בוצע ❌",
 
     // --- Profile Tab ---
     edit_profile_btn: "ערוך פרופיל",
@@ -736,6 +792,34 @@ export const translations = {
     new_password: "รหัสผ่านใหม่",
     error_email_exists: "อีเมลนี้ถูกลงทะเบียนแล้ว",
     error_missing_fields: "กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน",
+
+    // --- Notification Language ---
+    preferred_language: "ภาษาการแจ้งเตือนที่ต้องการ",
+    lang_note: "รายงานประจำวันและการแจ้งเตือนจะถูกส่งในภาษานี้",
+
+    // --- Emails (New User, Updates, Reports) ---
+    email_hello: "สวัสดี",
+    email_new_user_subject: "รายละเอียดการเข้าสู่ระบบ - แอป OpsManager",
+    email_welcome_title: "ยินดีต้อนรับสู่ระบบการจัดการ",
+    email_new_user_desc: "บัญชีของคุณถูกสร้างขึ้นแล้ว นี่คือรายละเอียดการเข้าสู่ระบบของคุณ:",
+    email_login_btn: "เข้าสู่ระบบแอป",
+    email_update_subject: "การแจ้งเตือนการอัปเดตโปรไฟล์",
+    email_update_title: "โปรไฟล์ของคุณได้รับการอัปเดตแล้ว",
+    email_update_desc: "มีการเปลี่ยนแปลงดังต่อไปนี้ในบัญชีของคุณ:",
+    email_report_perfect_subj: "🌟 ยอดเยี่ยม! ทำภารกิจเสร็จสิ้นทั้งหมด",
+    email_report_pending_subj: "⚠️ รายงานประจำวัน: มีภารกิจที่ต้องทำ",
+    email_report_perfect_title: "ทำได้ดีมาก คุณทำเสร็จหมดแล้ว! 🎉",
+    email_report_pending_title: "คุณมีภารกิจค้างอยู่สำหรับวันนี้! ⏰",
+    email_report_body_perfect: "นี่คือสรุปของคุณสำหรับวันนี้:",
+    email_report_body_pending: "รายละเอียดภารกิจและสิ่งที่ต้องทำด่วน:",
+    email_manager_perfect_subj: "🌟 สรุปประจำวัน: ทีมทำงานยอดเยี่ยม!",
+    email_manager_pending_subj: "📊 สรุปประจำวัน: มีภารกิจค้างในทีม",
+    email_manager_title: "ผลงานทีมประจำวัน 📊",
+    email_manager_desc: "สถานะภารกิจของพนักงานสำหรับวันนี้",
+    email_table_task: "งาน",
+    email_table_status: "สถานะ",
+    email_status_done: "เสร็จ ✔️",
+    email_status_not_done: "รอดำเนินการ ❌",
 
     // --- Profile Tab ---
     edit_profile_btn: "แก้ไขโปรไฟล์",
