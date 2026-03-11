@@ -1,32 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Tag, Box, Hash, MapPin, Pencil, X, Save, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers } from 'lucide-react';
+import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User } from 'lucide-react';
 
-const ConfigurationTab = ({ token, t }) => {
-  // עכשיו יש רק 2 טאבים ראשיים: עץ (קטגוריות ונכסים) ומיקומים
+// שימי לב: הוספנו את user ל-props!
+const ConfigurationTab = ({ token, t, user }) => { 
   const [activeSubTab, setActiveSubTab] = useState('tree'); 
   const [categories, setCategories] = useState([]);
   const [assets, setAssets] = useState([]);
   const [locations, setLocations] = useState([]); 
+  const [managers, setManagers] = useState([]); // רשימת מנהלים לביג בוס
 
-  // ניהול תצוגת העץ
+  // ביג בוס מוד: מנהל פתוח כרגע (ברירת מחדל לראשון או ריק)
+  const [expandedBossManager, setExpandedBossManager] = useState(null);
+
+  // ניהול תצוגת העץ (מזהה עץ פתוח)
   const [expandedCategories, setExpandedCategories] = useState([]);
 
   // מודאלים
   const [showTreeModal, setShowTreeModal] = useState(false);
-  const [treeNodeType, setTreeNodeType] = useState('category'); // 'category' or 'asset'
+  const [treeNodeType, setTreeNodeType] = useState('category'); 
   const [showLocationModal, setShowLocationModal] = useState(false);
 
-  // טפסים
-  const [categoryForm, setCategoryForm] = useState({ id: null, name: '', code: '' });
-  const [assetForm, setAssetForm] = useState({ id: null, name: '', category_id: '', location_id: '' });
-  
+  // טפסים (הוספנו created_by כדי שהביג בוס יוכל ליצור למנהל ספציפי)
+  const [categoryForm, setCategoryForm] = useState({ id: null, name: '', code: '', created_by: null });
+  const [assetForm, setAssetForm] = useState({ id: null, name: '', category_id: '', location_id: '', code: '', created_by: null });
   const [locationForm, setLocationForm] = useState({ 
-      id: null, name: '', code: '', image_url: '', map_link: '', dynamic_fields: [] 
+      id: null, name: '', code: '', image_url: '', map_link: '', dynamic_fields: [], created_by: null 
   });
   const [newField, setNewField] = useState({ name: '', type: 'text' });
   const [showFieldAdder, setShowFieldAdder] = useState(false);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+      fetchData(); 
+      if (user?.role === 'BIG_BOSS') fetchManagers();
+  }, [user]);
 
   const fetchData = async () => {
     try {
@@ -41,10 +47,15 @@ const ConfigurationTab = ({ token, t }) => {
     } catch (e) { console.error(e); }
   };
 
+  const fetchManagers = async () => {
+      try {
+          const res = await fetch('https://maintenance-app-h84v.onrender.com/managers', { headers: { 'Authorization': `Bearer ${token}` } });
+          if (res.ok) setManagers(await res.json());
+      } catch (e) {}
+  };
+
   const toggleCategory = (catId) => {
-      setExpandedCategories(prev => 
-          prev.includes(catId) ? prev.filter(id => id !== catId) : [...prev, catId]
-      );
+      setExpandedCategories(prev => prev.includes(catId) ? prev.filter(id => id !== catId) : [...prev, catId]);
   };
 
   const handleDelete = async (type, id) => {
@@ -59,14 +70,12 @@ const ConfigurationTab = ({ token, t }) => {
       } catch (e) { alert("Server Error"); }
   };
 
-  // --- לוגיקת קטגוריות ונכסים (עץ) ---
-// --- לוגיקת יצירת קוד נכס (מתוקן) ---
+  // --- לוגיקת יצירת קוד נכס (מתוקן לאיתור הקטגוריה) ---
   const generateAssetCode = (categoryId) => {
       const category = categories.find(c => c.id === parseInt(categoryId));
       if (!category) return '';
       const catCode = (category.code || 'GEN').toUpperCase();
       
-      // התיקון: אנחנו מחפשים *רק* נכסים שמתחילים בקידומת של הקטגוריה הזו!
       const relevantAssets = assets.filter(a => a.code && a.code.startsWith(catCode + '-'));
       let maxNum = 0;
       
@@ -74,9 +83,7 @@ const ConfigurationTab = ({ token, t }) => {
           const parts = a.code.split('-');
           if (parts.length === 2) {
               const numPart = parseInt(parts[1]);
-              if (!isNaN(numPart) && numPart > maxNum) {
-                  maxNum = numPart;
-              }
+              if (!isNaN(numPart) && numPart > maxNum) maxNum = numPart;
           }
       });
       
@@ -86,28 +93,23 @@ const ConfigurationTab = ({ token, t }) => {
 
   const handleSaveTreeItem = async (e) => {
       e.preventDefault();
-      
       let url = '';
       let method = 'POST';
       let payload = {};
 
       if (treeNodeType === 'category') {
-          if (!categoryForm.name || !categoryForm.code) return alert("יש למלא שם וקוד קטגוריה (3 אותיות).");
+          if (!categoryForm.name || !categoryForm.code) return alert("יש למלא שם וקוד קטגוריה.");
           method = categoryForm.id ? 'PUT' : 'POST';
           url = categoryForm.id ? `https://maintenance-app-h84v.onrender.com/categories/${categoryForm.id}` : 'https://maintenance-app-h84v.onrender.com/categories';
-          payload = { name: categoryForm.name, code: categoryForm.code.toUpperCase().slice(0, 3) };
+          payload = { name: categoryForm.name, code: categoryForm.code.toUpperCase().slice(0, 3), created_by: categoryForm.created_by };
       } else {
           if (!assetForm.name || !assetForm.category_id || !assetForm.location_id) return alert("יש למלא שם, קטגוריה ומיקום.");
           method = assetForm.id ? 'PUT' : 'POST';
           url = assetForm.id ? `https://maintenance-app-h84v.onrender.com/assets/${assetForm.id}` : 'https://maintenance-app-h84v.onrender.com/assets';
-          
-          // יצירת קוד אוטומטי רק לנכס חדש
           const finalCode = assetForm.id ? assetForm.code : generateAssetCode(assetForm.category_id);
           payload = { 
-              name: assetForm.name, 
-              category_id: assetForm.category_id, 
-              location_id: assetForm.location_id,
-              code: finalCode 
+              name: assetForm.name, category_id: assetForm.category_id, 
+              location_id: assetForm.location_id, code: finalCode, created_by: assetForm.created_by 
           };
       }
 
@@ -116,235 +118,256 @@ const ConfigurationTab = ({ token, t }) => {
               method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify(payload)
           });
-          if (res.ok) {
-              setShowTreeModal(false);
-              fetchData();
-          } else {
-              const data = await res.json();
-              alert("Error: " + (data.error || "Failed"));
-          }
+          if (res.ok) { setShowTreeModal(false); fetchData(); } 
+          else { const data = await res.json(); alert("Error: " + (data.error || "Failed")); }
       } catch (e) { alert("Server Error"); }
   };
 
-  const openTreeModal = (type, item = null) => {
+  const openTreeModal = (type, targetManagerId, item = null) => {
       setTreeNodeType(type);
       if (type === 'category') {
-          setCategoryForm(item ? { id: item.id, name: item.name, code: item.code || '' } : { id: null, name: '', code: '' });
+          setCategoryForm(item ? { id: item.id, name: item.name, code: item.code || '', created_by: targetManagerId } : { id: null, name: '', code: '', created_by: targetManagerId });
       } else {
-          setAssetForm(item ? { id: item.id, name: item.name, category_id: item.category_id, location_id: item.location_id || '', code: item.code } : { id: null, name: '', category_id: '', location_id: '' });
+          setAssetForm(item ? { id: item.id, name: item.name, category_id: item.category_id, location_id: item.location_id || '', code: item.code, created_by: targetManagerId } : { id: null, name: '', category_id: item?.category_id || '', location_id: '', code: '', created_by: targetManagerId });
       }
       setShowTreeModal(true);
   };
 
-  // --- לוגיקת מיקומים ושדות דינמיים ---
   const handleAddDynamicField = () => {
       if (!newField.name) return;
-      setLocationForm(prev => ({
-          ...prev, 
-          dynamic_fields: [...(prev.dynamic_fields || []), { ...newField, id: Date.now() }]
-      }));
+      setLocationForm(prev => ({ ...prev, dynamic_fields: [...(prev.dynamic_fields || []), { ...newField, id: Date.now() }] }));
       setNewField({ name: '', type: 'text' });
       setShowFieldAdder(false);
   };
 
   const removeDynamicField = (fieldId) => {
-      setLocationForm(prev => ({
-          ...prev, 
-          dynamic_fields: prev.dynamic_fields.filter(f => f.id !== fieldId)
-      }));
+      setLocationForm(prev => ({ ...prev, dynamic_fields: prev.dynamic_fields.filter(f => f.id !== fieldId) }));
   };
 
   const handleSaveLocation = async (e) => {
       e.preventDefault();
       if (!locationForm.name) return alert("חובה להזין שם מיקום");
-
       const method = locationForm.id ? 'PUT' : 'POST';
       const url = locationForm.id ? `https://maintenance-app-h84v.onrender.com/locations/${locationForm.id}` : 'https://maintenance-app-h84v.onrender.com/locations';
-
-      // ממירים את הלינק למפה לאובייקט JSON כדי שיתאים למסד הנתונים
       const payload = {
-          name: locationForm.name,
-          code: locationForm.code,
-          image_url: locationForm.image_url,
+          name: locationForm.name, code: locationForm.code, image_url: locationForm.image_url,
           coordinates: JSON.stringify({ link: locationForm.map_link }),
-          dynamic_fields: JSON.stringify(locationForm.dynamic_fields)
+          dynamic_fields: JSON.stringify(locationForm.dynamic_fields),
+          created_by: locationForm.created_by
       };
 
       try {
-          const res = await fetch(url, {
-              method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify(payload)
-          });
-          if (res.ok) {
-              setShowLocationModal(false);
-              fetchData();
-          } else {
-              const data = await res.json();
-              alert("Error: " + (data.error || "Failed"));
-          }
+          const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
+          if (res.ok) { setShowLocationModal(false); fetchData(); } 
+          else { const data = await res.json(); alert("Error: " + (data.error || "Failed")); }
       } catch (e) { alert("Server Error"); }
   };
 
-  const openLocationModal = (loc = null) => {
+  const openLocationModal = (targetManagerId, loc = null) => {
       if (loc) {
-          let parsedFields = [];
-          let parsedMap = '';
+          let parsedFields = [], parsedMap = '';
           try { parsedFields = typeof loc.dynamic_fields === 'string' ? JSON.parse(loc.dynamic_fields) : (loc.dynamic_fields || []); } catch(e){}
-          try { 
-              const coordObj = typeof loc.coordinates === 'string' ? JSON.parse(loc.coordinates) : loc.coordinates; 
-              parsedMap = coordObj?.link || '';
-          } catch(e){}
-          
-          setLocationForm({ id: loc.id, name: loc.name, code: loc.code || '', image_url: loc.image_url || '', map_link: parsedMap, dynamic_fields: parsedFields });
+          try { parsedMap = (typeof loc.coordinates === 'string' ? JSON.parse(loc.coordinates) : loc.coordinates)?.link || ''; } catch(e){}
+          setLocationForm({ id: loc.id, name: loc.name, code: loc.code || '', image_url: loc.image_url || '', map_link: parsedMap, dynamic_fields: parsedFields, created_by: targetManagerId });
       } else {
-          setLocationForm({ id: null, name: '', code: '', image_url: '', map_link: '', dynamic_fields: [] });
+          setLocationForm({ id: null, name: '', code: '', image_url: '', map_link: '', dynamic_fields: [], created_by: targetManagerId });
       }
       setShowLocationModal(true);
+  };
+
+  // ==============================================================
+  // פונקציית רינדור של סביבת העבודה (מופעלת למנהל עצמו, או תחת הביג בוס)
+  // ==============================================================
+  const renderWorkspace = (targetManagerId) => {
+      // סינון הנתונים רק למנהל הספציפי 
+      // (אם targetManagerId הוא null, נציג נתונים "גלובליים" שאין להם מנהל, למקרה שנשארו כאלו)
+      const wCategories = categories.filter(c => c.created_by === targetManagerId);
+      const wAssets = assets.filter(a => a.created_by === targetManagerId);
+      const wLocations = locations.filter(l => l.created_by === targetManagerId);
+
+      return (
+          <div className="space-y-6 mt-4 border-t pt-4">
+              <div className="flex gap-2 mb-4 bg-gray-100 p-1.5 rounded-xl shadow-inner border">
+                  <button onClick={() => setActiveSubTab('tree')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'tree' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
+                      <FolderTree size={16}/> קטגוריות ונכסים
+                  </button>
+                  <button onClick={() => setActiveSubTab('locations')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'locations' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
+                      <MapPin size={16}/> מיקומים
+                  </button>
+              </div>
+
+              {/* טאב עץ היררכיה */}
+              {activeSubTab === 'tree' && (
+                  <div className="animate-fade-in space-y-4">
+                      <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-md font-bold text-gray-700">עץ היררכיה</h3>
+                          <button onClick={() => openTreeModal('category', targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1">
+                              <Plus size={14}/> הוסף קטגוריה
+                          </button>
+                      </div>
+
+                      <div className="space-y-3">
+                          {wCategories.length === 0 && <p className="text-gray-400 text-center text-sm py-4">אין קטגוריות למנהל זה.</p>}
+                          {wCategories.map(category => {
+                              const categoryAssets = wAssets.filter(a => a.category_id === category.id);
+                              const isExpanded = expandedCategories.includes(category.id);
+                              
+                              return (
+                                  <div key={category.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                      <div className="p-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition">
+                                          <div className="flex items-center gap-3 cursor-pointer" onClick={() => toggleCategory(category.id)}>
+                                              <div className="p-1.5 bg-purple-100 text-purple-600 rounded-lg"><Tag size={16}/></div>
+                                              <div>
+                                                  <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+                                                      {category.name} 
+                                                      {category.code && <span className="text-[10px] bg-purple-200 text-purple-800 px-1.5 rounded-full uppercase">{category.code}</span>}
+                                                  </h4>
+                                              </div>
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                              <button onClick={() => openTreeModal('asset', targetManagerId, { category_id: category.id })} className="p-1.5 text-[#714B67] hover:bg-purple-100 rounded-full"><Plus size={16}/></button>
+                                              <button onClick={() => openTreeModal('category', targetManagerId, category)} className="p-1.5 text-gray-400 hover:text-blue-500 rounded-full"><Pencil size={16}/></button>
+                                              <button onClick={() => handleDelete('categories', category.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-full"><Trash2 size={16}/></button>
+                                              <button onClick={() => toggleCategory(category.id)} className="p-1.5 text-gray-400">
+                                                  {isExpanded ? <ChevronDown size={18}/> : <ChevronRight size={18}/>}
+                                              </button>
+                                          </div>
+                                      </div>
+
+                                      {isExpanded && (
+                                          <div className="bg-white border-t border-gray-100 animate-slide-down">
+                                              {categoryAssets.length === 0 ? (
+                                                  <div className="p-3 text-center text-xs text-gray-400">אין נכסים תחת קטגוריה זו.</div>
+                                              ) : (
+                                                  <div className="divide-y divide-gray-50">
+                                                      {categoryAssets.map(asset => {
+                                                          const locName = wLocations.find(l => l.id === asset.location_id)?.name || 'ללא מיקום';
+                                                          return (
+                                                              <div key={asset.id} className="p-2 pl-6 flex justify-between items-center hover:bg-gray-50 pr-3 ml-4 border-l-2 border-purple-200">
+                                                                  <div className="flex items-center gap-2">
+                                                                      <Box size={14} className="text-gray-400"/>
+                                                                      <div>
+                                                                          <span className="font-bold text-gray-700 text-sm block">{asset.name}</span>
+                                                                          <div className="text-[10px] text-gray-500 flex gap-2">
+                                                                              <span className="font-mono bg-gray-100 px-1 rounded text-purple-600">{asset.code}</span>
+                                                                              <span className="flex items-center gap-0.5"><MapPin size={10}/> {locName}</span>
+                                                                          </div>
+                                                                      </div>
+                                                                  </div>
+                                                                  <div className="flex gap-1">
+                                                                      <button onClick={() => openTreeModal('asset', targetManagerId, asset)} className="p-1 text-gray-400 hover:text-blue-500"><Pencil size={14}/></button>
+                                                                      <button onClick={() => handleDelete('assets', asset.id)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 size={14}/></button>
+                                                                  </div>
+                                                              </div>
+                                                          )
+                                                      })}
+                                                  </div>
+                                              )}
+                                          </div>
+                                      )}
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  </div>
+              )}
+
+              {/* טאב מיקומים */}
+              {activeSubTab === 'locations' && (
+                  <div className="animate-fade-in space-y-4">
+                      <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-md font-bold text-gray-700">ניהול מיקומים</h3>
+                          <button onClick={() => openLocationModal(targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1">
+                              <Plus size={14}/> הוסף מיקום
+                          </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {wLocations.length === 0 && <p className="text-gray-400 text-center text-sm py-4 col-span-2">אין מיקומים למנהל זה.</p>}
+                          {wLocations.map(loc => {
+                              let fieldsCount = 0;
+                              try { fieldsCount = (typeof loc.dynamic_fields === 'string' ? JSON.parse(loc.dynamic_fields) : (loc.dynamic_fields || [])).length; } catch(e){}
+                              return (
+                                  <div key={loc.id} className="bg-white p-3 rounded-xl border shadow-sm group">
+                                      <div className="flex justify-between items-start mb-2">
+                                          <div className="flex gap-2 items-center">
+                                              {loc.image_url ? (
+                                                  <img src={loc.image_url} alt={loc.name} className="w-10 h-10 rounded-lg object-cover border" />
+                                              ) : (
+                                                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 border"><MapPin size={16}/></div>
+                                              )}
+                                              <div>
+                                                  <h4 className="font-bold text-gray-800 text-sm">{loc.name}</h4>
+                                                  {loc.code && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase">{loc.code}</span>}
+                                              </div>
+                                          </div>
+                                          <div className="flex gap-1">
+                                              <button onClick={() => openLocationModal(targetManagerId, loc)} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"><Pencil size={14}/></button>
+                                              <button onClick={() => handleDelete('locations', loc.id)} className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><Trash2 size={14}/></button>
+                                          </div>
+                                      </div>
+                                      <div className="flex gap-3 text-[10px] text-gray-500 border-t pt-2 mt-2">
+                                          <span className="flex items-center gap-1"><Layers size={12}/> {fieldsCount} שדות מותאמים</span>
+                                      </div>
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  </div>
+              )}
+          </div>
+      );
   };
 
   return (
     <div className="p-4 pb-32 max-w-4xl mx-auto">
       <h2 className="text-3xl font-bold text-gray-800 mb-6">{t.config_title || "הגדרות מערכת"}</h2>
       
-      {/* תפריט עליון - רק 2 טאבים */}
-      <div className="flex gap-2 mb-6 bg-white p-1.5 rounded-xl shadow-sm border">
-        <button onClick={() => setActiveSubTab('tree')} className={`flex-1 py-3 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'tree' ? 'bg-[#714B67] text-white shadow-md transform scale-[1.02]' : 'text-gray-500 hover:bg-gray-50'}`}>
-            <FolderTree size={18}/> קטגוריות ונכסים
-        </button>
-        <button onClick={() => setActiveSubTab('locations')} className={`flex-1 py-3 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'locations' ? 'bg-[#714B67] text-white shadow-md transform scale-[1.02]' : 'text-gray-500 hover:bg-gray-50'}`}>
-            <MapPin size={18}/> מיקומים
-        </button>
-      </div>
-
-      {/* --- טאב עץ קטגוריות ונכסים --- */}
-      {activeSubTab === 'tree' && (
-        <div className="animate-fade-in space-y-4">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-gray-700">עץ היררכיה</h3>
-                <button onClick={() => openTreeModal('category')} className="bg-[#714B67] text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1">
-                    <Plus size={16}/> הוסף קטגוריה
-                </button>
-            </div>
-
-            <div className="space-y-3">
-                {categories.length === 0 && <p className="text-gray-400 text-center py-8">אין קטגוריות במערכת.</p>}
-                {categories.map(category => {
-                    const categoryAssets = assets.filter(a => a.category_id === category.id);
-                    const isExpanded = expandedCategories.includes(category.id);
-                    
-                    return (
-                        <div key={category.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                            {/* שורת קטגוריה */}
-                            <div className="p-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition">
-                                <div className="flex items-center gap-3 cursor-pointer" onClick={() => toggleCategory(category.id)}>
-                                    <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
-                                        <Tag size={20}/>
-                                    </div>
-                                    <div>
-                                        <h4 className="font-bold text-gray-800 text-lg flex items-center gap-2">
-                                            {category.name} 
-                                            {category.code && <span className="text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full uppercase">{category.code}</span>}
-                                        </h4>
-                                        <p className="text-xs text-gray-500">{categoryAssets.length} נכסים משויכים</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <button onClick={() => openTreeModal('asset', { category_id: category.id })} className="p-2 text-[#714B67] hover:bg-purple-100 rounded-full" title="הוסף נכס לקטגוריה זו"><Plus size={18}/></button>
-                                    <button onClick={() => openTreeModal('category', category)} className="p-2 text-gray-400 hover:text-blue-500 rounded-full"><Pencil size={18}/></button>
-                                    <button onClick={() => handleDelete('categories', category.id)} className="p-2 text-gray-400 hover:text-red-500 rounded-full"><Trash2 size={18}/></button>
-                                    <button onClick={() => toggleCategory(category.id)} className="p-2 text-gray-400">
-                                        {isExpanded ? <ChevronDown size={20}/> : <ChevronRight size={20}/>}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* נכסים תחת הקטגוריה */}
-                            {isExpanded && (
-                                <div className="bg-white border-t border-gray-100 animate-slide-down">
-                                    {categoryAssets.length === 0 ? (
-                                        <div className="p-4 text-center text-sm text-gray-400">אין נכסים תחת קטגוריה זו.</div>
-                                    ) : (
-                                        <div className="divide-y divide-gray-50">
-                                            {categoryAssets.map(asset => {
-                                                const locName = locations.find(l => l.id === asset.location_id)?.name || 'ללא מיקום';
-                                                return (
-                                                    <div key={asset.id} className="p-3 pl-8 flex justify-between items-center hover:bg-gray-50 pr-4 ml-6 border-l-2 border-purple-200">
-                                                        <div className="flex items-center gap-3">
-                                                            <Box size={16} className="text-gray-400"/>
-                                                            <div>
-                                                                <span className="font-bold text-gray-700 block">{asset.name}</span>
-                                                                <div className="text-xs text-gray-500 flex gap-2">
-                                                                    <span className="font-mono bg-gray-100 px-1 rounded text-purple-600">{asset.code}</span>
-                                                                    <span className="flex items-center gap-0.5"><MapPin size={10}/> {locName}</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex gap-1">
-                                                            <button onClick={() => openTreeModal('asset', asset)} className="p-1.5 text-gray-400 hover:text-blue-500"><Pencil size={16}/></button>
-                                                            <button onClick={() => handleDelete('assets', asset.id)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 size={16}/></button>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-      )}
-
-      {/* --- טאב מיקומים מתקדם --- */}
-      {activeSubTab === 'locations' && (
-        <div className="animate-fade-in space-y-4">
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-gray-700">ניהול מיקומים ושדות</h3>
-                <button onClick={() => openLocationModal()} className="bg-[#714B67] text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1">
-                    <Plus size={16}/> הוסף מיקום
-                </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {locations.map(loc => {
-                    let fieldsCount = 0;
-                    try { fieldsCount = (typeof loc.dynamic_fields === 'string' ? JSON.parse(loc.dynamic_fields) : (loc.dynamic_fields || [])).length; } catch(e){}
-                    return (
-                        <div key={loc.id} className="bg-white p-4 rounded-xl border shadow-sm hover:shadow-md transition group">
-                            <div className="flex justify-between items-start mb-3">
-                                <div className="flex gap-3 items-center">
-                                    {loc.image_url ? (
-                                        <img src={loc.image_url} alt={loc.name} className="w-12 h-12 rounded-lg object-cover border" />
-                                    ) : (
-                                        <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 border"><MapPin size={20}/></div>
-                                    )}
-                                    <div>
-                                        <h4 className="font-bold text-gray-800 text-lg">{loc.name}</h4>
-                                        {loc.code && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded uppercase">{loc.code}</span>}
-                                    </div>
-                                </div>
-                                <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition">
-                                    <button onClick={() => openLocationModal(loc)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"><Pencil size={16}/></button>
-                                    <button onClick={() => handleDelete('locations', loc.id)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><Trash2 size={16}/></button>
-                                </div>
-                            </div>
-                            <div className="flex gap-3 text-xs text-gray-500 border-t pt-3">
-                                <span className="flex items-center gap-1"><Layers size={14}/> {fieldsCount} שדות מותאמים</span>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
+      {/* תצוגת BIG_BOSS: רשימת מנהלים */}
+      {user?.role === 'BIG_BOSS' ? (
+          <div className="space-y-4">
+              <p className="text-sm text-gray-500 mb-4">אתה מחובר כ-Big Boss. בחר מנהל כדי לנהל את המיקומים, הקטגוריות והנכסים שלו בשטח.</p>
+              
+              {managers.map(manager => {
+                  const isExpanded = expandedBossManager === manager.id;
+                  return (
+                      <div key={manager.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${isExpanded ? 'ring-2 ring-purple-400' : ''}`}>
+                          <div 
+                              className={`p-4 flex justify-between items-center cursor-pointer transition ${isExpanded ? 'bg-purple-50' : 'hover:bg-gray-50'}`}
+                              onClick={() => setExpandedBossManager(isExpanded ? null : manager.id)}
+                          >
+                              <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-full ${isExpanded ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-500'}`}><User size={20}/></div>
+                                  <div>
+                                      <h3 className="font-bold text-gray-800 text-lg">{manager.full_name}</h3>
+                                      <span className="text-xs text-gray-500">ניהול סביבת עבודה</span>
+                                  </div>
+                              </div>
+                              <div className="text-gray-400">
+                                  {isExpanded ? <ChevronUp size={24}/> : <ChevronDown size={24}/>}
+                              </div>
+                          </div>
+                          
+                          {/* התוכן נפתח רק למנהל שנבחר */}
+                          {isExpanded && (
+                              <div className="p-4 bg-white border-t animate-slide-down">
+                                  {renderWorkspace(manager.id)}
+                              </div>
+                          )}
+                      </div>
+                  )
+              })}
+          </div>
+      ) : (
+          /* תצוגת מנהל רגיל: רואה ישירות את סביבת העבודה שלו */
+          <div className="bg-white p-6 rounded-2xl shadow-sm border">
+              {renderWorkspace(user.id)}
+          </div>
       )}
 
       {/* ========================================= */}
-      {/* מודאלים (חלונות קופצים) */}
+      {/* מודאלים משותפים */}
       {/* ========================================= */}
-
-      {/* מודאל עץ (הוספת קטגוריה/נכס) */}
       {showTreeModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-scale-in overflow-hidden">
@@ -364,31 +387,31 @@ const ConfigurationTab = ({ token, t }) => {
                               </div>
                               <div>
                                   <label className="block text-sm font-bold text-gray-700 mb-1">קוד קטגוריה (3 אותיות באנגלית)</label>
-                                  <input type="text" required maxLength="3" pattern="[A-Za-z]{3}" title="3 אותיות באנגלית בלבד" placeholder="למשל: AIR" className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-200 outline-none uppercase font-mono" value={categoryForm.code} onChange={e => setCategoryForm({...categoryForm, code: e.target.value.toUpperCase()})} />
-                                  <p className="text-xs text-gray-400 mt-1">קוד זה ישמש כקידומת אוטומטית לכל הנכסים תחת קטגוריה זו.</p>
+                                  <input type="text" required maxLength="3" pattern="[A-Za-z]{3}" title="3 אותיות באנגלית בלבד" placeholder="למשל: AIR" className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white outline-none uppercase font-mono" value={categoryForm.code} onChange={e => setCategoryForm({...categoryForm, code: e.target.value.toUpperCase()})} />
                               </div>
                           </>
                       ) : (
                           <>
                               <div>
                                   <label className="block text-sm font-bold text-gray-700 mb-1">שם הנכס</label>
-                                  <input type="text" required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-200 outline-none" value={assetForm.name} onChange={e => setAssetForm({...assetForm, name: e.target.value})} />
+                                  <input type="text" required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white outline-none" value={assetForm.name} onChange={e => setAssetForm({...assetForm, name: e.target.value})} />
                               </div>
                               <div>
                                   <label className="block text-sm font-bold text-gray-700 mb-1">שיוך לקטגוריה</label>
                                   <select required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white outline-none" value={assetForm.category_id} onChange={e => setAssetForm({...assetForm, category_id: e.target.value})}>
                                       <option value="">בחר קטגוריה...</option>
-                                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                      {/* מציג רק את הקטגוריות של המנהל הרלוונטי */}
+                                      {categories.filter(c => c.created_by === assetForm.created_by).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                   </select>
                               </div>
                               <div>
                                   <label className="block text-sm font-bold text-gray-700 mb-1">שיוך למיקום (חובה)</label>
                                   <select required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white outline-none" value={assetForm.location_id} onChange={e => setAssetForm({...assetForm, location_id: e.target.value})}>
                                       <option value="">בחר מיקום...</option>
-                                      {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                      {/* מציג רק מיקומים של המנהל הרלוונטי */}
+                                      {locations.filter(l => l.created_by === assetForm.created_by).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                                   </select>
                               </div>
-                              {/* הצגת הקוד אם זה מצב עריכה, בהוספה הקוד נוצר אוטומטית מאחורי הקלעים */}
                               {assetForm.id && (
                                   <div>
                                       <label className="block text-sm font-bold text-gray-700 mb-1">קוד נכס</label>
@@ -397,14 +420,12 @@ const ConfigurationTab = ({ token, t }) => {
                               )}
                           </>
                       )}
-                      
                       <button type="submit" className="w-full py-3 bg-[#714B67] text-white rounded-xl font-bold shadow-md hover:opacity-90 mt-4">שמור שינויים</button>
                   </form>
               </div>
           </div>
       )}
 
-      {/* מודאל מיקומים ושדות דינמיים */}
       {showLocationModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-scale-in flex flex-col max-h-[90vh]">
@@ -425,7 +446,7 @@ const ConfigurationTab = ({ token, t }) => {
                           </div>
                           <div>
                               <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={14}/> מפות גוגל (לינק)</label>
-                              <input type="url" placeholder="https://maps.google.com/..." className="w-full p-3 border rounded-lg bg-gray-50 outline-none text-left dir-ltr" value={locationForm.map_link} onChange={e => setLocationForm({...locationForm, map_link: e.target.value})} />
+                              <input type="url" placeholder="http://maps.google.com/..." className="w-full p-3 border rounded-lg bg-gray-50 outline-none text-left dir-ltr" value={locationForm.map_link} onChange={e => setLocationForm({...locationForm, map_link: e.target.value})} />
                           </div>
                           <div className="col-span-2">
                               <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><ImageIcon size={14}/> תמונת פרופיל (URL)</label>
@@ -441,17 +462,16 @@ const ConfigurationTab = ({ token, t }) => {
                               )}
                           </div>
 
-                          {/* בניית שדה חדש */}
                           {showFieldAdder && (
                               <div className="bg-purple-50 p-3 rounded-lg border border-purple-200 mb-4 flex gap-2 items-end">
                                   <div className="flex-1">
-                                      <label className="text-xs font-bold text-purple-700 mb-1 block">שם השדה (למשל: תעודת אחריות)</label>
+                                      <label className="text-xs font-bold text-purple-700 mb-1 block">שם השדה</label>
                                       <input type="text" className="w-full p-2 border rounded bg-white text-sm" value={newField.name} onChange={e => setNewField({...newField, name: e.target.value})} />
                                   </div>
                                   <div className="w-1/3">
                                       <label className="text-xs font-bold text-purple-700 mb-1 block">סוג השדה</label>
                                       <select className="w-full p-2 border rounded bg-white text-sm" value={newField.type} onChange={e => setNewField({...newField, type: e.target.value})}>
-                                          <option value="text">כתב חופשי (טקסט)</option>
+                                          <option value="text">טקסט</option>
                                           <option value="number">מספרים</option>
                                           <option value="file">קובץ / מסמך</option>
                                           <option value="media">תמונה / מדיה</option>
@@ -462,9 +482,8 @@ const ConfigurationTab = ({ token, t }) => {
                               </div>
                           )}
 
-                          {/* רשימת השדות שהתווספו */}
                           <div className="space-y-2">
-                              {locationForm.dynamic_fields.length === 0 && !showFieldAdder && <p className="text-xs text-gray-400 text-center italic">לא הוגדרו שדות מותאמים אישית למיקום זה.</p>}
+                              {locationForm.dynamic_fields.length === 0 && !showFieldAdder && <p className="text-xs text-gray-400 text-center italic">לא הוגדרו שדות מותאמים.</p>}
                               {locationForm.dynamic_fields.map((field) => (
                                   <div key={field.id} className="flex justify-between items-center bg-gray-50 p-2.5 rounded border text-sm">
                                       <div className="flex items-center gap-2 font-medium text-gray-700">

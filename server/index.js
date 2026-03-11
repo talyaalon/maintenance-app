@@ -538,27 +538,44 @@ app.get('/managers', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).send('Server Error'); }
 });
 
+
+// ==========================================
+// ניהול מיקומים (מותאם אישית לכל מנהל)
+// ==========================================
 app.get('/locations', authenticateToken, async (req, res) => {
   try {
-    const r = await pool.query('SELECT locations.*, users.full_name as creator_name FROM locations LEFT JOIN users ON locations.created_by = users.id ORDER BY locations.name ASC');
+    let query = `
+        SELECT locations.*, users.full_name as creator_name 
+        FROM locations 
+        LEFT JOIN users ON locations.created_by = users.id
+    `;
+    let params = [];
+    
+    // סינון - אם זה מנהל, תביא רק את המיקומים שלו
+    if (req.user.role === 'MANAGER') {
+        query += ` WHERE locations.created_by = $1 OR locations.created_by IS NULL`;
+        params.push(req.user.id);
+    }
+    query += ` ORDER BY locations.name ASC`;
+    
+    const r = await pool.query(query, params);
     res.json(r.rows);
   } catch (err) { res.status(500).send('Error'); }
 });
 
-// ==========================================
-// ניהול מיקומים (יצירה ועריכה) - מעודכן לשדות דינמיים
-// ==========================================
 app.post('/locations', authenticateToken, async (req, res) => {
   try { 
-      const { name, code, image_url, coordinates, dynamic_fields } = req.body;
+      // הוספנו את created_by כדי שהביג בוס יוכל ליצור למנהל ספציפי
+      const { name, code, image_url, coordinates, dynamic_fields, created_by } = req.body;
+      const ownerId = created_by || req.user.id; 
       
-      const check = await pool.query('SELECT id FROM locations WHERE name = $1', [name]);
-      if (check.rows.length > 0) return res.status(400).json({ error: "Location name already exists" });
+      const check = await pool.query('SELECT id FROM locations WHERE name = $1 AND created_by = $2', [name, ownerId]);
+      if (check.rows.length > 0) return res.status(400).json({ error: "Location name already exists for this manager" });
 
       const r = await pool.query(
           `INSERT INTO locations (name, created_by, code, image_url, coordinates, dynamic_fields) 
            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`, 
-          [name, req.user.id, code || null, image_url || null, coordinates || null, dynamic_fields || '[]']
+          [name, ownerId, code || null, image_url || null, coordinates || null, dynamic_fields || '[]']
       ); 
       res.json(r.rows[0]); 
   } catch (e) { 
@@ -567,31 +584,82 @@ app.post('/locations', authenticateToken, async (req, res) => {
   }
 });
 
+// ==========================================
+// ניהול קטגוריות (מותאם אישית לכל מנהל)
+// ==========================================
 app.get('/categories', authenticateToken, async (req, res) => {
-    try { const result = await pool.query('SELECT * FROM categories ORDER BY name'); res.json(result.rows); } catch (err) { res.status(500).send('Error'); }
+    try {
+        let query = `
+            SELECT categories.*, users.full_name as creator_name 
+            FROM categories 
+            LEFT JOIN users ON categories.created_by = users.id
+        `;
+        let params = [];
+        // אם זה מנהל רגיל - תביא רק את שלו (או דברים גלובליים ישנים ללא מנהל)
+        if (req.user.role === 'MANAGER') {
+            query += ` WHERE categories.created_by = $1 OR categories.created_by IS NULL`;
+            params.push(req.user.id);
+        }
+        query += ` ORDER BY categories.name`;
+        
+        const result = await pool.query(query, params); 
+        res.json(result.rows); 
+    } catch (err) { res.status(500).send('Error'); }
 });
 
 app.post('/categories', authenticateToken, async (req, res) => {
     try { 
-        const { name } = req.body;
-        const check = await pool.query('SELECT id FROM categories WHERE name = $1', [name]);
-        if (check.rows.length > 0) return res.status(400).json({ error: "Category name already exists" });
+        // הביג בוס יכול לשלוח created_by ספציפי, אחרת זה המשתמש שיצר
+        const { name, code, created_by } = req.body;
+        const ownerId = created_by || req.user.id;
 
-        const result = await pool.query('INSERT INTO categories (name) VALUES ($1) RETURNING *', [name]); 
+        const check = await pool.query('SELECT id FROM categories WHERE name = $1 AND created_by = $2', [name, ownerId]);
+        if (check.rows.length > 0) return res.status(400).json({ error: "Category name already exists for this manager" });
+
+        const result = await pool.query(
+            'INSERT INTO categories (name, code, created_by) VALUES ($1, $2, $3) RETURNING *', 
+            [name, code, ownerId]
+        ); 
         res.json(result.rows[0]); 
     } catch (err) { res.status(500).send('Error'); }
 });
 
-app.get('/assets', authenticateToken, async (req, res) => {
-    try { const result = await pool.query('SELECT assets.*, categories.name as category_name FROM assets LEFT JOIN categories ON assets.category_id = categories.id ORDER BY assets.code'); res.json(result.rows); } catch (err) { res.status(500).send('Error'); }
+app.put('/categories/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, code } = req.body;
+        const result = await pool.query('UPDATE categories SET name = $1, code = $2 WHERE id = $3 RETURNING *', [name, code, id]);
+        res.json(result.rows[0]);
+    } catch (err) { res.status(500).send('Error updating category'); }
 });
 
 // ==========================================
-// ניהול נכסים (יצירה ועריכה) - מעודכן לשיוך מיקום
+// ניהול נכסים (מותאם אישית לכל מנהל)
 // ==========================================
+app.get('/assets', authenticateToken, async (req, res) => {
+    try { 
+        let query = `
+            SELECT assets.*, categories.name as category_name, users.full_name as creator_name 
+            FROM assets 
+            LEFT JOIN categories ON assets.category_id = categories.id 
+            LEFT JOIN users ON assets.created_by = users.id
+        `;
+        let params = [];
+        if (req.user.role === 'MANAGER') {
+            query += ` WHERE assets.created_by = $1 OR assets.created_by IS NULL`;
+            params.push(req.user.id);
+        }
+        query += ` ORDER BY assets.code`;
+        
+        const result = await pool.query(query, params); 
+        res.json(result.rows); 
+    } catch (err) { res.status(500).send('Error'); }
+});
+
 app.post('/assets', authenticateToken, async (req, res) => {
     try {
-        const { name, code, category_id, location_id } = req.body;
+        const { name, code, category_id, location_id, created_by } = req.body;
+        const ownerId = created_by || req.user.id;
         
         if (code) {
             const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
@@ -599,15 +667,27 @@ app.post('/assets', authenticateToken, async (req, res) => {
         }
         
         const result = await pool.query(
-            `INSERT INTO assets (name, code, category_id, location_id) 
-             VALUES ($1, $2, $3, $4) RETURNING *`, 
-            [name, code, category_id, location_id || null]
+            `INSERT INTO assets (name, code, category_id, location_id, created_by) 
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`, 
+            [name, code, category_id, location_id || null, ownerId]
         );
         res.json(result.rows[0]);
     } catch (err) { 
         console.error(err); 
         res.status(500).send('Error saving asset'); 
     }
+});
+
+app.put('/assets/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, category_id, location_id } = req.body;
+        const result = await pool.query(
+            'UPDATE assets SET name = $1, category_id = $2, location_id = $3 WHERE id = $4 RETURNING *', 
+            [name, category_id, location_id || null, id]
+        );
+        res.json(result.rows[0]);
+    } catch (err) { res.status(500).send('Error updating asset'); }
 });
 
 app.put('/locations/:id', authenticateToken, async (req, res) => {
@@ -626,29 +706,7 @@ app.put('/locations/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.put('/categories/:id', authenticateToken, async (req, res) => {
-    try {
-        const { name } = req.body;
-        await pool.query('UPDATE categories SET name = $1 WHERE id = $2', [name, req.params.id]);
-        res.json({ success: true });
-    } catch (e) { res.status(500).send("Error updating category"); }
-});
-app.put('/assets/:id', authenticateToken, async (req, res) => {
-    try {
-        const { name, category_id, location_id } = req.body;
-        // שימי לב: אנחנו לא מאפשרים עריכת "קוד" אחרי שנוצר כדי למנוע בלאגן במערכת
-        const result = await pool.query(
-            `UPDATE assets 
-             SET name = $1, category_id = $2, location_id = $3
-             WHERE id = $4 RETURNING *`,
-            [name, category_id, location_id || null, req.params.id]
-        );
-        res.json(result.rows[0]);
-    } catch (err) { 
-        console.error(err); 
-        res.status(500).send('Error updating asset'); 
-    }
-});
+
 
 const deleteItem = async (table, id, res) => {
     try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); } 
@@ -1258,7 +1316,7 @@ const cron = require('node-cron');
 // ==========================================
 // 🚀 CRON JOB: דוח יומי (תמיכה במובייל + 3 שפות)
 // ==========================================
-cron.schedule('30 15 * * *', async () => {
+cron.schedule('10 16 * * *', async () => {
     console.log("⏰ [CRON] Starting Daily Task Check...");
 
     // מילון תרגומים חכם
