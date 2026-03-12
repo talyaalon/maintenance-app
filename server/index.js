@@ -18,6 +18,7 @@ try {
 } catch (error) {
     console.log("⚠️ Firebase warning (Server is still running!):", error.message);
 }
+
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 const express = require('express');
@@ -43,34 +44,29 @@ cloudinary.config({
   api_secret: '-7M6Z0dvS0fPFkQiEuWj66FWPXM'
 });
 
-// הגדרות העלאת קבצים (מאפשר תמונות ומסמכים)
+// 👇 התיקון הגדול מתחיל כאן 👇
+// ווידוא שתיקיית ההעלאות קיימת בשרת (פותר את שגיאת ה-ENOENT ב-Render!)
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log("✅ Uploads directory created successfully!");
+}
+
+// הגדרות העלאת קבצים
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/');
+        cb(null, uploadDir); // שימוש בנתיב המלא והבטוח
     },
     filename: (req, file, cb) => {
-        cb(null, Date.now() + '-' + encodeURIComponent(file.originalname));
+        // ניקוי שם הקובץ מרווחים כדי למנוע תקלות קידוד
+        const safeName = encodeURIComponent(file.originalname.replace(/\s+/g, '_'));
+        cb(null, Date.now() + '-' + safeName);
     }
 });
 
-const upload = multer({ 
-    storage: storage,
-    fileFilter: (req, file, cb) => {
-        // מאשרים תמונות, מסמכי PDF, וורד ואקסל!
-        if (
-            file.mimetype.startsWith('image/') || 
-            file.mimetype === 'application/pdf' ||
-            file.mimetype.includes('excel') ||
-            file.mimetype.includes('spreadsheetml') ||
-            file.mimetype.includes('word') ||
-            file.mimetype === 'application/msword'
-        ) {
-            cb(null, true);
-        } else {
-            cb(new Error('פורמט הקובץ אינו נתמך (יש להעלות תמונה, PDF או אקסל/וורד)'), false);
-        }
-    }
-});
+// 🚀 הסרנו את החסימה הנוקשה (fileFilter) כדי שתוכלי להעלות ODF, אקסל, ומסמכים מכל סוג בחופשיות!
+const upload = multer({ storage: storage });
+// 👆 התיקון הגדול מסתיים כאן 👆
 
 console.log("📧 Configuring Email using Brevo SMTP...");
 const transporter = nodemailer.createTransport({
@@ -126,9 +122,8 @@ const sendUpdateEmail = async (email, fullName, changes) => {
 // 📧 שליחת מייל למשתמש חדש (מותאם לשפות ולתפקידים)
 // ==========================================
 const sendWelcomeEmail = async (email, fullName, password, role, lang = 'he') => {
-    const appLink = "https://air-manage-app.netlify.app/"; // 👈 הקישור החדש שלך!
+    const appLink = "https://air-manage-app.netlify.app/";
 
-    // המילון הפנימי של השרת
     const dict = {
         en: {
             dir: 'ltr', align: 'left',
@@ -171,10 +166,8 @@ const sendWelcomeEmail = async (email, fullName, password, role, lang = 'he') =>
         }
     };
 
-    // שליפת השפה (אם משום מה חסר, ברירת המחדל היא אנגלית)
     const l = dict[lang] || dict['en'];
 
-    // הגדרת הטקסטים לפי התפקיד (מנהל או עובד)
     let titleText = l.title_emp;
     let descriptionText = l.desc_emp;
     
@@ -246,24 +239,20 @@ app.get('/fix-db', async (req, res) => {
         try {
             console.log("🔧 Starting DB Fix...");
             
-            // 1. עדכונים ישנים
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS images TEXT[]');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_images TEXT[]'); 
             await client.query('ALTER TABLE tasks ALTER COLUMN due_date TYPE TIMESTAMP WITHOUT TIME ZONE');
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token TEXT');
             
-            // 2. הוספת שיוך למנהל
             await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)');
             await client.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)');
 
-            // 3. הוספת העמודות החדשות
             await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS code VARCHAR(10)');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS code VARCHAR(50)');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS image_url TEXT');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS coordinates TEXT');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS dynamic_fields TEXT');
 
-            // 4. יצירת טבלת שדות מותאמים
             await client.query(`
                 CREATE TABLE IF NOT EXISTS location_fields (
                     id SERIAL PRIMARY KEY,
@@ -273,7 +262,6 @@ app.get('/fix-db', async (req, res) => {
                 )
             `);
 
-            // 5. 🚀 התיקון החדש: ביטול חוקי הכפילות הישנים שחוסמים מנהלים שונים ליצור אותם שמות! 🚀
             await client.query('ALTER TABLE categories DROP CONSTRAINT IF EXISTS categories_name_key');
             await client.query('ALTER TABLE locations DROP CONSTRAINT IF EXISTS locations_name_key');
             await client.query('ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_code_key');
@@ -297,7 +285,6 @@ app.get('/fix-db', async (req, res) => {
     }
 });
 
-// נתיב חדש: שמירת הטוקן של המכשיר
 app.post('/users/device-token', authenticateToken, async (req, res) => {
     try {
         const { device_token } = req.body;
@@ -316,7 +303,6 @@ app.post('/users/device-token', authenticateToken, async (req, res) => {
 // Login
 app.post('/login', async (req, res) => {
   try {
-    // 1. המרה לאותיות קטנות (מוודאים קודם שהמשתמש באמת שלח אימייל כדי למנוע קריסה)
     const email = req.body.email ? req.body.email.toLowerCase() : '';
     const { password } = req.body;
 
@@ -342,9 +328,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
- // ==========================================
-// עריכת פרופיל אישי (כולל תמונה ושפה)
-// ==========================================
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
         const id = req.user.id;
@@ -355,10 +338,8 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
             profile_picture_url = `/uploads/${req.file.filename}`;
         }
 
-        // הגדרת השפה (אם לא נבחרה - ברירת מחדל אנגלית)
         const lang = preferred_language || 'en';
 
-        // 1. עדכון פיירבייס (חובה בתוך Try..Catch משלו כדי לא להפיל את כל השרת)
         const firebaseUpdateData = { displayName: full_name, email: email };
         if (password && password.trim() !== '') {
             if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
@@ -372,10 +353,8 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
             if (firebaseErr.code === 'auth/email-already-exists') {
                 return res.status(400).json({ error: "Email already taken" });
             }
-            // במקרה של שגיאת פיירבייס אחרת, אנחנו לא רוצים לקרוס לגמרי, אז נמשיך הלאה.
         }
 
-        // 2. עדכון מסד הנתונים (PostgreSQL)
         let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, profile_picture_url=$4, preferred_language=$5';
         let params = [full_name, email, phone, profile_picture_url, lang];
         let paramCount = 6;
@@ -397,12 +376,10 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
             return res.status(404).json({ error: "User not found in database" });
         }
 
-        // 3. הצלחה! מחזירים את המשתמש המעודכן חזרה לאפליקציה (כדי שתוכל לסגור את החלון)
         res.json({ message: "Profile updated successfully", user: result.rows[0] });
 
     } catch (err) {
         console.error("❌ Error updating profile:", err);
-        // תפיסת כפילות אימייל ברמת מסד הנתונים
         if (err.code === '23505') {
             return res.status(400).json({ error: "Email already exists" });
         }
@@ -431,21 +408,17 @@ app.get('/users', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Server Error'); }
 });
 
-// Create User
 app.post('/users', authenticateToken, async (req, res) => {
   try {
-    // 🌍 הוספנו פה את preferred_language
     const { full_name, password, role, parent_manager_id, preferred_language } = req.body;
     let { email, phone } = req.body;
     
-    // 1. המרת אימייל לאותיות קטנות
     email = email ? email.toLowerCase() : '';
 
     if (!full_name || !email || !password || !role) {
         return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // 2. אימות מספר הטלפון (במידה והוזן)
     if (phone) {
         const phoneRegex = /^[0-9]{9,15}$/; 
         if (!phoneRegex.test(phone)) {
@@ -453,7 +426,7 @@ app.post('/users', authenticateToken, async (req, res) => {
         }
     }
 
-    const bcrypt = require('bcrypt'); // למקרה שזה לא יובא למעלה
+    const bcrypt = require('bcrypt');
     const hashedPassword = await bcrypt.hash(password, 10);
     
     let assignedManager = parent_manager_id;
@@ -461,9 +434,8 @@ app.post('/users', authenticateToken, async (req, res) => {
         assignedManager = req.user.id;
     }
 
-    const lang = preferred_language || 'he'; // שפה
+    const lang = preferred_language || 'he';
 
-    // 🌍 הוספת השפה לשאילתת יצירת המשתמש
     const newUser = await pool.query(
       `INSERT INTO users (full_name, email, password, role, phone, parent_manager_id, preferred_language) 
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, full_name, email, role, phone, preferred_language`,
@@ -471,7 +443,6 @@ app.post('/users', authenticateToken, async (req, res) => {
     );
     
     try {
-        // העברת השפה לפונקציית שליחת המייל!
         await sendWelcomeEmail(email, full_name, password, role, lang);
     } catch (emailError) {
         console.error("Error sending welcome email:", emailError);
@@ -488,20 +459,15 @@ app.post('/users', authenticateToken, async (req, res) => {
   }
 });
  
-// ==========================================
-// עריכת משתמש (כולל שמירת העדפת שפה, סנכרון Firebase ומעקב שינויים)
-// ==========================================
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { full_name, email, phone, role, password, preferred_language } = req.body;
 
-    // שליפת משתמש ישן למעקב שינויים
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
     const oldUser = oldUserRes.rows[0];
 
-    // 1. עדכון Firebase Auth 
     const firebaseUpdateData = { displayName: full_name, email: email };
     if (password && password.trim() !== '') {
         if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
@@ -516,7 +482,6 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         return res.status(500).json({ error: "שגיאה בעדכון פרטי ההתחברות." });
     }
 
-    // 2. עדכון מסד הנתונים (כולל השפה!)
     const lang = preferred_language || oldUser.preferred_language || 'he';
     let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4, preferred_language=$5';
     let params = [full_name, email, phone, role, lang];
@@ -536,7 +501,6 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     const result = await pool.query(query, params);
     const updatedUser = result.rows[0];
 
-    // 3. דיווח שינויים במייל
     let changes = [];
     if (oldUser.full_name !== updatedUser.full_name) changes.push(`Name changed to: <strong>${updatedUser.full_name}</strong>`);
     if (oldUser.email !== updatedUser.email) changes.push(`Email changed to: <strong>${updatedUser.email}</strong>`);
@@ -545,7 +509,6 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     if (password && password.trim() !== '') changes.push('Password has been changed');
 
     if (changes.length > 0) {
-        // שלחנו את הפונקציה המקורית שלך לשליחת מייל עדכון
         sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes).catch(err => console.error("Email send error:", err));
     }
     
@@ -587,7 +550,7 @@ app.get('/managers', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// ניהול שדות מותאמים אישית למיקומים (לפי מנהל)
+// ניהול שדות מותאמים אישית למיקומים
 // ==========================================
 app.get('/location-fields', authenticateToken, async (req, res) => {
     try {
@@ -616,7 +579,7 @@ app.delete('/location-fields/:id', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// ניהול מיקומים (כולל קבצים וקוד אוטומטי!)
+// ניהול מיקומים
 // ==========================================
 app.get('/locations', authenticateToken, async (req, res) => {
     try {
@@ -636,11 +599,7 @@ app.get('/locations', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error'); }
 });
 
-// ==========================================
-// ניהול מיקומים - חסין תקלות (עוטף שגיאות קבצים!)
-// ==========================================
 app.post('/locations', authenticateToken, (req, res) => {
-    // 🚀 עוטפים את מערכת הקבצים כדי לתפוס קריסות לפני שהן קורות! 🚀
     upload.any()(req, res, async (uploadErr) => {
         if (uploadErr) {
             console.error("Multer Upload Error:", uploadErr);
@@ -734,7 +693,7 @@ app.put('/locations/:id', authenticateToken, (req, res) => {
 });
 
 // ==========================================
-// ניהול קטגוריות (מותאם אישית לכל מנהל)
+// ניהול קטגוריות
 // ==========================================
 app.get('/categories', authenticateToken, async (req, res) => {
     try {
@@ -744,7 +703,6 @@ app.get('/categories', authenticateToken, async (req, res) => {
             LEFT JOIN users ON categories.created_by = users.id
         `;
         let params = [];
-        // אם זה מנהל רגיל - תביא רק את שלו (או דברים גלובליים ישנים ללא מנהל)
         if (req.user.role === 'MANAGER') {
             query += ` WHERE categories.created_by = $1 OR categories.created_by IS NULL`;
             params.push(req.user.id);
@@ -785,7 +743,7 @@ app.put('/categories/:id', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// ניהול נכסים (מותאם אישית לכל מנהל)
+// ניהול נכסים
 // ==========================================
 app.get('/assets', authenticateToken, async (req, res) => {
     try { 
@@ -841,10 +799,6 @@ app.put('/assets/:id', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error updating asset'); }
 });
 
-
-
-
-
 const deleteItem = async (table, id, res) => {
     try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); } 
     catch (e) { res.status(400).json({ error: "Cannot delete: Item is in use." }); }
@@ -887,9 +841,6 @@ app.get('/tasks', authenticateToken, async (req, res) => {
     } catch (err) { console.error(err); res.sendStatus(500); }
 });
 
-// ==========================================
-// 1. יצירת משימה בודדת מהאפליקציה (הקוד המקורי שלך!)
-// ==========================================
 app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   try {
     const files = req.files || [];
@@ -908,7 +859,6 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
     let createdCount = 1;
 
-    // יצירת המשימות במסד הנתונים
     if (!isRecurring) {
         await pool.query(
             `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
@@ -952,7 +902,6 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         createdCount = tasksToInsert.length;
     }
     
-    // שליחת ההתראה לעובד
     try {
         const workerRes = await pool.query('SELECT device_token FROM users WHERE id = $1', [worker_id]);
         const workerToken = workerRes.rows[0]?.device_token;
@@ -980,12 +929,6 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   }
 });
 
-// ==========================================
-// 2. יצירת משימות במאסה מתוך אקסל (הקוד החדש והחכם)
-// ==========================================
-// ==========================================
-// יצירת משימות במאסה מתוך אקסל (תמיכה מלאה בתמונות ומערכי תאריכים)
-// ==========================================
 app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
     try {
         const { tasks } = req.body;
@@ -998,7 +941,6 @@ app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
             if (!notificationsMap[task.worker_id]) notificationsMap[task.worker_id] = 0;
 
             if (!task.is_recurring) {
-                // משימה חד פעמית (כולל תמונות)
                 await pool.query(
                     `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id, images) 
                      VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8)`,
@@ -1007,7 +949,6 @@ app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
                 insertedCount++;
                 notificationsMap[task.worker_id]++;
             } else {
-                // משימה מחזורית - רץ לשנה הקרובה
                 const start = new Date(task.due_date);
                 const end = new Date(start);
                 end.setFullYear(end.getFullYear() + 1); 
@@ -1040,7 +981,6 @@ app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
             }
         }
 
-        // שליחת התראה מרוכזת אחת לעובד על כל המאסה
         try {
             for (const worker_id in notificationsMap) {
                 const taskCount = notificationsMap[worker_id];
@@ -1086,9 +1026,7 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
             [completion_note, completionImageUrl, id]
         );
 
-        // 👇 קוד התראה למנהל - להדביק לפני res.json
         try {
-            // 1. נמצא מי המנהל של העובד
             const managerQuery = `
                 SELECT m.device_token 
                 FROM tasks t
@@ -1099,7 +1037,6 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
             const managerRes = await pool.query(managerQuery, [id]);
             const managerToken = managerRes.rows[0]?.device_token;
 
-            // 2. נשלח למנהל הודעה
             if (managerToken) {
                 await admin.messaging().send({
                     token: managerToken,
@@ -1155,9 +1092,6 @@ app.delete('/tasks/delete-all', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send("Error deleting tasks"); }
 });
 
-// ==========================================
-// 👇 ייצוא לאקסל
-// ==========================================
 app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     try {
         const { worker_id, start_date, end_date, status } = req.query;
@@ -1211,9 +1145,6 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     }
 });
 
-// ==========================================
-// 👇 ייבוא מאקסל (כולל עדכון סטטוס וכל השדות)
-// ==========================================
 app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     const { tasks, isDryRun } = req.body; 
     const client = await pool.connect();
@@ -1253,7 +1184,7 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             const assetName = getValue(row, ['Asset Name', 'Asset', 'שם הנכס']);
             const desc = getValue(row, ['Description', 'תיאור']) || '';
             const urgencyRaw = getValue(row, ['Urgency', 'דחיפות']);
-            const statusRaw = getValue(row, ['Status', 'סטטוס']) || 'PENDING'; // 👇 קריאת סטטוס
+            const statusRaw = getValue(row, ['Status', 'סטטוס']) || 'PENDING'; 
             const dateRaw = getValue(row, ['Due Date', 'Date', 'תאריך', 'תאריך יעד']);
             
             const imagesRaw = getValue(row, ['Images', 'Image URLs', 'Photos', 'תמונות', 'קישורי תמונות']);
@@ -1315,7 +1246,7 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                     title,
                     description: desc,
                     urgency: ['High', 'Urgent', 'גבוהה', 'דחוף'].includes(urgencyRaw) ? 'High' : 'Normal',
-                    status: statusRaw, // 👇 שמירת הסטטוס
+                    status: statusRaw,
                     due_date: dateRaw ? new Date(dateRaw) : new Date(),
                     worker_id,
                     location_id,
@@ -1342,7 +1273,6 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
 
             for (const t of validTasks) {
                 if (t.id) {
-                    // 👇 UPDATE כולל סטטוס
                     const check = await client.query('SELECT id FROM tasks WHERE id = $1', [t.id]);
                     if (check.rows.length > 0) {
                         await client.query(
@@ -1353,7 +1283,6 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                             [t.title, t.description, t.urgency, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images, t.status, t.id]
                         );
                     } else {
-                        // 👇 INSERT כולל סטטוס (אם ID לא קיים)
                         await client.query(
                             `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images) 
                              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
@@ -1361,7 +1290,6 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                         );
                     }
                 } else {
-                    // 👇 INSERT רגיל כולל סטטוס
                     await client.query(
                         `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images) 
                          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
@@ -1386,17 +1314,13 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     }
 });
 
-// 👇 נתיב שדרוג מסד הנתונים (להרצה חד-פעמית)
 app.get('/api/upgrade-db', async (req, res) => {
     try {
-        // שדרוג טבלת קטגוריות
         await pool.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS code VARCHAR(3);`);
         
-        // שדרוג טבלת נכסים
         await pool.query(`ALTER TABLE assets ADD COLUMN IF NOT EXISTS location_id INT;`);
         await pool.query(`ALTER TABLE assets ADD COLUMN IF NOT EXISTS code VARCHAR(20);`);
         
-        // שדרוג טבלת מיקומים (כולל שדות דינמיים וקואורדינטות)
         await pool.query(`ALTER TABLE locations ADD COLUMN IF NOT EXISTS code VARCHAR(50);`);
         await pool.query(`ALTER TABLE locations ADD COLUMN IF NOT EXISTS image_url TEXT;`);
         await pool.query(`ALTER TABLE locations ADD COLUMN IF NOT EXISTS coordinates JSON;`);
@@ -1450,13 +1374,9 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
 
 const cron = require('node-cron');
 
-// ==========================================
-// 🚀 CRON JOB: דוח יומי (תמיכה במובייל + 3 שפות)
-// ==========================================
 cron.schedule('10 16 * * *', async () => {
     console.log("⏰ [CRON] Starting Daily Task Check...");
 
-    // מילון תרגומים חכם
     const dict = {
         he: {
             dir: 'rtl', align: 'right',
@@ -1540,7 +1460,6 @@ cron.schedule('10 16 * * *', async () => {
             if (myTasks.length > 0) employeeTasks[emp.id] = { user: emp, tasks: myTasks };
         });
 
-        // HTML Base (Responsive Mobile First)
         const getEmailTemplate = (langDict, content) => `
         <!DOCTYPE html>
         <html>
@@ -1555,12 +1474,9 @@ cron.schedule('10 16 * * *', async () => {
         </body>
         </html>`;
 
-        // ==============================
-        // 1. WORKERS
-        // ==============================
         for (const empId in employeeTasks) {
             const { user: emp, tasks: wTasks } = employeeTasks[empId];
-            const l = dict[emp.preferred_language] || dict['he']; // שליפת השפה של העובד
+            const l = dict[emp.preferred_language] || dict['he']; 
             
             const completed = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
             const pending = wTasks.filter(t => t.status === 'PENDING');
@@ -1614,9 +1530,6 @@ cron.schedule('10 16 * * *', async () => {
             }
         }
 
-        // ==============================
-        // 2. MANAGERS
-        // ==============================
         const leaders = allUsers.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
         for (const leader of leaders) {
             const relevantEmps = leader.role === 'BIG_BOSS' 
@@ -1625,7 +1538,7 @@ cron.schedule('10 16 * * *', async () => {
 
             if (relevantEmps.length === 0) continue;
 
-            const l = dict[leader.preferred_language] || dict['he']; // שפת המנהל!
+            const l = dict[leader.preferred_language] || dict['he'];
             let allTeamPerfect = true;
             
             let leaderContent = `
@@ -1702,23 +1615,16 @@ cron.schedule('10 16 * * *', async () => {
     } catch (error) { console.error("❌ [CRON] Failed:", error); }
 }, { scheduled: true, timezone: "Asia/Bangkok" });
 
-// ==========================================
-// 🚑 פונקציית חירום 4.0: סנכרון הבוס (מותאם למסד נתונים מספרי)
-// ==========================================
 app.get('/api/rescue-boss', async (req, res) => {
     try {
-        // 👇 הקלידי פה את המייל המדויק שהגדרת עכשיו בפיירבייס 👇
         const bossEmail = "talyaisrael2025@gmail.com"; 
         const bossName = "Big Boss";
 
-        // יצירת סיסמה וירטואלית למסד הנתונים (פיירבייס מנהל את ההתחברות האמיתית)
         const bcrypt = require('bcrypt');
         const dummyPassword = await bcrypt.hash("123456", 10);
 
-        // מחיקת שאריות ישנות מהמסד כדי למנוע התנגשות
         await pool.query('DELETE FROM users WHERE email = $1', [bossEmail]);
         
-        // יצירת הבוס - הפעם אנחנו לא נותנים לו ID, המסד ימציא לו מספר לבד!
         await pool.query(
             `INSERT INTO users (full_name, email, role, password) 
              VALUES ($1, $2, 'BIG_BOSS', $3)`,
