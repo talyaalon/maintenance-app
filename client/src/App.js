@@ -124,7 +124,7 @@ function App() {
                     />;
           case 3: 
             if (isEmployee) return null;
-            return <ConfigurationTab token={token} t={t} user={user} />;
+            return <ConfigurationTab token={token} t={t} user={user} lang={lang} />;
           case 4: 
             return <ProfileTab 
                         t={t} 

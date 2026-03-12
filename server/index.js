@@ -626,7 +626,9 @@ app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
         const { name, map_link, dynamic_fields, created_by } = req.body;
         const ownerId = created_by || req.user.id; 
         
-        // יצירת קוד LOC אוטומטי
+        const check = await pool.query('SELECT id FROM locations WHERE name = $1 AND created_by = $2', [name, ownerId]);
+        if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: מיקום בשם זה כבר קיים אצלך!" });
+
         const locs = await pool.query("SELECT code FROM locations WHERE created_by = $1 AND code LIKE 'LOC-%'", [ownerId]);
         let max = 0;
         locs.rows.forEach(r => {
@@ -637,7 +639,6 @@ app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
         });
         const generatedCode = `LOC-${String(max + 1).padStart(4, '0')}`;
 
-        // טיפול בקבצים
         let mainImageUrl = req.body.existing_image || null;
         let parsedDynamicFields = [];
         try { parsedDynamicFields = JSON.parse(dynamic_fields || '[]'); } catch(e){}
@@ -647,7 +648,6 @@ app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
                 if (file.fieldname === 'main_image') {
                     mainImageUrl = `/uploads/${file.filename}`;
                 } else if (file.fieldname.startsWith('dynamic_')) {
-                    // התיקון: פענוח השם מעברית מקודדת
                     const fieldName = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
                     const fieldObj = parsedDynamicFields.find(f => f.name === fieldName);
                     if (fieldObj) fieldObj.value = `/uploads/${file.filename}`;
@@ -662,7 +662,7 @@ app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
         ); 
         res.json(r.rows[0]); 
     } catch (e) { 
-        console.error("❌ Error saving location:", e);
+        if (e.code === '23505') return res.status(400).json({ error: "כפילות: הערך כבר קיים במערכת." });
         res.status(500).json({ error: 'Server Error: ' + e.message }); 
     }
 });
@@ -728,7 +728,7 @@ app.post('/categories', authenticateToken, async (req, res) => {
         const ownerId = created_by || req.user.id;
 
         const check = await pool.query('SELECT id FROM categories WHERE name = $1 AND created_by = $2', [name, ownerId]);
-        if (check.rows.length > 0) return res.status(400).json({ error: "Category name already exists for this manager" });
+        if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: קטגוריה בשם זה כבר קיימת אצלך במערכת!" });
 
         const result = await pool.query(
             'INSERT INTO categories (name, code, created_by) VALUES ($1, $2, $3) RETURNING *', 
@@ -736,8 +736,7 @@ app.post('/categories', authenticateToken, async (req, res) => {
         ); 
         res.json(result.rows[0]); 
     } catch (err) { 
-        console.error("❌ Category Error:", err);
-        // עכשיו השרת ישלח לך בדיוק את הסיבה לקריסה!
+        if (err.code === '23505') return res.status(400).json({ error: "כפילות: הערך כבר קיים במערכת." });
         res.status(500).json({ error: "DB Error: " + err.message }); 
     }
 });
@@ -781,7 +780,7 @@ app.post('/assets', authenticateToken, async (req, res) => {
         
         if (code) {
             const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
-            if (check.rows.length > 0) return res.status(400).json({ error: "Asset code already exists" });
+            if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: קוד הנכס כבר קיים במערכת!" });
         }
         
         const result = await pool.query(
@@ -791,7 +790,7 @@ app.post('/assets', authenticateToken, async (req, res) => {
         );
         res.json(result.rows[0]);
     } catch (err) { 
-        console.error(err); 
+        if (err.code === '23505') return res.status(400).json({ error: "כפילות: הערך כבר קיים במערכת." });
         res.status(500).send('Error saving asset'); 
     }
 });

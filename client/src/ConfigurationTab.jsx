@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload } from 'lucide-react';
 
-const ConfigurationTab = ({ token, t, user }) => { 
+const ConfigurationTab = ({ token, t, user, lang }) => { 
   const [activeSubTab, setActiveSubTab] = useState('tree'); 
   const [categories, setCategories] = useState([]);
   const [assets, setAssets] = useState([]);
@@ -22,7 +22,7 @@ const ConfigurationTab = ({ token, t, user }) => {
   const [categoryForm, setCategoryForm] = useState({ id: null, name: '', code: '', created_by: null });
   const [assetForm, setAssetForm] = useState({ id: null, name: '', category_id: '', location_id: '', code: '', created_by: null });
   
-  // טופס מיקומים מתקדם
+  // טופס מיקומים
   const [locationForm, setLocationForm] = useState({ id: null, name: '', map_address: '', map_link: '', existing_image: '', created_by: null });
   const [locationImageFile, setLocationImageFile] = useState(null);
   const [locationImagePreview, setLocationImagePreview] = useState(null);
@@ -34,7 +34,9 @@ const ConfigurationTab = ({ token, t, user }) => {
 
   const [dynamicValues, setDynamicValues] = useState({});
   const [dynamicFiles, setDynamicFiles] = useState({});
-  const [newField, setNewField] = useState({ name: '', type: 'text' });
+  
+  // 🌍 הוספת שדה גלובלי משודרג (תמיכה ב-3 שפות)
+  const [newField, setNewField] = useState({ name_he: '', name_en: '', name_th: '', type: 'text' });
 
   useEffect(() => { 
       fetchData(); 
@@ -61,6 +63,19 @@ const ConfigurationTab = ({ token, t, user }) => {
           const res = await fetch('https://maintenance-app-h84v.onrender.com/managers', { headers: { 'Authorization': `Bearer ${token}` } });
           if (res.ok) setManagers(await res.json());
       } catch (e) {}
+  };
+
+  // 🚀 פונקציית תרגום שם השדה לפי האובייקט החכם
+  const getFieldName = (nameStr) => {
+      try {
+          // מנסה לפענח אם זה אובייקט JSON של שפות
+          const parsed = JSON.parse(nameStr);
+          // לוקח את השפה הנוכחית, ואם אין אז אנגלית, ואם אין אז עברית
+          return parsed[lang] || parsed.en || parsed.he || nameStr;
+      } catch (e) {
+          // אם זה סתם טקסט ישן מהעבר, נחזיר אותו כמו שהוא
+          return nameStr;
+      }
   };
 
   const toggleCategory = (catId) => setExpandedCategories(prev => prev.includes(catId) ? prev.filter(id => id !== catId) : [...prev, catId]);
@@ -90,6 +105,19 @@ const ConfigurationTab = ({ token, t, user }) => {
       return `${catCode}-${String(maxNum + 1).padStart(4, '0')}`;
   };
 
+  const handleApiError = async (res) => {
+      try {
+          const data = await res.json();
+          if (data.error && data.error.includes("כפילות")) {
+              alert("⚠️ שים לב: " + data.error);
+          } else {
+              alert("❌ שגיאה: " + (data.error || "תקלה בשמירה. בדוק את הנתונים."));
+          }
+      } catch (e) {
+          alert("❌ שגיאת שרת לא צפויה.");
+      }
+  };
+
   const handleSaveTreeItem = async (e) => {
       e.preventDefault();
       let url = '', method = 'POST', payload = {};
@@ -107,7 +135,7 @@ const ConfigurationTab = ({ token, t, user }) => {
       try {
           const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
           if (res.ok) { setShowTreeModal(false); fetchData(); } 
-          else { const data = await res.json(); alert("Error: " + (data.error || "Failed")); }
+          else { await handleApiError(res); }
       } catch (e) { alert("Server Error"); }
   };
 
@@ -118,37 +146,46 @@ const ConfigurationTab = ({ token, t, user }) => {
       setShowTreeModal(true);
   };
 
+  // 🌍 הוספת שדה גלובלי והפיכתו לאובייקט חכם לשפות
   const handleAddGlobalField = async (targetManagerId) => {
-      if (!newField.name) return;
+      if (!newField.name_he && !newField.name_en && !newField.name_th) return alert("יש למלא לפחות שם באחת השפות");
+      
+      // יצירת אובייקט JSON שיאחסן את כל השפות במסד הנתונים כטקסט אחד חכם!
+      const nameObjectStr = JSON.stringify({
+          he: newField.name_he || newField.name_en, // גיבוי אם חסר
+          en: newField.name_en || newField.name_he,
+          th: newField.name_th || newField.name_en
+      });
+
       try {
           const res = await fetch('https://maintenance-app-h84v.onrender.com/location-fields', {
               method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ ...newField, created_by: targetManagerId })
+              body: JSON.stringify({ name: nameObjectStr, type: newField.type, created_by: targetManagerId })
           });
           if (res.ok) {
-              setNewField({ name: '', type: 'text' });
+              setNewField({ name_he: '', name_en: '', name_th: '', type: 'text' });
               fetchData();
+          } else {
+              await handleApiError(res);
           }
       } catch(e){ alert("שגיאה בהוספת שדה"); }
   };
 
-  // --- מנגנון החיפוש החכם (מונע חסימות והעלמת רשימה) ---
   const handleMapSearchInput = (query) => {
       setLocationForm(prev => ({ ...prev, map_address: query }));
-      
       if (searchTimeout) clearTimeout(searchTimeout);
       
-      if (query.length < 3) {
+      if (query.trim().length < 2) {
           setMapSuggestions([]);
           setIsSearchingMap(false);
           return;
       }
       
       setIsSearchingMap(true);
-      // מחכים חצי שניה אחרי שהמשתמש מסיים להקליד, ואז שולחים בקשה
       setSearchTimeout(setTimeout(async () => {
           try {
-              const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
+              const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&accept-language=th,en,he&viewbox=97.0,20.0,106.0,5.0&bounded=1`;
+              const res = await fetch(url);
               if (res.ok) {
                   const data = await res.json();
                   setMapSuggestions(data);
@@ -158,7 +195,7 @@ const ConfigurationTab = ({ token, t, user }) => {
           } finally {
               setIsSearchingMap(false);
           }
-      }, 800));
+      }, 700));
   };
 
   const handleSelectMapSuggestion = (place) => {
@@ -198,9 +235,8 @@ const ConfigurationTab = ({ token, t, user }) => {
       const managerFields = globalFields.filter(f => f.created_by === locationForm.created_by);
       
       managerFields.forEach(f => {
-          let val = dynamicValues[f.name] || '';
+          let val = dynamicValues[f.name] || ''; // f.name הוא ה-JSON החכם פה
           if ((f.type === 'file' || f.type === 'media') && dynamicFiles[f.name]) {
-              // קידוד השם לעברית כדי שהשרת לא יקרוס
               const safeName = encodeURIComponent(f.name);
               formData.append(`dynamic_${safeName}`, dynamicFiles[f.name]);
               val = 'pending_upload';
@@ -212,10 +248,7 @@ const ConfigurationTab = ({ token, t, user }) => {
       try {
           const res = await fetch(url, { method, headers: { 'Authorization': `Bearer ${token}` }, body: formData });
           if (res.ok) { setShowLocationModal(false); fetchData(); } 
-          else { 
-              const errData = await res.json();
-              alert("שגיאה בשמירת מיקום: " + (errData.error || '')); 
-          }
+          else { await handleApiError(res); }
       } catch (e) { alert("Server Error"); }
   };
 
@@ -236,10 +269,7 @@ const ConfigurationTab = ({ token, t, user }) => {
               displayAddress = decodeURIComponent(displayAddress.split('?q=')[1].split('&')[0]);
           }
 
-          // תיקון נתיב התמונה שיוצג גם בחלון העריכה!
-          const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') 
-              ? `https://maintenance-app-h84v.onrender.com${loc.image_url}` 
-              : loc.image_url;
+          const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') ? `https://maintenance-app-h84v.onrender.com${loc.image_url}` : loc.image_url;
 
           setLocationForm({ id: loc.id, name: loc.name, map_address: displayAddress, map_link: parsedMap, existing_image: loc.image_url || '', created_by: targetManagerId });
           setLocationImagePreview(fullImgUrl);
@@ -351,10 +381,7 @@ const ConfigurationTab = ({ token, t, user }) => {
                               let fieldsCount = 0;
                               try { fieldsCount = (typeof loc.dynamic_fields === 'string' ? JSON.parse(loc.dynamic_fields) : (loc.dynamic_fields || [])).length; } catch(e){}
                               
-                              // התיקון: בניית הנתיב המלא לתמונה בתצוגה הקטנה בחוץ!
-                              const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') 
-                                  ? `https://maintenance-app-h84v.onrender.com${loc.image_url}` 
-                                  : loc.image_url;
+                              const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') ? `https://maintenance-app-h84v.onrender.com${loc.image_url}` : loc.image_url;
 
                               return (
                                   <div key={loc.id} className="bg-white p-3 rounded-xl border shadow-sm group">
@@ -388,17 +415,18 @@ const ConfigurationTab = ({ token, t, user }) => {
                           <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
                               <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
                                   <div className="flex justify-between items-center mb-4 border-b pb-3">
-                                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> שדות מיקום לכל הסניפים</h3>
+                                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> שדות מיקום מותאמים</h3>
                                       <button onClick={() => setShowFieldsSettingsModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={20}/></button>
                                   </div>
-                                  <p className="text-xs text-gray-500 mb-4">השדות שתגדיר כאן יתווספו אוטומטית לכל המיקומים (קיימים וחדשים).</p>
                                   
-                                  <div className="space-y-2 mb-6">
+                                  <div className="space-y-2 mb-6 max-h-48 overflow-y-auto">
                                       {mFields.length === 0 && <p className="text-center text-sm text-gray-400 italic">לא הוגדרו שדות.</p>}
                                       {mFields.map(f => (
                                           <div key={f.id} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border text-sm">
                                               <div className="flex items-center gap-2 font-medium">
-                                                  <span className="w-2 h-2 rounded-full bg-purple-400"></span> {f.name}
+                                                  <span className="w-2 h-2 rounded-full bg-purple-400"></span> 
+                                                  {/* שימוש בפונקציית התרגום! */}
+                                                  {getFieldName(f.name)}
                                                   <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 rounded uppercase">{f.type}</span>
                                               </div>
                                               <button onClick={() => handleDelete('location-fields', f.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16}/></button>
@@ -406,20 +434,19 @@ const ConfigurationTab = ({ token, t, user }) => {
                                       ))}
                                   </div>
 
-                                  <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 flex gap-2 items-end">
-                                      <div className="flex-1">
-                                          <label className="text-xs font-bold text-purple-800 block mb-1">שם השדה (למשל: תעודת כשרות)</label>
-                                          <input type="text" className="w-full p-2.5 border rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-purple-300" value={newField.name} onChange={e => setNewField({...newField, name: e.target.value})} />
-                                      </div>
-                                      <div className="w-1/3">
-                                          <label className="text-xs font-bold text-purple-800 block mb-1">סוג התוכן</label>
-                                          <select className="w-full p-2.5 border rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-purple-300" value={newField.type} onChange={e => setNewField({...newField, type: e.target.value})}>
+                                  <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 space-y-3">
+                                      <h4 className="text-xs font-bold text-purple-800">הוספת שדה חדש (הזן שפות):</h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                          <input type="text" placeholder="שם בעברית (חובה)" className="w-full p-2 border rounded-lg text-xs outline-none" value={newField.name_he} onChange={e => setNewField({...newField, name_he: e.target.value})} />
+                                          <input type="text" placeholder="Name in English" className="w-full p-2 border rounded-lg text-xs outline-none" value={newField.name_en} onChange={e => setNewField({...newField, name_en: e.target.value})} />
+                                          <input type="text" placeholder="ชื่อภาษาไทย" className="w-full p-2 border rounded-lg text-xs outline-none" value={newField.name_th} onChange={e => setNewField({...newField, name_th: e.target.value})} />
+                                          <select className="w-full p-2 border rounded-lg text-xs outline-none bg-white" value={newField.type} onChange={e => setNewField({...newField, type: e.target.value})}>
                                               <option value="text">טקסט</option>
                                               <option value="number">מספרים</option>
                                               <option value="file">קובץ / מסמך / תמונה</option>
                                           </select>
                                       </div>
-                                      <button onClick={() => handleAddGlobalField(targetManagerId)} className="bg-purple-600 text-white p-2.5 rounded-lg hover:bg-purple-700 shadow-md"><Plus size={18}/></button>
+                                      <button onClick={() => handleAddGlobalField(targetManagerId)} className="w-full bg-purple-600 text-white p-2 rounded-lg hover:bg-purple-700 shadow-sm text-sm font-bold mt-2">הוסף שדה למערכת</button>
                                   </div>
                               </div>
                           </div>
@@ -457,7 +484,6 @@ const ConfigurationTab = ({ token, t, user }) => {
           <div className="bg-white p-6 rounded-2xl shadow-sm border">{renderWorkspace(user.id)}</div>
       )}
 
-      {/* מודאל עץ קטגוריות */}
       {showTreeModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
@@ -482,7 +508,6 @@ const ConfigurationTab = ({ token, t, user }) => {
           </div>
       )}
 
-      {/* מודאל מיקום ענק */}
       {showLocationModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] animate-scale-in">
@@ -507,39 +532,40 @@ const ConfigurationTab = ({ token, t, user }) => {
                           <input type="text" required placeholder="למשל: סניף תל אביב מרכז" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none" value={locationForm.name} onChange={e => setLocationForm({...locationForm, name: e.target.value})} />
                       </div>
                       
-                      {/* תיבת חיפוש גוגל מפות מושלמת! */}
-                      <div className="relative">
-                          <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> חיפוש כתובת (המיקום יוצג במפה)</label>
+                      <div className="relative flex flex-col relative z-20">
+                          <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> חיפוש כתובת (ממוקד תאילנד)</label>
                           <div className="relative">
                               <input 
                                   type="text" 
-                                  placeholder="הקלד כתובת לחיפוש..." 
-                                  className="w-full p-3 pr-10 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-200 outline-none mb-3" 
+                                  placeholder="הקלד כתובת או עסק לחיפוש..." 
+                                  className="w-full p-3 pr-10 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-200 outline-none" 
                                   value={locationForm.map_address} 
                                   onChange={e => handleMapSearchInput(e.target.value)} 
                               />
                               {isSearchingMap && <div className="absolute right-3 top-3.5 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>}
                           </div>
                           
-                          {/* רשימת ההצעות נשארת עד שבוחרים משהו! */}
                           {mapSuggestions.length > 0 && (
-                              <div className="absolute z-20 w-full bg-white border rounded-lg shadow-xl max-h-48 overflow-y-auto mt-[-10px] top-full left-0">
+                              <div className="absolute z-[9999] w-full bg-white border border-blue-200 rounded-lg shadow-2xl max-h-60 overflow-y-auto mt-1 top-[70px]">
+                                  <div className="p-2 bg-blue-50 text-xs text-blue-600 font-bold border-b flex justify-between">
+                                      <span>תוצאות חיפוש:</span>
+                                      <button type="button" onClick={() => setMapSuggestions([])} className="hover:underline">סגור</button>
+                                  </div>
                                   {mapSuggestions.map((place, idx) => (
                                       <div 
                                           key={idx} 
-                                          className="p-3 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 flex items-start gap-2"
+                                          className="p-3 text-sm text-gray-700 hover:bg-blue-100 cursor-pointer border-b last:border-b-0 flex items-start gap-2 transition"
                                           onClick={() => handleSelectMapSuggestion(place)}
                                       >
                                           <MapPin size={16} className="text-blue-500 flex-shrink-0 mt-0.5"/>
-                                          <span className="leading-tight">{place.display_name}</span>
+                                          <span className="leading-tight font-medium">{place.display_name}</span>
                                       </div>
                                   ))}
                               </div>
                           )}
                           
-                          {/* תצוגת מפה של גוגל */}
-                          {locationForm.map_address && !isSearchingMap && mapSuggestions.length === 0 && (
-                              <div className="w-full h-48 rounded-xl overflow-hidden border shadow-sm">
+                          {locationForm.map_link && (
+                              <div className="w-full h-48 rounded-xl overflow-hidden border shadow-sm mt-3 relative z-10">
                                   <iframe 
                                       width="100%" 
                                       height="100%" 
@@ -551,13 +577,13 @@ const ConfigurationTab = ({ token, t, user }) => {
                           )}
                       </div>
 
-                      {/* שדות דינמיים */}
                       {globalFields.filter(f => f.created_by === locationForm.created_by).length > 0 && (
                           <div className="border-t pt-5 mt-2 space-y-4">
                               <h4 className="font-bold text-[#714B67] text-sm flex items-center gap-1"><Layers size={18}/> נתונים ומסמכים נוספים</h4>
                               {globalFields.filter(f => f.created_by === locationForm.created_by).map(field => (
                                   <div key={field.id} className="bg-gray-50 p-3 rounded-xl border">
-                                      <label className="block text-xs font-bold text-gray-700 mb-2">{field.name} <span className="text-[10px] font-normal text-gray-400 bg-white px-1 py-0.5 rounded border ml-2">{field.type}</span></label>
+                                      {/* שימוש בפונקציה שלנו כדי להציג את השם בשפה הנכונה */}
+                                      <label className="block text-xs font-bold text-gray-700 mb-2">{getFieldName(field.name)} <span className="text-[10px] font-normal text-gray-400 bg-white px-1 py-0.5 rounded border ml-2">{field.type}</span></label>
                                       
                                       {field.type === 'text' || field.type === 'number' ? (
                                           <input type={field.type} placeholder="הכנס נתון..." className="w-full p-2.5 border rounded-lg bg-white text-sm outline-none" value={dynamicValues[field.name] || ''} onChange={e => setDynamicValues({...dynamicValues, [field.name]: e.target.value})} />
