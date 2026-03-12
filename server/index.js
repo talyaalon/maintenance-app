@@ -228,26 +228,24 @@ app.get('/fix-db', async (req, res) => {
         try {
             console.log("🔧 Starting DB Fix...");
             
-            // 1. עדכונים ישנים לטבלת המשימות והמשתמשים
+            // 1. עדכונים ישנים
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS images TEXT[]');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_images TEXT[]'); 
             await client.query('ALTER TABLE tasks ALTER COLUMN due_date TYPE TIMESTAMP WITHOUT TIME ZONE');
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token TEXT');
             
-            // 2. הוספת שיוך למנהל בקטגוריות ונכסים
+            // 2. הוספת שיוך למנהל
             await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)');
             await client.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)');
 
-            // 3. ✨ התיקון שלנו: יצירת עמודת 'code' לקטגוריות! ✨
+            // 3. הוספת העמודות החדשות
             await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS code VARCHAR(10)');
-
-            // 4. למען הביטחון: הוספת העמודות החדשות גם למיקומים אם הן חסרות
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS code VARCHAR(50)');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS image_url TEXT');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS coordinates TEXT');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS dynamic_fields TEXT');
 
-            // 5. יצירת טבלת שדות מותאמים אישית למיקומים
+            // 4. יצירת טבלת שדות מותאמים
             await client.query(`
                 CREATE TABLE IF NOT EXISTS location_fields (
                     id SERIAL PRIMARY KEY,
@@ -256,13 +254,18 @@ app.get('/fix-db', async (req, res) => {
                     type VARCHAR(50) NOT NULL
                 )
             `);
+
+            // 5. 🚀 התיקון החדש: ביטול חוקי הכפילות הישנים שחוסמים מנהלים שונים ליצור אותם שמות! 🚀
+            await client.query('ALTER TABLE categories DROP CONSTRAINT IF EXISTS categories_name_key');
+            await client.query('ALTER TABLE locations DROP CONSTRAINT IF EXISTS locations_name_key');
+            await client.query('ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_code_key');
             
             console.log("✅ DB Fix Completed!");
             res.send(`
                 <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
-                    <h1 style="color: #166534;">✅ מסד הנתונים עודכן בהצלחה!</h1>
-                    <p>עמודת קוד הקטגוריה נוצרה, והכל מוכן לעבודה.</p>
-                    <p>את יכולה לחזור לאפליקציה עכשיו.</p>
+                    <h1 style="color: #166534;">✅ מסד הנתונים תוקן בהצלחה!</h1>
+                    <p>חוקי הכפילות הישנים הוסרו. המערכת עכשיו תומכת רשמית במספר מנהלים (Multi-Tenant).</p>
+                    <p>את יכולה לחזור לאפליקציה וליצור את הקטגוריה!</p>
                 </div>
             `);
         } catch (dbError) {
@@ -616,7 +619,7 @@ app.get('/locations', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// ניהול מיקומים (כולל קבצים, קוד אוטומטי וגוגל מפות)
+// ניהול מיקומים (מתוקן לעבודה עם שדות בעברית!)
 // ==========================================
 app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
     try { 
@@ -644,7 +647,8 @@ app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
                 if (file.fieldname === 'main_image') {
                     mainImageUrl = `/uploads/${file.filename}`;
                 } else if (file.fieldname.startsWith('dynamic_')) {
-                    const fieldName = file.fieldname.replace('dynamic_', '');
+                    // התיקון: פענוח השם מעברית מקודדת
+                    const fieldName = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
                     const fieldObj = parsedDynamicFields.find(f => f.name === fieldName);
                     if (fieldObj) fieldObj.value = `/uploads/${file.filename}`;
                 }
@@ -676,7 +680,8 @@ app.put('/locations/:id', authenticateToken, upload.any(), async (req, res) => {
                 if (file.fieldname === 'main_image') {
                     mainImageUrl = `/uploads/${file.filename}`;
                 } else if (file.fieldname.startsWith('dynamic_')) {
-                    const fieldName = file.fieldname.replace('dynamic_', '');
+                    // התיקון: פענוח השם מעברית מקודדת
+                    const fieldName = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
                     const fieldObj = parsedDynamicFields.find(f => f.name === fieldName);
                     if (fieldObj) fieldObj.value = `/uploads/${file.filename}`;
                 }
