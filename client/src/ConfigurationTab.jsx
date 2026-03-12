@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload } from 'lucide-react';
 
 const ConfigurationTab = ({ token, t, user, lang }) => { 
-  // שומר את הטאב הפנימי (מיקומים או נכסים)
   const [activeSubTab, setActiveSubTab] = useState(() => {
       return localStorage.getItem('configActiveSubTab') || 'tree';
   });
@@ -10,6 +9,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   useEffect(() => {
       localStorage.setItem('configActiveSubTab', activeSubTab);
   }, [activeSubTab]);
+
   const [categories, setCategories] = useState([]);
   const [assets, setAssets] = useState([]);
   const [locations, setLocations] = useState([]); 
@@ -96,20 +96,18 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       return `${catCode}-${String(maxNum + 1).padStart(4, '0')}`;
   };
 
-  // 🚀 מערכת ניהול שגיאות חכמה
   const handleApiError = async (res) => {
       try {
-          const text = await res.text(); // מושך טקסט כדי לא לקרוס
+          const text = await res.text();
           try {
-              const data = JSON.parse(text); // מנסה להפוך ל-JSON
+              const data = JSON.parse(text);
               if (data.error && data.error.includes("כפילות")) {
                   alert("⚠️ שים לב: " + data.error);
               } else {
-                  alert("❌ שגיאה: " + (data.error || "תקלה בשמירה. בדוק את הנתונים."));
+                  alert("❌ שגיאה: " + (data.error || "תקלה בשמירה."));
               }
           } catch (e) {
               alert("❌ שגיאת שרת: התקבלה תגובה לא תקינה מהשרת.");
-              console.error("Server HTML Error:", text);
           }
       } catch (e) {
           alert("❌ שגיאת תקשורת מול השרת.");
@@ -186,13 +184,14 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       const managerFields = globalFields.filter(f => f.created_by === locationForm.created_by);
       
       managerFields.forEach(f => {
-          let val = dynamicValues[f.name] || '';
-          if ((f.type === 'file' || f.type === 'media') && dynamicFiles[f.name]) {
-              const safeName = encodeURIComponent(f.name); // מגן מפני קריסות של אותיות בעברית
-              formData.append(`dynamic_${safeName}`, dynamicFiles[f.name]);
+          // שימוש ב-ID של השדה במקום בשם!
+          let val = dynamicValues[f.id] || dynamicValues[f.name] || ''; 
+          if ((f.type === 'file' || f.type === 'media') && dynamicFiles[f.id]) {
+              formData.append(`dynamic_${f.id}`, dynamicFiles[f.id]);
               val = 'pending_upload';
           }
-          fieldsToSave.push({ name: f.name, type: f.type, value: val });
+          // שומרים גם את ה-id כדי שהשרת ידע לקשר את הקובץ
+          fieldsToSave.push({ id: f.id, name: f.name, type: f.type, value: val });
       });
       formData.append('dynamic_fields', JSON.stringify(fieldsToSave));
 
@@ -216,7 +215,11 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           setLocationImagePreview(fullImgUrl);
 
           let vals = {};
-          parsedFields.forEach(f => vals[f.name] = f.value);
+          parsedFields.forEach(f => {
+              // תמיכה במיקומים ישנים וחדשים
+              const key = f.id || f.name;
+              vals[key] = f.value;
+          });
           setDynamicValues(vals);
           setDynamicFiles({});
       } else {
@@ -228,7 +231,6 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       setShowLocationModal(true);
   };
 
-  // פונקציה לבניית קישור תצוגה מקדימה חכם למפה
   const getMapEmbedUrl = () => {
       const query = locationForm.map_link || locationForm.name;
       if (!query) return '';
@@ -358,12 +360,11 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           })}
                       </div>
 
-                      {/* מודאל הגדרות שדות גלובליים */}
                       {showFieldsSettingsModal && (
                           <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
                               <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
                                   <div className="flex justify-between items-center mb-4 border-b pb-3">
-                                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> שדות מיקום לכל הסניפים</h3>
+                                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> שדות מיקום מותאמים</h3>
                                       <button onClick={() => setShowFieldsSettingsModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={20}/></button>
                                   </div>
                                   
@@ -431,7 +432,6 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           <div className="bg-white p-6 rounded-2xl shadow-sm border">{renderWorkspace(user.id)}</div>
       )}
 
-      {/* מודאל עץ קטגוריות / נכסים */}
       {showTreeModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
@@ -456,7 +456,6 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           </div>
       )}
 
-      {/* מודאל מיקום ענק - מתוקן להדבקת לינקים */}
       {showLocationModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] animate-scale-in">
@@ -481,7 +480,6 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           <input type="text" required placeholder="למשל: סניף תל אביב מרכז" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none" value={locationForm.name} onChange={e => setLocationForm({...locationForm, name: e.target.value})} />
                       </div>
                       
-                      {/* תיבת הלינק המדויקת */}
                       <div>
                           <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> קישור מגוגל מפות</label>
                           <input 
@@ -492,7 +490,6 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               onChange={e => setLocationForm({...locationForm, map_link: e.target.value})} 
                           />
                           
-                          {/* תצוגת מפה חיה! מופעלת מיד ברגע שיש שם או לינק */}
                           {(locationForm.map_link || locationForm.name) && (
                               <div className="w-full h-48 rounded-xl overflow-hidden border shadow-sm relative z-10">
                                   <iframe 
@@ -506,35 +503,38 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           )}
                       </div>
 
-                      {/* שדות דינמיים */}
                       {globalFields.filter(f => f.created_by === locationForm.created_by).length > 0 && (
                           <div className="border-t pt-5 mt-2 space-y-4">
                               <h4 className="font-bold text-[#714B67] text-sm flex items-center gap-1"><Layers size={18}/> נתונים ומסמכים נוספים</h4>
-                              {globalFields.filter(f => f.created_by === locationForm.created_by).map(field => (
-                                  <div key={field.id} className="bg-gray-50 p-3 rounded-xl border">
-                                      <label className="block text-xs font-bold text-gray-700 mb-2">{getFieldName(field.name)} <span className="text-[10px] font-normal text-gray-400 bg-white px-1 py-0.5 rounded border ml-2">{field.type}</span></label>
-                                      
-                                      {field.type === 'text' || field.type === 'number' ? (
-                                          <input type={field.type} placeholder="הכנס נתון..." className="w-full p-2.5 border rounded-lg bg-white text-sm outline-none" value={dynamicValues[field.name] || ''} onChange={e => setDynamicValues({...dynamicValues, [field.name]: e.target.value})} />
-                                      ) : (
-                                          <div className="flex items-center gap-3">
-                                              <label className="flex items-center gap-2 cursor-pointer bg-white border border-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-100 transition">
-                                                  <Upload size={14} className="text-gray-500"/>
-                                                  <span className="text-gray-700 font-medium">בחר קובץ...</span>
-                                                  <input type="file" hidden onChange={e => setDynamicFiles({...dynamicFiles, [field.name]: e.target.files[0]})} />
-                                              </label>
-                                              
-                                              {dynamicFiles[field.name] ? (
-                                                  <span className="text-xs text-blue-600 font-medium">נבחר קובץ: {dynamicFiles[field.name].name}</span>
-                                              ) : dynamicValues[field.name] && dynamicValues[field.name].includes('/uploads/') ? (
-                                                  <a href={`https://maintenance-app-h84v.onrender.com${dynamicValues[field.name]}`} target="_blank" rel="noreferrer" className="text-xs text-green-600 font-medium hover:underline flex items-center gap-1">✓ צפה בקובץ הקיים</a>
-                                              ) : (
-                                                  <span className="text-xs text-gray-400">לא נבחר קובץ</span>
-                                              )}
-                                          </div>
-                                      )}
-                                  </div>
-                              ))}
+                              {globalFields.filter(f => f.created_by === locationForm.created_by).map(field => {
+                                  // שימוש ב-ID לשליפת הערך!
+                                  const key = field.id; 
+                                  return (
+                                      <div key={key} className="bg-gray-50 p-3 rounded-xl border">
+                                          <label className="block text-xs font-bold text-gray-700 mb-2">{getFieldName(field.name)} <span className="text-[10px] font-normal text-gray-400 bg-white px-1 py-0.5 rounded border ml-2">{field.type}</span></label>
+                                          
+                                          {field.type === 'text' || field.type === 'number' ? (
+                                              <input type={field.type} placeholder="הכנס נתון..." className="w-full p-2.5 border rounded-lg bg-white text-sm outline-none" value={dynamicValues[key] || dynamicValues[field.name] || ''} onChange={e => setDynamicValues({...dynamicValues, [key]: e.target.value})} />
+                                          ) : (
+                                              <div className="flex items-center gap-3">
+                                                  <label className="flex items-center gap-2 cursor-pointer bg-white border border-gray-300 px-3 py-2 rounded-lg text-sm hover:bg-gray-100 transition">
+                                                      <Upload size={14} className="text-gray-500"/>
+                                                      <span className="text-gray-700 font-medium">בחר קובץ...</span>
+                                                      <input type="file" hidden onChange={e => setDynamicFiles({...dynamicFiles, [key]: e.target.files[0]})} />
+                                                  </label>
+                                                  
+                                                  {dynamicFiles[key] ? (
+                                                      <span className="text-xs text-blue-600 font-medium">נבחר קובץ: {dynamicFiles[key].name}</span>
+                                                  ) : (dynamicValues[key] || dynamicValues[field.name]) && (dynamicValues[key] || dynamicValues[field.name]).includes('/uploads/') ? (
+                                                      <a href={`https://maintenance-app-h84v.onrender.com${dynamicValues[key] || dynamicValues[field.name]}`} target="_blank" rel="noreferrer" className="text-xs text-green-600 font-medium hover:underline flex items-center gap-1">✓ צפה בקובץ הקיים</a>
+                                                  ) : (
+                                                      <span className="text-xs text-gray-400">לא נבחר קובץ</span>
+                                                  )}
+                                              </div>
+                                          )}
+                                      </div>
+                                  );
+                              })}
                           </div>
                       )}
                   </div>

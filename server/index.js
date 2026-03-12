@@ -619,13 +619,12 @@ app.get('/locations', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// ניהול מיקומים - חסין תקלות וכפילויות (כולל קבצים)
+// ניהול מיקומים - חסין תקלות (שימוש ב-ID לשדות דינמיים)
 // ==========================================
 app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
     try { 
         let { name, map_link, dynamic_fields, created_by, existing_image } = req.body;
         
-        // הגנה מקריסת נתונים מהאפליקציה
         if (!name) return res.status(400).json({ error: "שם המיקום הוא שדה חובה" });
 
         const ownerId = (created_by && created_by !== 'null') ? parseInt(created_by, 10) : req.user.id; 
@@ -652,8 +651,9 @@ app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
                 if (file.fieldname === 'main_image') {
                     mainImageUrl = `/uploads/${file.filename}`;
                 } else if (file.fieldname.startsWith('dynamic_')) {
-                    const fieldName = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
-                    const fieldObj = parsedDynamicFields.find(f => f.name === fieldName);
+                    // התיקון הענק: משתמשים ב-ID במקום בשם המורכב
+                    const fieldId = file.fieldname.replace('dynamic_', '');
+                    const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId));
                     if (fieldObj) fieldObj.value = `/uploads/${file.filename}`;
                 }
             });
@@ -684,8 +684,9 @@ app.put('/locations/:id', authenticateToken, upload.any(), async (req, res) => {
                 if (file.fieldname === 'main_image') {
                     mainImageUrl = `/uploads/${file.filename}`;
                 } else if (file.fieldname.startsWith('dynamic_')) {
-                    const fieldName = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
-                    const fieldObj = parsedDynamicFields.find(f => f.name === fieldName);
+                    // התיקון הענק: משתמשים ב-ID
+                    const fieldId = file.fieldname.replace('dynamic_', '');
+                    const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId));
                     if (fieldObj) fieldObj.value = `/uploads/${file.filename}`;
                 }
             });
