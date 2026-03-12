@@ -228,16 +228,34 @@ app.get('/fix-db', async (req, res) => {
         try {
             console.log("🔧 Starting DB Fix...");
             
-            // 1. עדכונים לטבלת המשימות (מה שעשינו קודם)
+            // 1. עדכונים ישנים לטבלת המשימות והמשתמשים
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS images TEXT[]');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completion_images TEXT[]'); 
             await client.query('ALTER TABLE tasks ALTER COLUMN due_date TYPE TIMESTAMP WITHOUT TIME ZONE');
-            
-            // 2. 👇 הנה השורה החדשה שלנו! הוספת עמודה לטוקן בטבלת משתמשים 👇
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token TEXT');
             
+            // 2. 👇 התיקון החדש: הוספת שיוך למנהל בקטגוריות ונכסים 👇
+            await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)');
+            await client.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)');
+
+            // 3. 👇 התיקון החדש: יצירת טבלת שדות מותאמים אישית למיקומים 👇
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS location_fields (
+                    id SERIAL PRIMARY KEY,
+                    created_by INTEGER REFERENCES users(id),
+                    name VARCHAR(255) NOT NULL,
+                    type VARCHAR(50) NOT NULL
+                )
+            `);
+            
             console.log("✅ DB Fix Completed!");
-            res.send("✅ Database updated! Added 'completion_images' to tasks AND 'device_token' to users.");
+            res.send(`
+                <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
+                    <h1 style="color: #166534;">✅ מסד הנתונים עודכן בהצלחה!</h1>
+                    <p>נוספו עמודות שיוך למנהלים (created_by) וטבלת שדות מותאמים אישית נוצרה.</p>
+                    <p>את יכולה לחזור לאפליקציה עכשיו.</p>
+                </div>
+            `);
         } catch (dbError) {
             console.error("❌ DB Fix Failed:", dbError);
             res.status(500).send("DB Error: " + dbError.message);
@@ -538,50 +556,120 @@ app.get('/managers', authenticateToken, async (req, res) => {
   } catch (err) { res.status(500).send('Server Error'); }
 });
 
-
 // ==========================================
-// ניהול מיקומים (מותאם אישית לכל מנהל)
+// ניהול שדות מותאמים אישית למיקומים (לפי מנהל)
 // ==========================================
-app.get('/locations', authenticateToken, async (req, res) => {
-  try {
-    let query = `
-        SELECT locations.*, users.full_name as creator_name 
-        FROM locations 
-        LEFT JOIN users ON locations.created_by = users.id
-    `;
-    let params = [];
-    
-    // סינון - אם זה מנהל, תביא רק את המיקומים שלו
-    if (req.user.role === 'MANAGER') {
-        query += ` WHERE locations.created_by = $1 OR locations.created_by IS NULL`;
-        params.push(req.user.id);
-    }
-    query += ` ORDER BY locations.name ASC`;
-    
-    const r = await pool.query(query, params);
-    res.json(r.rows);
-  } catch (err) { res.status(500).send('Error'); }
+app.get('/location-fields', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM location_fields ORDER BY id ASC');
+        res.json(result.rows);
+    } catch (err) { res.status(500).send('Error'); }
 });
 
-app.post('/locations', authenticateToken, async (req, res) => {
-  try { 
-      // הוספנו את created_by כדי שהביג בוס יוכל ליצור למנהל ספציפי
-      const { name, code, image_url, coordinates, dynamic_fields, created_by } = req.body;
-      const ownerId = created_by || req.user.id; 
-      
-      const check = await pool.query('SELECT id FROM locations WHERE name = $1 AND created_by = $2', [name, ownerId]);
-      if (check.rows.length > 0) return res.status(400).json({ error: "Location name already exists for this manager" });
+app.post('/location-fields', authenticateToken, async (req, res) => {
+    try {
+        const { name, type, created_by } = req.body;
+        const ownerId = created_by || req.user.id;
+        const result = await pool.query(
+            'INSERT INTO location_fields (name, type, created_by) VALUES ($1, $2, $3) RETURNING *',
+            [name, type, ownerId]
+        );
+        res.json(result.rows[0]);
+    } catch (err) { res.status(500).send('Error adding field'); }
+});
 
-      const r = await pool.query(
-          `INSERT INTO locations (name, created_by, code, image_url, coordinates, dynamic_fields) 
-           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`, 
-          [name, ownerId, code || null, image_url || null, coordinates || null, dynamic_fields || '[]']
-      ); 
-      res.json(r.rows[0]); 
-  } catch (e) { 
-      console.error(e); 
-      res.status(500).send('Error saving location'); 
-  }
+app.delete('/location-fields/:id', authenticateToken, async (req, res) => {
+    try {
+        await pool.query('DELETE FROM location_fields WHERE id = $1', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).send('Error deleting field'); }
+});
+
+// ==========================================
+// ניהול מיקומים (כולל קבצים וקוד אוטומטי!)
+// ==========================================
+app.get('/locations', authenticateToken, async (req, res) => {
+    try {
+        let query = `
+            SELECT locations.*, users.full_name as creator_name 
+            FROM locations 
+            LEFT JOIN users ON locations.created_by = users.id
+        `;
+        let params = [];
+        if (req.user.role === 'MANAGER') {
+            query += ` WHERE locations.created_by = $1 OR locations.created_by IS NULL`;
+            params.push(req.user.id);
+        }
+        query += ` ORDER BY locations.name ASC`;
+        const r = await pool.query(query, params);
+        res.json(r.rows);
+    } catch (err) { res.status(500).send('Error'); }
+});
+
+app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
+    try { 
+        const { name, map_link, dynamic_fields, created_by } = req.body;
+        const ownerId = created_by || req.user.id; 
+        
+        // יצירת קוד LOC אוטומטי
+        const locs = await pool.query("SELECT code FROM locations WHERE created_by = $1 AND code LIKE 'LOC-%'", [ownerId]);
+        let max = 0;
+        locs.rows.forEach(r => {
+            const num = parseInt(r.code.split('-')[1]);
+            if (!isNaN(num) && num > max) max = num;
+        });
+        const generatedCode = `LOC-${String(max + 1).padStart(4, '0')}`;
+
+        // טיפול בקבצים שהועלו (תמונת פרופיל ושדות דינמיים)
+        let mainImageUrl = req.body.existing_image || null;
+        let parsedDynamicFields = JSON.parse(dynamic_fields || '[]');
+
+        if (req.files && req.files.length > 0) {
+            req.files.forEach(file => {
+                if (file.fieldname === 'main_image') {
+                    mainImageUrl = `/uploads/${file.filename}`;
+                } else if (file.fieldname.startsWith('dynamic_')) {
+                    const fieldName = file.fieldname.replace('dynamic_', '');
+                    const fieldObj = parsedDynamicFields.find(f => f.name === fieldName);
+                    if (fieldObj) fieldObj.value = `/uploads/${file.filename}`;
+                }
+            });
+        }
+
+        const r = await pool.query(
+            `INSERT INTO locations (name, created_by, code, image_url, coordinates, dynamic_fields) 
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`, 
+            [name, ownerId, generatedCode, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields)]
+        ); 
+        res.json(r.rows[0]); 
+    } catch (e) { res.status(500).send('Error saving location'); }
+});
+
+app.put('/locations/:id', authenticateToken, upload.any(), async (req, res) => {
+    try { 
+        const { name, map_link, dynamic_fields } = req.body;
+        
+        let mainImageUrl = req.body.existing_image || null;
+        let parsedDynamicFields = JSON.parse(dynamic_fields || '[]');
+
+        if (req.files && req.files.length > 0) {
+            req.files.forEach(file => {
+                if (file.fieldname === 'main_image') {
+                    mainImageUrl = `/uploads/${file.filename}`;
+                } else if (file.fieldname.startsWith('dynamic_')) {
+                    const fieldName = file.fieldname.replace('dynamic_', '');
+                    const fieldObj = parsedDynamicFields.find(f => f.name === fieldName);
+                    if (fieldObj) fieldObj.value = `/uploads/${file.filename}`;
+                }
+            });
+        }
+
+        const r = await pool.query(
+            `UPDATE locations SET name=$1, image_url=$2, coordinates=$3, dynamic_fields=$4 WHERE id=$5 RETURNING *`, 
+            [name, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields), req.params.id]
+        ); 
+        res.json(r.rows[0]); 
+    } catch (e) { res.status(500).send('Error updating location'); }
 });
 
 // ==========================================
@@ -690,21 +778,7 @@ app.put('/assets/:id', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error updating asset'); }
 });
 
-app.put('/locations/:id', authenticateToken, async (req, res) => {
-  try {
-      const { name, code, image_url, coordinates, dynamic_fields } = req.body;
-      const r = await pool.query(
-          `UPDATE locations 
-           SET name = $1, code = $2, image_url = $3, coordinates = $4, dynamic_fields = $5
-           WHERE id = $6 RETURNING *`,
-          [name, code || null, image_url || null, coordinates || null, dynamic_fields || '[]', req.params.id]
-      );
-      res.json(r.rows[0]);
-  } catch (e) { 
-      console.error(e); 
-      res.status(500).send('Error updating location'); 
-  }
-});
+
 
 
 
