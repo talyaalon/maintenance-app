@@ -43,16 +43,34 @@ cloudinary.config({
   api_secret: '-7M6Z0dvS0fPFkQiEuWj66FWPXM'
 });
 
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'maintenance_app',
-    resource_type: 'auto',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'webp', 'mp4', 'mov', 'avi', 'mkv'],
-  },
+// הגדרות העלאת קבצים (מאפשר תמונות ומסמכים)
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + '-' + encodeURIComponent(file.originalname));
+    }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ 
+    storage: storage,
+    fileFilter: (req, file, cb) => {
+        // מאשרים תמונות, מסמכי PDF, וורד ואקסל!
+        if (
+            file.mimetype.startsWith('image/') || 
+            file.mimetype === 'application/pdf' ||
+            file.mimetype.includes('excel') ||
+            file.mimetype.includes('spreadsheetml') ||
+            file.mimetype.includes('word') ||
+            file.mimetype === 'application/msword'
+        ) {
+            cb(null, true);
+        } else {
+            cb(new Error('פורמט הקובץ אינו נתמך (יש להעלות תמונה, PDF או אקסל/וורד)'), false);
+        }
+    }
+});
 
 console.log("📧 Configuring Email using Brevo SMTP...");
 const transporter = nodemailer.createTransport({
