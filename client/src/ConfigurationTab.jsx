@@ -184,13 +184,12 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       const managerFields = globalFields.filter(f => f.created_by === locationForm.created_by);
       
       managerFields.forEach(f => {
-          // שימוש ב-ID של השדה במקום בשם!
           let val = dynamicValues[f.id] || dynamicValues[f.name] || ''; 
           if ((f.type === 'file' || f.type === 'media') && dynamicFiles[f.id]) {
+              // 🚀 התיקון הענק: שולחים רק את ה-ID הקצר, כדי שהשרת לא יקרוס מאורך השם! 🚀
               formData.append(`dynamic_${f.id}`, dynamicFiles[f.id]);
               val = 'pending_upload';
           }
-          // שומרים גם את ה-id כדי שהשרת ידע לקשר את הקובץ
           fieldsToSave.push({ id: f.id, name: f.name, type: f.type, value: val });
       });
       formData.append('dynamic_fields', JSON.stringify(fieldsToSave));
@@ -216,7 +215,6 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
           let vals = {};
           parsedFields.forEach(f => {
-              // תמיכה במיקומים ישנים וחדשים
               const key = f.id || f.name;
               vals[key] = f.value;
           });
@@ -507,7 +505,6 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           <div className="border-t pt-5 mt-2 space-y-4">
                               <h4 className="font-bold text-[#714B67] text-sm flex items-center gap-1"><Layers size={18}/> נתונים ומסמכים נוספים</h4>
                               {globalFields.filter(f => f.created_by === locationForm.created_by).map(field => {
-                                  // שימוש ב-ID לשליפת הערך!
                                   const key = field.id; 
                                   return (
                                       <div key={key} className="bg-gray-50 p-3 rounded-xl border">
