@@ -16,6 +16,33 @@ import ConfigurationTab from './ConfigurationTab';
 
 function App() {
   const [user, setUser] = useState(null);
+  // 🚀 מנגנון התחברות אוטומטי וזכירת משתמש (Persistent Login)
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    
+    if (token) {
+      try {
+        // מפענחים את הטוקן השמור בטלפון כדי להוציא ממנו את פרטי המשתמש
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        
+        const decodedUser = JSON.parse(jsonPayload);
+        
+        // בודקים שהטוקן לא פג תוקף (הוא מוגדר ל-24 שעות)
+        if (decodedUser.exp * 1000 > Date.now()) {
+            setUser({ id: decodedUser.id, role: decodedUser.role, name: decodedUser.name });
+        } else {
+            localStorage.removeItem('token'); // אם פג תוקף - מוחקים
+        }
+      } catch (e) {
+        console.error("Token decoding failed", e);
+      }
+    }
+  }, []);
+
   const [tasks, setTasks] = useState([]);
   
   // הגדרת שפה: ברירת מחדל אנגלית
