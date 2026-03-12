@@ -1,37 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload } from 'lucide-react';
+import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Layers, User, ChevronUp, Settings, Upload, Map } from 'lucide-react';
 
 const ConfigurationTab = ({ token, t, user }) => { 
   const [activeSubTab, setActiveSubTab] = useState('tree'); 
   const [categories, setCategories] = useState([]);
   const [assets, setAssets] = useState([]);
   const [locations, setLocations] = useState([]); 
-  const [globalFields, setGlobalFields] = useState([]); // שומר את כל השדות המותאמים של המנהלים
+  const [globalFields, setGlobalFields] = useState([]); 
   const [managers, setManagers] = useState([]); 
 
   const [expandedBossManager, setExpandedBossManager] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState([]);
 
-  // מודאלים
   const [showTreeModal, setShowTreeModal] = useState(false);
   const [treeNodeType, setTreeNodeType] = useState('category'); 
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showFieldsSettingsModal, setShowFieldsSettingsModal] = useState(false);
 
-  // טפסים
   const [categoryForm, setCategoryForm] = useState({ id: null, name: '', code: '', created_by: null });
   const [assetForm, setAssetForm] = useState({ id: null, name: '', category_id: '', location_id: '', code: '', created_by: null });
   
-  // טופס מיקומים מתקדם (שודרג עם מפות גוגל!)
-  const [locationForm, setLocationForm] = useState({ id: null, name: '', map_address: '', existing_image: '', created_by: null });
+  // --- טופס מיקומים מתקדם ---
+  const [locationForm, setLocationForm] = useState({ id: null, name: '', map_address: '', map_link: '', existing_image: '', created_by: null });
   const [locationImageFile, setLocationImageFile] = useState(null);
   const [locationImagePreview, setLocationImagePreview] = useState(null);
   
-  // שדות דינמיים של המיקום הספציפי שנערך כעת
+  // חיפוש מפה חי!
+  const [mapSuggestions, setMapSuggestions] = useState([]);
+  const [isSearchingMap, setIsSearchingMap] = useState(false);
+
   const [dynamicValues, setDynamicValues] = useState({});
   const [dynamicFiles, setDynamicFiles] = useState({});
-
-  // הוספת שדה גלובלי חדש בהגדרות
   const [newField, setNewField] = useState({ name: '', type: 'text' });
 
   useEffect(() => { 
@@ -72,7 +71,6 @@ const ConfigurationTab = ({ token, t, user }) => {
       } catch (e) { alert("Server Error"); }
   };
 
-  // --- עץ וקטגוריות ---
   const generateAssetCode = (categoryId) => {
       const category = categories.find(c => c.id === parseInt(categoryId));
       if (!category) return '';
@@ -117,7 +115,6 @@ const ConfigurationTab = ({ token, t, user }) => {
       setShowTreeModal(true);
   };
 
-  // --- הגדרות שדות מיקומים גלובליים ---
   const handleAddGlobalField = async (targetManagerId) => {
       if (!newField.name) return;
       try {
@@ -132,7 +129,37 @@ const ConfigurationTab = ({ token, t, user }) => {
       } catch(e){ alert("שגיאה בהוספת שדה"); }
   };
 
-  // --- שמירת מיקום (כולל קבצים ושדות דינמיים) ---
+  // --- מנגנון החיפוש החי במפה ---
+  const handleMapSearchInput = async (query) => {
+      setLocationForm(prev => ({ ...prev, map_address: query }));
+      if (query.length < 3) {
+          setMapSuggestions([]);
+          return;
+      }
+      setIsSearchingMap(true);
+      try {
+          // מנוע חיפוש פתוח וחינמי שמחזיר כתובות וקואורדינטות!
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`);
+          const data = await res.json();
+          setMapSuggestions(data);
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setIsSearchingMap(false);
+      }
+  };
+
+  const handleSelectMapSuggestion = (place) => {
+      // ברגע שבוחרים, הופכים את זה ללינק ניווט אמיתי של גוגל מפות!
+      const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lon}`;
+      setLocationForm(prev => ({
+          ...prev,
+          map_address: place.display_name,
+          map_link: googleMapsLink
+      }));
+      setMapSuggestions([]); // סגירת החלונית
+  };
+
   const handleLocationImageChange = (e) => {
       const file = e.target.files[0];
       if (file) { setLocationImageFile(file); setLocationImagePreview(URL.createObjectURL(file)); }
@@ -146,21 +173,13 @@ const ConfigurationTab = ({ token, t, user }) => {
       const formData = new FormData();
       formData.append('name', locationForm.name);
       formData.append('created_by', locationForm.created_by);
-      
-      // המרת חיפוש הכתובת ללינק גוגל מפות שיישלח לשרת
-      let finalMapLink = locationForm.map_address;
-      if (finalMapLink && !finalMapLink.startsWith('http')) {
-          finalMapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(finalMapLink)}`;
-      }
-      formData.append('map_link', finalMapLink);
+      formData.append('map_link', locationForm.map_link || locationForm.map_address); // אם אין לינק, נשלח את הכתובת
       
       if (locationImageFile) formData.append('main_image', locationImageFile);
       else if (locationForm.existing_image) formData.append('existing_image', locationForm.existing_image);
 
-      // איסוף שדות דינמיים שרלוונטיים למנהל
       const fieldsToSave = [];
       const managerFields = globalFields.filter(f => f.created_by === locationForm.created_by);
-      
       managerFields.forEach(f => {
           let val = dynamicValues[f.name] || '';
           if ((f.type === 'file' || f.type === 'media') && dynamicFiles[f.name]) {
@@ -183,12 +202,12 @@ const ConfigurationTab = ({ token, t, user }) => {
 
   const openLocationModal = (targetManagerId, loc = null) => {
       setLocationImageFile(null);
+      setMapSuggestions([]);
       if (loc) {
           let parsedFields = [], parsedMap = '';
           try { parsedFields = typeof loc.dynamic_fields === 'string' ? JSON.parse(loc.dynamic_fields) : (loc.dynamic_fields || []); } catch(e){}
           try { parsedMap = (typeof loc.coordinates === 'string' ? JSON.parse(loc.coordinates) : loc.coordinates)?.link || ''; } catch(e){}
           
-          // חילוץ הכתובת מתוך לינק המפות כדי שיהיה יפה בשדה החיפוש
           let displayAddress = parsedMap;
           if (displayAddress.includes('query=')) {
               displayAddress = decodeURIComponent(displayAddress.split('query=')[1].split('&')[0]);
@@ -196,7 +215,7 @@ const ConfigurationTab = ({ token, t, user }) => {
               displayAddress = decodeURIComponent(displayAddress.split('?q=')[1].split('&')[0]);
           }
 
-          setLocationForm({ id: loc.id, name: loc.name, map_address: displayAddress, existing_image: loc.image_url || '', created_by: targetManagerId });
+          setLocationForm({ id: loc.id, name: loc.name, map_address: displayAddress, map_link: parsedMap, existing_image: loc.image_url || '', created_by: targetManagerId });
           setLocationImagePreview(loc.image_url);
 
           let vals = {};
@@ -204,7 +223,7 @@ const ConfigurationTab = ({ token, t, user }) => {
           setDynamicValues(vals);
           setDynamicFiles({});
       } else {
-          setLocationForm({ id: null, name: '', map_address: '', existing_image: '', created_by: targetManagerId });
+          setLocationForm({ id: null, name: '', map_address: '', map_link: '', existing_image: '', created_by: targetManagerId });
           setLocationImagePreview(null);
           setDynamicValues({});
           setDynamicFiles({});
@@ -212,7 +231,6 @@ const ConfigurationTab = ({ token, t, user }) => {
       setShowLocationModal(true);
   };
 
-  // --- רינדור סביבת העבודה (אזור העץ והמיקומים) ---
   const renderWorkspace = (targetManagerId) => {
       const wCategories = categories.filter(c => c.created_by === targetManagerId);
       const wAssets = assets.filter(a => a.created_by === targetManagerId);
@@ -296,7 +314,6 @@ const ConfigurationTab = ({ token, t, user }) => {
                       <div className="flex justify-between items-center mb-4">
                           <h3 className="text-md font-bold text-gray-700">ניהול מיקומים</h3>
                           <div className="flex gap-2">
-                              {/* כפתור גלגל השיניים להגדרות השדות */}
                               <button onClick={() => setShowFieldsSettingsModal(true)} className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-gray-300 flex items-center gap-1 shadow-sm"><Settings size={14}/> הגדרות שדות</button>
                               <button onClick={() => openLocationModal(targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={14}/> הוסף מיקום</button>
                           </div>
@@ -434,14 +451,13 @@ const ConfigurationTab = ({ token, t, user }) => {
           </div>
       )}
 
-      {/* מודאל מיקום (תמונה, גוגל מפות, ושדות דינמיים) */}
+      {/* מודאל מיקום (עם העלאת תמונה, חיפוש כתובת חי, ושדות) */}
       {showLocationModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] animate-scale-in">
                   <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl"><h3 className="font-bold text-lg text-gray-800">כרטיסיית מיקום</h3><button onClick={() => setShowLocationModal(false)} className="hover:bg-gray-200 p-1 rounded-full"><X/></button></div>
                   <div className="p-6 overflow-y-auto space-y-5">
                       
-                      {/* תמונת מיקום */}
                       <div className="flex flex-col items-center">
                           <div className="relative group">
                               <div className="w-28 h-28 rounded-3xl overflow-hidden border-4 border-white shadow-lg bg-gray-100 flex items-center justify-center">
@@ -460,13 +476,35 @@ const ConfigurationTab = ({ token, t, user }) => {
                           <input type="text" required placeholder="למשל: סניף תל אביב מרכז" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none" value={locationForm.name} onChange={e => setLocationForm({...locationForm, name: e.target.value})} />
                       </div>
                       
-                      {/* חיפוש במפות גוגל עם תצוגה מקדימה! */}
-                      <div>
+                      {/* תיבת החיפוש החיה החדשה! */}
+                      <div className="relative">
                           <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> חיפוש כתובת (המיקום יוצג במפה)</label>
-                          <input type="text" placeholder="למשל: דיזנגוף סנטר, תל אביב" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-200 outline-none mb-3" value={locationForm.map_address} onChange={e => setLocationForm({...locationForm, map_address: e.target.value})} />
+                          <input 
+                              type="text" 
+                              placeholder="הקלד כתובת לחיפוש..." 
+                              className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-200 outline-none mb-3" 
+                              value={locationForm.map_address} 
+                              onChange={e => handleMapSearchInput(e.target.value)} 
+                          />
+                          
+                          {/* רשימת ההצעות שנפתחת בזמן הקלדה */}
+                          {mapSuggestions.length > 0 && (
+                              <div className="absolute z-20 w-full bg-white border rounded-lg shadow-xl max-h-48 overflow-y-auto mt-1 top-[70px]">
+                                  {mapSuggestions.map((place, idx) => (
+                                      <div 
+                                          key={idx} 
+                                          className="p-3 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer border-b last:border-b-0 flex items-center gap-2"
+                                          onClick={() => handleSelectMapSuggestion(place)}
+                                      >
+                                          <MapPin size={14} className="text-blue-500 flex-shrink-0"/>
+                                          <span className="truncate">{place.display_name}</span>
+                                      </div>
+                                  ))}
+                              </div>
+                          )}
                           
                           {/* מפת גוגל חיה */}
-                          {locationForm.map_address && (
+                          {locationForm.map_link && (
                               <div className="w-full h-48 rounded-xl overflow-hidden border shadow-sm">
                                   <iframe 
                                       width="100%" 
@@ -479,7 +517,6 @@ const ConfigurationTab = ({ token, t, user }) => {
                           )}
                       </div>
 
-                      {/* שדות דינמיים גלובליים */}
                       {globalFields.filter(f => f.created_by === locationForm.created_by).length > 0 && (
                           <div className="border-t pt-5 mt-2 space-y-4">
                               <h4 className="font-bold text-[#714B67] text-sm flex items-center gap-1"><Layers size={18}/> נתונים ומסמכים נוספים</h4>

@@ -719,7 +719,6 @@ app.get('/categories', authenticateToken, async (req, res) => {
 
 app.post('/categories', authenticateToken, async (req, res) => {
     try { 
-        // הביג בוס יכול לשלוח created_by ספציפי, אחרת זה המשתמש שיצר
         const { name, code, created_by } = req.body;
         const ownerId = created_by || req.user.id;
 
@@ -731,7 +730,11 @@ app.post('/categories', authenticateToken, async (req, res) => {
             [name, code, ownerId]
         ); 
         res.json(result.rows[0]); 
-    } catch (err) { res.status(500).send('Error'); }
+    } catch (err) { 
+        console.error("❌ Category Error:", err);
+        // עכשיו השרת ישלח לך בדיוק את הסיבה לקריסה!
+        res.status(500).json({ error: "DB Error: " + err.message }); 
+    }
 });
 
 app.put('/categories/:id', authenticateToken, async (req, res) => {
