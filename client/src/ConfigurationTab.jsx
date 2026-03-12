@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Layers, User, ChevronUp, Settings, Upload, Map } from 'lucide-react';
+import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload } from 'lucide-react';
 
 const ConfigurationTab = ({ token, t, user }) => { 
   const [activeSubTab, setActiveSubTab] = useState('tree'); 
@@ -22,7 +22,7 @@ const ConfigurationTab = ({ token, t, user }) => {
   const [categoryForm, setCategoryForm] = useState({ id: null, name: '', code: '', created_by: null });
   const [assetForm, setAssetForm] = useState({ id: null, name: '', category_id: '', location_id: '', code: '', created_by: null });
   
-  // טופס מיקומים מתקדם
+  // טופס מיקומים מתקדם (שודרג עם מפות גוגל!)
   const [locationForm, setLocationForm] = useState({ id: null, name: '', map_address: '', existing_image: '', created_by: null });
   const [locationImageFile, setLocationImageFile] = useState(null);
   const [locationImagePreview, setLocationImagePreview] = useState(null);
@@ -147,7 +147,7 @@ const ConfigurationTab = ({ token, t, user }) => {
       formData.append('name', locationForm.name);
       formData.append('created_by', locationForm.created_by);
       
-      // המרת חיפוש הכתובת ללינק גוגל מפות אמיתי
+      // המרת חיפוש הכתובת ללינק גוגל מפות שיישלח לשרת
       let finalMapLink = locationForm.map_address;
       if (finalMapLink && !finalMapLink.startsWith('http')) {
           finalMapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(finalMapLink)}`;
@@ -174,7 +174,10 @@ const ConfigurationTab = ({ token, t, user }) => {
       try {
           const res = await fetch(url, { method, headers: { 'Authorization': `Bearer ${token}` }, body: formData });
           if (res.ok) { setShowLocationModal(false); fetchData(); } 
-          else { alert("Error saving location"); }
+          else { 
+              const errData = await res.json();
+              alert("Error saving location: " + (errData.error || '')); 
+          }
       } catch (e) { alert("Server Error"); }
   };
 
@@ -185,10 +188,12 @@ const ConfigurationTab = ({ token, t, user }) => {
           try { parsedFields = typeof loc.dynamic_fields === 'string' ? JSON.parse(loc.dynamic_fields) : (loc.dynamic_fields || []); } catch(e){}
           try { parsedMap = (typeof loc.coordinates === 'string' ? JSON.parse(loc.coordinates) : loc.coordinates)?.link || ''; } catch(e){}
           
-          // אם זה כבר לינק של גוגל מפות, ננסה לחלץ משם את הכתובת הידידותית
+          // חילוץ הכתובת מתוך לינק המפות כדי שיהיה יפה בשדה החיפוש
           let displayAddress = parsedMap;
           if (displayAddress.includes('query=')) {
               displayAddress = decodeURIComponent(displayAddress.split('query=')[1].split('&')[0]);
+          } else if (displayAddress.includes('?q=')) {
+              displayAddress = decodeURIComponent(displayAddress.split('?q=')[1].split('&')[0]);
           }
 
           setLocationForm({ id: loc.id, name: loc.name, map_address: displayAddress, existing_image: loc.image_url || '', created_by: targetManagerId });
@@ -292,8 +297,8 @@ const ConfigurationTab = ({ token, t, user }) => {
                           <h3 className="text-md font-bold text-gray-700">ניהול מיקומים</h3>
                           <div className="flex gap-2">
                               {/* כפתור גלגל השיניים להגדרות השדות */}
-                              <button onClick={() => setShowFieldsSettingsModal(true)} className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-gray-300 flex items-center gap-1 shadow-sm"><Settings size={14}/> שדות</button>
-                              <button onClick={() => openLocationModal(targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={14}/> מיקום</button>
+                              <button onClick={() => setShowFieldsSettingsModal(true)} className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-gray-300 flex items-center gap-1 shadow-sm"><Settings size={14}/> הגדרות שדות</button>
+                              <button onClick={() => openLocationModal(targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={14}/> הוסף מיקום</button>
                           </div>
                       </div>
 
@@ -313,7 +318,7 @@ const ConfigurationTab = ({ token, t, user }) => {
                                               )}
                                               <div>
                                                   <h4 className="font-bold text-gray-800 text-sm">{loc.name}</h4>
-                                                  <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase">{loc.code}</span>
+                                                  <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase font-mono">{loc.code}</span>
                                               </div>
                                           </div>
                                           <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition">
@@ -334,13 +339,13 @@ const ConfigurationTab = ({ token, t, user }) => {
                           <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
                               <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
                                   <div className="flex justify-between items-center mb-4 border-b pb-3">
-                                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> שדות מיקום מתקדמים</h3>
+                                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> שדות מיקום לכל הסניפים</h3>
                                       <button onClick={() => setShowFieldsSettingsModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={20}/></button>
                                   </div>
-                                  <p className="text-xs text-gray-500 mb-4">השדות שתגדיר כאן יתווספו אוטומטית לכל המיקומים הקיימים והחדשים תחת אחריותך.</p>
+                                  <p className="text-xs text-gray-500 mb-4">השדות שתגדיר כאן יתווספו אוטומטית לכל המיקומים (קיימים וחדשים).</p>
                                   
                                   <div className="space-y-2 mb-6">
-                                      {mFields.length === 0 && <p className="text-center text-sm text-gray-400 italic">לא הוגדרו עדיין שדות.</p>}
+                                      {mFields.length === 0 && <p className="text-center text-sm text-gray-400 italic">לא הוגדרו שדות.</p>}
                                       {mFields.map(f => (
                                           <div key={f.id} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border text-sm">
                                               <div className="flex items-center gap-2 font-medium">
@@ -354,16 +359,15 @@ const ConfigurationTab = ({ token, t, user }) => {
 
                                   <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 flex gap-2 items-end">
                                       <div className="flex-1">
-                                          <label className="text-xs font-bold text-purple-800 block mb-1">שם השדה (למשל: סרטון הדרכה)</label>
+                                          <label className="text-xs font-bold text-purple-800 block mb-1">שם השדה (למשל: תעודת כשרות)</label>
                                           <input type="text" className="w-full p-2.5 border rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-purple-300" value={newField.name} onChange={e => setNewField({...newField, name: e.target.value})} />
                                       </div>
                                       <div className="w-1/3">
-                                          <label className="text-xs font-bold text-purple-800 block mb-1">סוג</label>
+                                          <label className="text-xs font-bold text-purple-800 block mb-1">סוג התוכן</label>
                                           <select className="w-full p-2.5 border rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-purple-300" value={newField.type} onChange={e => setNewField({...newField, type: e.target.value})}>
                                               <option value="text">טקסט</option>
                                               <option value="number">מספרים</option>
-                                              <option value="file">קובץ / מסמך</option>
-                                              <option value="media">תמונה / מדיה</option>
+                                              <option value="file">קובץ / מסמך / תמונה</option>
                                           </select>
                                       </div>
                                       <button onClick={() => handleAddGlobalField(targetManagerId)} className="bg-purple-600 text-white p-2.5 rounded-lg hover:bg-purple-700 shadow-md"><Plus size={18}/></button>
@@ -402,7 +406,6 @@ const ConfigurationTab = ({ token, t, user }) => {
               })}
           </div>
       ) : (
-          /* תצוגת מנהל רגיל */
           <div className="bg-white p-6 rounded-2xl shadow-sm border">{renderWorkspace(user.id)}</div>
       )}
 
@@ -431,7 +434,7 @@ const ConfigurationTab = ({ token, t, user }) => {
           </div>
       )}
 
-      {/* מודאל מיקום (עם העלאת תמונה וחיפוש כתובת) */}
+      {/* מודאל מיקום (תמונה, גוגל מפות, ושדות דינמיים) */}
       {showLocationModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] animate-scale-in">
@@ -457,16 +460,29 @@ const ConfigurationTab = ({ token, t, user }) => {
                           <input type="text" required placeholder="למשל: סניף תל אביב מרכז" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none" value={locationForm.name} onChange={e => setLocationForm({...locationForm, name: e.target.value})} />
                       </div>
                       
+                      {/* חיפוש במפות גוגל עם תצוגה מקדימה! */}
                       <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> חיפוש כתובת (מפות גוגל)</label>
-                          <input type="text" placeholder="למשל: דיזנגוף סנטר, תל אביב..." className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-200 outline-none" value={locationForm.map_address} onChange={e => setLocationForm({...locationForm, map_address: e.target.value})} />
-                          <p className="text-[10px] text-gray-400 mt-1">הכתובת תהפוך אוטומטית לקישור ניווט באפליקציה.</p>
+                          <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> חיפוש כתובת (המיקום יוצג במפה)</label>
+                          <input type="text" placeholder="למשל: דיזנגוף סנטר, תל אביב" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-200 outline-none mb-3" value={locationForm.map_address} onChange={e => setLocationForm({...locationForm, map_address: e.target.value})} />
+                          
+                          {/* מפת גוגל חיה */}
+                          {locationForm.map_address && (
+                              <div className="w-full h-48 rounded-xl overflow-hidden border shadow-sm">
+                                  <iframe 
+                                      width="100%" 
+                                      height="100%" 
+                                      frameBorder="0" style={{border:0}} 
+                                      src={`https://maps.google.com/maps?q=${encodeURIComponent(locationForm.map_address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} 
+                                      allowFullScreen
+                                  ></iframe>
+                              </div>
+                          )}
                       </div>
 
-                      {/* שדות דינמיים */}
+                      {/* שדות דינמיים גלובליים */}
                       {globalFields.filter(f => f.created_by === locationForm.created_by).length > 0 && (
                           <div className="border-t pt-5 mt-2 space-y-4">
-                              <h4 className="font-bold text-[#714B67] text-sm flex items-center gap-1"><Layers size={18}/> נתונים נוספים</h4>
+                              <h4 className="font-bold text-[#714B67] text-sm flex items-center gap-1"><Layers size={18}/> נתונים ומסמכים נוספים</h4>
                               {globalFields.filter(f => f.created_by === locationForm.created_by).map(field => (
                                   <div key={field.id} className="bg-gray-50 p-3 rounded-xl border">
                                       <label className="block text-xs font-bold text-gray-700 mb-2">{field.name} <span className="text-[10px] font-normal text-gray-400 bg-white px-1 py-0.5 rounded border ml-2">{field.type}</span></label>

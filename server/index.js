@@ -234,11 +234,20 @@ app.get('/fix-db', async (req, res) => {
             await client.query('ALTER TABLE tasks ALTER COLUMN due_date TYPE TIMESTAMP WITHOUT TIME ZONE');
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS device_token TEXT');
             
-            // 2. 👇 התיקון החדש: הוספת שיוך למנהל בקטגוריות ונכסים 👇
+            // 2. הוספת שיוך למנהל בקטגוריות ונכסים
             await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)');
             await client.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)');
 
-            // 3. 👇 התיקון החדש: יצירת טבלת שדות מותאמים אישית למיקומים 👇
+            // 3. ✨ התיקון שלנו: יצירת עמודת 'code' לקטגוריות! ✨
+            await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS code VARCHAR(10)');
+
+            // 4. למען הביטחון: הוספת העמודות החדשות גם למיקומים אם הן חסרות
+            await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS code VARCHAR(50)');
+            await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS image_url TEXT');
+            await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS coordinates TEXT');
+            await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS dynamic_fields TEXT');
+
+            // 5. יצירת טבלת שדות מותאמים אישית למיקומים
             await client.query(`
                 CREATE TABLE IF NOT EXISTS location_fields (
                     id SERIAL PRIMARY KEY,
@@ -252,7 +261,7 @@ app.get('/fix-db', async (req, res) => {
             res.send(`
                 <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
                     <h1 style="color: #166534;">✅ מסד הנתונים עודכן בהצלחה!</h1>
-                    <p>נוספו עמודות שיוך למנהלים (created_by) וטבלת שדות מותאמים אישית נוצרה.</p>
+                    <p>עמודת קוד הקטגוריה נוצרה, והכל מוכן לעבודה.</p>
                     <p>את יכולה לחזור לאפליקציה עכשיו.</p>
                 </div>
             `);
@@ -606,6 +615,9 @@ app.get('/locations', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error'); }
 });
 
+// ==========================================
+// ניהול מיקומים (כולל קבצים, קוד אוטומטי וגוגל מפות)
+// ==========================================
 app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
     try { 
         const { name, map_link, dynamic_fields, created_by } = req.body;
@@ -615,14 +627,17 @@ app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
         const locs = await pool.query("SELECT code FROM locations WHERE created_by = $1 AND code LIKE 'LOC-%'", [ownerId]);
         let max = 0;
         locs.rows.forEach(r => {
-            const num = parseInt(r.code.split('-')[1]);
-            if (!isNaN(num) && num > max) max = num;
+            if(r.code) {
+                const num = parseInt(r.code.split('-')[1]);
+                if (!isNaN(num) && num > max) max = num;
+            }
         });
         const generatedCode = `LOC-${String(max + 1).padStart(4, '0')}`;
 
-        // טיפול בקבצים שהועלו (תמונת פרופיל ושדות דינמיים)
+        // טיפול בקבצים
         let mainImageUrl = req.body.existing_image || null;
-        let parsedDynamicFields = JSON.parse(dynamic_fields || '[]');
+        let parsedDynamicFields = [];
+        try { parsedDynamicFields = JSON.parse(dynamic_fields || '[]'); } catch(e){}
 
         if (req.files && req.files.length > 0) {
             req.files.forEach(file => {
@@ -642,7 +657,10 @@ app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
             [name, ownerId, generatedCode, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields)]
         ); 
         res.json(r.rows[0]); 
-    } catch (e) { res.status(500).send('Error saving location'); }
+    } catch (e) { 
+        console.error("❌ Error saving location:", e);
+        res.status(500).json({ error: 'Server Error: ' + e.message }); 
+    }
 });
 
 app.put('/locations/:id', authenticateToken, upload.any(), async (req, res) => {
@@ -650,7 +668,8 @@ app.put('/locations/:id', authenticateToken, upload.any(), async (req, res) => {
         const { name, map_link, dynamic_fields } = req.body;
         
         let mainImageUrl = req.body.existing_image || null;
-        let parsedDynamicFields = JSON.parse(dynamic_fields || '[]');
+        let parsedDynamicFields = [];
+        try { parsedDynamicFields = JSON.parse(dynamic_fields || '[]'); } catch(e){}
 
         if (req.files && req.files.length > 0) {
             req.files.forEach(file => {
@@ -669,7 +688,10 @@ app.put('/locations/:id', authenticateToken, upload.any(), async (req, res) => {
             [name, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields), req.params.id]
         ); 
         res.json(r.rows[0]); 
-    } catch (e) { res.status(500).send('Error updating location'); }
+    } catch (e) { 
+        console.error("❌ Error updating location:", e);
+        res.status(500).json({ error: 'Server Error: ' + e.message }); 
+    }
 });
 
 // ==========================================
