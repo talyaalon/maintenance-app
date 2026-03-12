@@ -1374,7 +1374,7 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
 
 const cron = require('node-cron');
 
-cron.schedule('10 16 * * *', async () => {
+cron.schedule('52 20 * * *', async () => {
     console.log("⏰ [CRON] Starting Daily Task Check...");
 
     const dict = {
