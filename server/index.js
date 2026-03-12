@@ -619,12 +619,16 @@ app.get('/locations', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// ניהול מיקומים (מתוקן לעבודה עם שדות בעברית!)
+// ניהול מיקומים - חסין תקלות וכפילויות (כולל קבצים)
 // ==========================================
 app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
     try { 
-        const { name, map_link, dynamic_fields, created_by } = req.body;
-        const ownerId = created_by || req.user.id; 
+        let { name, map_link, dynamic_fields, created_by, existing_image } = req.body;
+        
+        // הגנה מקריסת נתונים מהאפליקציה
+        if (!name) return res.status(400).json({ error: "שם המיקום הוא שדה חובה" });
+
+        const ownerId = (created_by && created_by !== 'null') ? parseInt(created_by, 10) : req.user.id; 
         
         const check = await pool.query('SELECT id FROM locations WHERE name = $1 AND created_by = $2', [name, ownerId]);
         if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: מיקום בשם זה כבר קיים אצלך!" });
@@ -639,9 +643,9 @@ app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
         });
         const generatedCode = `LOC-${String(max + 1).padStart(4, '0')}`;
 
-        let mainImageUrl = req.body.existing_image || null;
+        let mainImageUrl = (existing_image && existing_image !== 'null') ? existing_image : null;
         let parsedDynamicFields = [];
-        try { parsedDynamicFields = JSON.parse(dynamic_fields || '[]'); } catch(e){}
+        try { if (dynamic_fields && dynamic_fields !== 'null') parsedDynamicFields = JSON.parse(dynamic_fields); } catch(e){}
 
         if (req.files && req.files.length > 0) {
             req.files.forEach(file => {
@@ -662,25 +666,24 @@ app.post('/locations', authenticateToken, upload.any(), async (req, res) => {
         ); 
         res.json(r.rows[0]); 
     } catch (e) { 
-        if (e.code === '23505') return res.status(400).json({ error: "כפילות: הערך כבר קיים במערכת." });
+        console.error("❌ Location POST Error:", e);
         res.status(500).json({ error: 'Server Error: ' + e.message }); 
     }
 });
 
 app.put('/locations/:id', authenticateToken, upload.any(), async (req, res) => {
     try { 
-        const { name, map_link, dynamic_fields } = req.body;
+        let { name, map_link, dynamic_fields, existing_image } = req.body;
         
-        let mainImageUrl = req.body.existing_image || null;
+        let mainImageUrl = (existing_image && existing_image !== 'null') ? existing_image : null;
         let parsedDynamicFields = [];
-        try { parsedDynamicFields = JSON.parse(dynamic_fields || '[]'); } catch(e){}
+        try { if (dynamic_fields && dynamic_fields !== 'null') parsedDynamicFields = JSON.parse(dynamic_fields); } catch(e){}
 
         if (req.files && req.files.length > 0) {
             req.files.forEach(file => {
                 if (file.fieldname === 'main_image') {
                     mainImageUrl = `/uploads/${file.filename}`;
                 } else if (file.fieldname.startsWith('dynamic_')) {
-                    // התיקון: פענוח השם מעברית מקודדת
                     const fieldName = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
                     const fieldObj = parsedDynamicFields.find(f => f.name === fieldName);
                     if (fieldObj) fieldObj.value = `/uploads/${file.filename}`;
@@ -694,7 +697,7 @@ app.put('/locations/:id', authenticateToken, upload.any(), async (req, res) => {
         ); 
         res.json(r.rows[0]); 
     } catch (e) { 
-        console.error("❌ Error updating location:", e);
+        console.error("❌ Location PUT Error:", e);
         res.status(500).json({ error: 'Server Error: ' + e.message }); 
     }
 });

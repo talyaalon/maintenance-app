@@ -19,7 +19,7 @@ function App() {
   // 🚀 מנגנון התחברות אוטומטי וזכירת משתמש (Persistent Login)
   useEffect(() => {
     const token = localStorage.getItem('token');
-    
+
     if (token) {
       try {
         // מפענחים את הטוקן השמור בטלפון כדי להוציא ממנו את פרטי המשתמש
@@ -49,7 +49,16 @@ function App() {
   const [lang, setLang] = useState('en'); 
   const t = translations[lang]; // המילון הנוכחי
 
-  const [activeTab, setActiveTab] = useState(1);
+  // שואב את הטאב האחרון מהזיכרון (אם אין, יפתח את טאב 1)
+  const [activeTab, setActiveTab] = useState(() => {
+      const savedTab = localStorage.getItem('appActiveTab');
+      return savedTab ? parseInt(savedTab, 10) : 1;
+  });
+
+  // שומר את הטאב לזיכרון בכל פעם שאת עוברת עמוד
+  useEffect(() => {
+      localStorage.setItem('appActiveTab', activeTab);
+  }, [activeTab]);
 
   // מודאלים
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);

@@ -2,7 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload } from 'lucide-react';
 
 const ConfigurationTab = ({ token, t, user, lang }) => { 
-  const [activeSubTab, setActiveSubTab] = useState('tree'); 
+  // שומר את הטאב הפנימי (מיקומים או נכסים)
+  const [activeSubTab, setActiveSubTab] = useState(() => {
+      return localStorage.getItem('configActiveSubTab') || 'tree';
+  });
+
+  useEffect(() => {
+      localStorage.setItem('configActiveSubTab', activeSubTab);
+  }, [activeSubTab]);
   const [categories, setCategories] = useState([]);
   const [assets, setAssets] = useState([]);
   const [locations, setLocations] = useState([]); 
@@ -12,17 +19,14 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   const [expandedBossManager, setExpandedBossManager] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState([]);
 
-  // מודאלים
   const [showTreeModal, setShowTreeModal] = useState(false);
   const [treeNodeType, setTreeNodeType] = useState('category'); 
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showFieldsSettingsModal, setShowFieldsSettingsModal] = useState(false);
 
-  // טפסים
   const [categoryForm, setCategoryForm] = useState({ id: null, name: '', code: '', created_by: null });
   const [assetForm, setAssetForm] = useState({ id: null, name: '', category_id: '', location_id: '', code: '', created_by: null });
   
-  // טופס מיקומים - מותאם להדבקת קישור ישיר!
   const [locationForm, setLocationForm] = useState({ id: null, name: '', map_link: '', existing_image: '', created_by: null });
   const [locationImageFile, setLocationImageFile] = useState(null);
   const [locationImagePreview, setLocationImagePreview] = useState(null);
@@ -62,9 +66,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       try {
           const parsed = JSON.parse(nameStr);
           return parsed[lang] || parsed.en || parsed.he || nameStr;
-      } catch (e) {
-          return nameStr;
-      }
+      } catch (e) { return nameStr; }
   };
 
   const toggleCategory = (catId) => setExpandedCategories(prev => prev.includes(catId) ? prev.filter(id => id !== catId) : [...prev, catId]);
@@ -94,16 +96,23 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       return `${catCode}-${String(maxNum + 1).padStart(4, '0')}`;
   };
 
+  // 🚀 מערכת ניהול שגיאות חכמה
   const handleApiError = async (res) => {
       try {
-          const data = await res.json();
-          if (data.error && data.error.includes("כפילות")) {
-              alert("⚠️ שים לב: " + data.error);
-          } else {
-              alert("❌ שגיאה: " + (data.error || "תקלה בשמירה. בדוק את הנתונים."));
+          const text = await res.text(); // מושך טקסט כדי לא לקרוס
+          try {
+              const data = JSON.parse(text); // מנסה להפוך ל-JSON
+              if (data.error && data.error.includes("כפילות")) {
+                  alert("⚠️ שים לב: " + data.error);
+              } else {
+                  alert("❌ שגיאה: " + (data.error || "תקלה בשמירה. בדוק את הנתונים."));
+              }
+          } catch (e) {
+              alert("❌ שגיאת שרת: התקבלה תגובה לא תקינה מהשרת.");
+              console.error("Server HTML Error:", text);
           }
       } catch (e) {
-          alert("❌ שגיאת שרת לא צפויה.");
+          alert("❌ שגיאת תקשורת מול השרת.");
       }
   };
 
@@ -151,9 +160,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           if (res.ok) {
               setNewField({ name_he: '', name_en: '', name_th: '', type: 'text' });
               fetchData();
-          } else {
-              await handleApiError(res);
-          }
+          } else { await handleApiError(res); }
       } catch(e){ alert("שגיאה בהוספת שדה"); }
   };
 
@@ -170,8 +177,6 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       const formData = new FormData();
       formData.append('name', locationForm.name);
       formData.append('created_by', locationForm.created_by);
-      
-      // שומרים את הלינק בדיוק כמו שהמנהל הדביק אותו!
       formData.append('map_link', locationForm.map_link || '');
       
       if (locationImageFile) formData.append('main_image', locationImageFile);
@@ -183,7 +188,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       managerFields.forEach(f => {
           let val = dynamicValues[f.name] || '';
           if ((f.type === 'file' || f.type === 'media') && dynamicFiles[f.name]) {
-              const safeName = encodeURIComponent(f.name);
+              const safeName = encodeURIComponent(f.name); // מגן מפני קריסות של אותיות בעברית
               formData.append(`dynamic_${safeName}`, dynamicFiles[f.name]);
               val = 'pending_upload';
           }
@@ -223,19 +228,11 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       setShowLocationModal(true);
   };
 
-  // 🚀 פונקציה חכמה שמחלצת מידע מהקישור לצורך התצוגה המקדימה בלבד 🚀
-  const getMapPreviewQuery = () => {
-      if (!locationForm.map_link) return locationForm.name;
-      // אם הודבק לינק ארוך של גוגל מפות
-      if (locationForm.map_link.includes('/place/')) {
-          const parts = locationForm.map_link.split('/place/')[1].split('/')[0];
-          return decodeURIComponent(parts.replace(/\+/g, ' '));
-      }
-      if (locationForm.map_link.includes('?q=')) {
-          return decodeURIComponent(locationForm.map_link.split('?q=')[1].split('&')[0]);
-      }
-      // אם זה לינק קצר (maps.app.goo.gl), נשתמש פשוט בשם המיקום בשביל תצוגת הרקע
-      return locationForm.name;
+  // פונקציה לבניית קישור תצוגה מקדימה חכם למפה
+  const getMapEmbedUrl = () => {
+      const query = locationForm.map_link || locationForm.name;
+      if (!query) return '';
+      return `https://maps.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
   };
 
   const renderWorkspace = (targetManagerId) => {
@@ -366,7 +363,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
                               <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
                                   <div className="flex justify-between items-center mb-4 border-b pb-3">
-                                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> שדות מיקום מותאמים</h3>
+                                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> שדות מיקום לכל הסניפים</h3>
                                       <button onClick={() => setShowFieldsSettingsModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={20}/></button>
                                   </div>
                                   
@@ -434,6 +431,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           <div className="bg-white p-6 rounded-2xl shadow-sm border">{renderWorkspace(user.id)}</div>
       )}
 
+      {/* מודאל עץ קטגוריות / נכסים */}
       {showTreeModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
@@ -458,6 +456,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           </div>
       )}
 
+      {/* מודאל מיקום ענק - מתוקן להדבקת לינקים */}
       {showLocationModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] animate-scale-in">
@@ -482,31 +481,32 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           <input type="text" required placeholder="למשל: סניף תל אביב מרכז" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none" value={locationForm.name} onChange={e => setLocationForm({...locationForm, name: e.target.value})} />
                       </div>
                       
-                      {/* התיבה החדשה: רק הדבקת קישור ישיר */}
+                      {/* תיבת הלינק המדויקת */}
                       <div>
                           <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> קישור מגוגל מפות</label>
                           <input 
                               type="url" 
-                              placeholder="הדבק כאן קישור שיתוף מגוגל מפות..." 
+                              placeholder="הדבק כאן קישור שיתוף (למשל: https://maps.app.goo.gl/...)" 
                               className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-200 outline-none mb-3 text-left dir-ltr" 
                               value={locationForm.map_link} 
                               onChange={e => setLocationForm({...locationForm, map_link: e.target.value})} 
                           />
                           
-                          {/* תצוגת מפה חיה של הקישור או השם! */}
+                          {/* תצוגת מפה חיה! מופעלת מיד ברגע שיש שם או לינק */}
                           {(locationForm.map_link || locationForm.name) && (
                               <div className="w-full h-48 rounded-xl overflow-hidden border shadow-sm relative z-10">
                                   <iframe 
                                       width="100%" 
                                       height="100%" 
                                       frameBorder="0" style={{border:0}} 
-                                      src={`https://maps.google.com/maps?q=${encodeURIComponent(getMapPreviewQuery())}&t=&z=15&ie=UTF8&iwloc=&output=embed`} 
+                                      src={getMapEmbedUrl()} 
                                       allowFullScreen
                                   ></iframe>
                               </div>
                           )}
                       </div>
 
+                      {/* שדות דינמיים */}
                       {globalFields.filter(f => f.created_by === locationForm.created_by).length > 0 && (
                           <div className="border-t pt-5 mt-2 space-y-4">
                               <h4 className="font-bold text-[#714B67] text-sm flex items-center gap-1"><Layers size={18}/> נתונים ומסמכים נוספים</h4>
