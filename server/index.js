@@ -35,7 +35,7 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
 cloudinary.config({
