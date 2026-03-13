@@ -184,10 +184,14 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       const managerFields = globalFields.filter(f => f.created_by === locationForm.created_by);
       
       managerFields.forEach(f => {
-          let val = dynamicValues[f.id] || dynamicValues[f.name] || ''; 
-          if ((f.type === 'file' || f.type === 'media') && dynamicFiles[f.id]) {
-              // 🚀 התיקון הענק: שולחים רק את ה-ID הקצר, כדי שהשרת לא יקרוס מאורך השם! 🚀
-              formData.append(`dynamic_${f.id}`, dynamicFiles[f.id]);
+          // משתמשים ב-ID, ואם אין - משתמשים בשם. זה מכסה את כל המקרים!
+          const key = f.id || f.name; 
+          let val = dynamicValues[key] || dynamicValues[f.name] || ''; 
+          
+          if ((f.type === 'file' || f.type === 'media') && dynamicFiles[key]) {
+              // אורזים את השם/ID כדי שיעבור בטוח לשרת!
+              const safeName = encodeURIComponent(key);
+              formData.append(`dynamic_${safeName}`, dynamicFiles[key]);
               val = 'pending_upload';
           }
           fieldsToSave.push({ id: f.id, name: f.name, type: f.type, value: val });
@@ -200,7 +204,6 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           else { await handleApiError(res); }
       } catch (e) { alert("Server Error"); }
   };
-
   const openLocationModal = (targetManagerId, loc = null) => {
       setLocationImageFile(null);
       if (loc) {

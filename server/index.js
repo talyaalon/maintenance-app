@@ -596,32 +596,23 @@ app.get('/locations', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// ניהול מיקומים - חסין תקלות ושומר ב-Cloudinary
+// ניהול מיקומים - חסין תקלות (כולל מפענח עברית לענן!)
 // ==========================================
 app.post('/locations', authenticateToken, (req, res) => {
     upload.any()(req, res, async (uploadErr) => {
-        if (uploadErr) {
-            console.error("Multer Upload Error:", uploadErr);
-            return res.status(500).json({ error: "שגיאה בקליטת הקובץ: " + uploadErr.message });
-        }
+        if (uploadErr) return res.status(500).json({ error: "שגיאת קובץ: " + uploadErr.message });
         
         try { 
             let { name, map_link, dynamic_fields, created_by, existing_image } = req.body;
-            if (!name) return res.status(400).json({ error: "שם המיקום הוא שדה חובה" });
+            if (!name) return res.status(400).json({ error: "שם המיקום חובה" });
 
             const ownerId = (created_by && created_by !== 'null') ? parseInt(created_by, 10) : req.user.id; 
-            
             const check = await pool.query('SELECT id FROM locations WHERE name = $1 AND created_by = $2', [name, ownerId]);
-            if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: מיקום בשם זה כבר קיים אצלך!" });
+            if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: מיקום כבר קיים" });
 
             const locs = await pool.query("SELECT code FROM locations WHERE created_by = $1 AND code LIKE 'LOC-%'", [ownerId]);
             let max = 0;
-            locs.rows.forEach(r => {
-                if(r.code) {
-                    const num = parseInt(r.code.split('-')[1]);
-                    if (!isNaN(num) && num > max) max = num;
-                }
-            });
+            locs.rows.forEach(r => { if(r.code) { let num = parseInt(r.code.split('-')[1]); if (num > max) max = num; } });
             const generatedCode = `LOC-${String(max + 1).padStart(4, '0')}`;
 
             let mainImageUrl = (existing_image && existing_image !== 'null') ? existing_image : null;
@@ -630,14 +621,12 @@ app.post('/locations', authenticateToken, (req, res) => {
 
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => {
-                    // 🚀 התיקון הקריטי: שולף את הלינק של הענן במקום לשמור מקומית!
-                    const fileUrl = file.secure_url || file.path;
-                    
+                    const fileUrl = file.secure_url || file.path; 
                     if (file.fieldname === 'main_image') {
                         mainImageUrl = fileUrl;
                     } else if (file.fieldname.startsWith('dynamic_')) {
-                        const fieldId = file.fieldname.replace('dynamic_', '');
-                        // תמיכה בשדות ישנים וחדשים
+                        // 🚀 התיקון הענק: פקודת הפענוח שמתרגמת את הג'יבריש חזרה לשם השדה!
+                        const fieldId = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
                         const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId) || f.name === fieldId);
                         if (fieldObj) fieldObj.value = fileUrl;
                     }
@@ -645,41 +634,31 @@ app.post('/locations', authenticateToken, (req, res) => {
             }
 
             const r = await pool.query(
-                `INSERT INTO locations (name, created_by, code, image_url, coordinates, dynamic_fields) 
-                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`, 
+                `INSERT INTO locations (name, created_by, code, image_url, coordinates, dynamic_fields) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`, 
                 [name, ownerId, generatedCode, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields)]
             ); 
             res.json(r.rows[0]); 
-        } catch (e) { 
-            console.error("❌ Location POST Error:", e);
-            res.status(500).json({ error: 'תקלה בשמירת הנתונים במסד: ' + e.message }); 
-        }
+        } catch (e) { res.status(500).json({ error: e.message }); }
     });
 });
 
 app.put('/locations/:id', authenticateToken, (req, res) => {
     upload.any()(req, res, async (uploadErr) => {
-        if (uploadErr) {
-            console.error("Multer Upload Error:", uploadErr);
-            return res.status(500).json({ error: "שגיאה בקליטת הקובץ: " + uploadErr.message });
-        }
-
+        if (uploadErr) return res.status(500).json({ error: "שגיאת קובץ: " + uploadErr.message });
         try { 
             let { name, map_link, dynamic_fields, existing_image } = req.body;
-            
             let mainImageUrl = (existing_image && existing_image !== 'null') ? existing_image : null;
             let parsedDynamicFields = [];
             try { if (dynamic_fields && dynamic_fields !== 'null') parsedDynamicFields = JSON.parse(dynamic_fields); } catch(e){}
 
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => {
-                    // 🚀 התיקון הקריטי: שולף את הלינק של הענן!
                     const fileUrl = file.secure_url || file.path;
-                    
                     if (file.fieldname === 'main_image') {
                         mainImageUrl = fileUrl;
                     } else if (file.fieldname.startsWith('dynamic_')) {
-                        const fieldId = file.fieldname.replace('dynamic_', '');
+                        // 🚀 התיקון הענק: פקודת הפענוח שמתרגמת את הג'יבריש חזרה לשם השדה!
+                        const fieldId = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
                         const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId) || f.name === fieldId);
                         if (fieldObj) fieldObj.value = fileUrl;
                     }
@@ -691,10 +670,7 @@ app.put('/locations/:id', authenticateToken, (req, res) => {
                 [name, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields), req.params.id]
             ); 
             res.json(r.rows[0]); 
-        } catch (e) { 
-            console.error("❌ Location PUT Error:", e);
-            res.status(500).json({ error: 'תקלה בעדכון הנתונים במסד: ' + e.message }); 
-        }
+        } catch (e) { res.status(500).json({ error: e.message }); }
     });
 });
 
