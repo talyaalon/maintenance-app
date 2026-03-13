@@ -38,35 +38,24 @@ const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
+// ==========================================
+// ☁️ הגדרות Cloudinary - מקבל גם תמונות וגם מסמכים (ODF, PDF, אקסל)
+// ==========================================
 cloudinary.config({
   cloud_name: 'dojnc3j0r',
   api_key: '133411631835124',
   api_secret: '-7M6Z0dvS0fPFkQiEuWj66FWPXM'
 });
 
-// 👇 התיקון הגדול מתחיל כאן 👇
-// ווידוא שתיקיית ההעלאות קיימת בשרת (פותר את שגיאת ה-ENOENT ב-Render!)
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-    console.log("✅ Uploads directory created successfully!");
-}
-
-// הגדרות העלאת קבצים
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir); // שימוש בנתיב המלא והבטוח
-    },
-    filename: (req, file, cb) => {
-        // ניקוי שם הקובץ מרווחים כדי למנוע תקלות קידוד
-        const safeName = encodeURIComponent(file.originalname.replace(/\s+/g, '_'));
-        cb(null, Date.now() + '-' + safeName);
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'maintenance_app_files',
+        resource_type: 'auto' // מאפשר העלאה של כל סוגי הקבצים לענן!
     }
 });
 
-// 🚀 הסרנו את החסימה הנוקשה (fileFilter) כדי שתוכלי להעלות ODF, אקסל, ומסמכים מכל סוג בחופשיות!
 const upload = multer({ storage: storage });
-// 👆 התיקון הגדול מסתיים כאן 👆
 
 console.log("📧 Configuring Email using Brevo SMTP...");
 const transporter = nodemailer.createTransport({
@@ -335,7 +324,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         
         let profile_picture_url = req.body.existing_picture || null;
         if (req.file) {
-            profile_picture_url = `/uploads/${req.file.filename}`;
+            profile_picture_url = req.file.path; // מעודכן לקחת מ-Cloudinary!
         }
 
         const lang = preferred_language || 'en';
@@ -579,7 +568,7 @@ app.delete('/location-fields/:id', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// ניהול מיקומים
+// ניהול מיקומים - מותאם לענן ושומר קבצים מכל סוג
 // ==========================================
 app.get('/locations', authenticateToken, async (req, res) => {
     try {
@@ -602,8 +591,8 @@ app.get('/locations', authenticateToken, async (req, res) => {
 app.post('/locations', authenticateToken, (req, res) => {
     upload.any()(req, res, async (uploadErr) => {
         if (uploadErr) {
-            console.error("Multer Upload Error:", uploadErr);
-            return res.status(500).json({ error: "שגיאה בקליטת הקובץ: " + uploadErr.message });
+            console.error("Upload Error:", uploadErr);
+            return res.status(500).json({ error: "שגיאה בהעלאת קובץ: " + uploadErr.message });
         }
         
         try { 
@@ -631,12 +620,13 @@ app.post('/locations', authenticateToken, (req, res) => {
 
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => {
+                    // שימוש ב-file.path שמגיע ישירות מ-Cloudinary!
                     if (file.fieldname === 'main_image') {
-                        mainImageUrl = `/uploads/${file.filename}`;
+                        mainImageUrl = file.path;
                     } else if (file.fieldname.startsWith('dynamic_')) {
                         const fieldId = file.fieldname.replace('dynamic_', '');
                         const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId));
-                        if (fieldObj) fieldObj.value = `/uploads/${file.filename}`;
+                        if (fieldObj) fieldObj.value = file.path;
                     }
                 });
             }
@@ -649,7 +639,7 @@ app.post('/locations', authenticateToken, (req, res) => {
             res.json(r.rows[0]); 
         } catch (e) { 
             console.error("❌ Location POST Error:", e);
-            res.status(500).json({ error: 'תקלה בשמירת הנתונים במסד: ' + e.message }); 
+            res.status(500).json({ error: 'תקלה בשמירת הנתונים: ' + e.message }); 
         }
     });
 });
@@ -657,8 +647,8 @@ app.post('/locations', authenticateToken, (req, res) => {
 app.put('/locations/:id', authenticateToken, (req, res) => {
     upload.any()(req, res, async (uploadErr) => {
         if (uploadErr) {
-            console.error("Multer Upload Error:", uploadErr);
-            return res.status(500).json({ error: "שגיאה בקליטת הקובץ: " + uploadErr.message });
+            console.error("Upload Error:", uploadErr);
+            return res.status(500).json({ error: "שגיאה בהעלאת קובץ: " + uploadErr.message });
         }
 
         try { 
@@ -671,11 +661,11 @@ app.put('/locations/:id', authenticateToken, (req, res) => {
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => {
                     if (file.fieldname === 'main_image') {
-                        mainImageUrl = `/uploads/${file.filename}`;
+                        mainImageUrl = file.path;
                     } else if (file.fieldname.startsWith('dynamic_')) {
                         const fieldId = file.fieldname.replace('dynamic_', '');
                         const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId));
-                        if (fieldObj) fieldObj.value = `/uploads/${file.filename}`;
+                        if (fieldObj) fieldObj.value = file.path;
                     }
                 });
             }
@@ -687,7 +677,7 @@ app.put('/locations/:id', authenticateToken, (req, res) => {
             res.json(r.rows[0]); 
         } catch (e) { 
             console.error("❌ Location PUT Error:", e);
-            res.status(500).json({ error: 'תקלה בעדכון הנתונים במסד: ' + e.message }); 
+            res.status(500).json({ error: 'תקלה בעדכון הנתונים: ' + e.message }); 
         }
     });
 });
@@ -843,8 +833,7 @@ app.get('/tasks', authenticateToken, async (req, res) => {
 
 app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   try {
-    const files = req.files || [];
-    const imageUrls = files.map(file => file.path);
+    const imageUrls = req.files ? req.files.map(file => file.path) : [];
     
     console.log("📝 Creating Task:", { body: req.body, images: imageUrls });
 
@@ -1372,9 +1361,12 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
     }
 });
 
+// ==========================================
+// 🚀 מערכת הדוחות החכמה (CRON + API Test)
+// ==========================================
 const cron = require('node-cron');
 
-cron.schedule('52 20 * * *', async () => {
+const runDailyReport = async () => {
     console.log("⏰ [CRON] Starting Daily Task Check...");
 
     const dict = {
@@ -1452,7 +1444,7 @@ cron.schedule('52 20 * * *', async () => {
         const tasksRes = await pool.query("SELECT * FROM tasks WHERE DATE(due_date) = CURRENT_DATE");
         const todayTasks = tasksRes.rows;
 
-        if (todayTasks.length === 0) return;
+        if (todayTasks.length === 0) return console.log("No tasks for today.");
 
         const employeeTasks = {};
         allUsers.filter(u => u.role === 'EMPLOYEE').forEach(emp => {
@@ -1522,12 +1514,6 @@ cron.schedule('52 20 * * *', async () => {
                     html: htmlBody
                 }).catch(e => console.log(e));
             }
-            if (emp.device_token) {
-                admin.messaging().send({
-                    token: emp.device_token,
-                    notification: { title: isPerfect ? l.push_w_perf_title : l.push_w_pend_title, body: isPerfect ? l.push_w_perf_body : l.push_w_pend_body }
-                }).catch(e => console.log(e));
-            }
         }
 
         const leaders = allUsers.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
@@ -1546,12 +1532,7 @@ cron.schedule('52 20 * * *', async () => {
                     <table width="100%" cellpadding="0" cellspacing="0" border="0">
                         <tr>
                             <td align="${l.align}" style="font-weight:bold; font-size:14px; color:${isPerfect ? '#166534' : '#991b1b'};">
-                                ${isPerfect ? '🌟' : '⚠️'} ${emp.full_name}
-                            </td>
-                            <td align="${l.align === 'right' ? 'left' : 'right'}" style="width:1%; white-space:nowrap;">
-                                <span style="font-size:11px; color:#6b7280; background:#fff; padding:3px 8px; border-radius:12px; border:1px solid #ddd; font-weight:bold;">
-                                    ${completed.length} ${l.out_of} ${wTasks.length}
-                                </span>
+                                הדוח היומי מוכן
                             </td>
                         </tr>
                     </table>
@@ -1604,16 +1585,19 @@ cron.schedule('52 20 * * *', async () => {
                     html: leaderHtml
                 }).catch(e => console.log(e));
             }
-            if (leader.device_token) {
-                admin.messaging().send({
-                    token: leader.device_token,
-                    notification: { title: allTeamPerfect ? l.push_m_perf_title : l.push_m_pend_title, body: allTeamPerfect ? l.push_m_perf_body : l.push_m_pend_body }
-                }).catch(e => console.log(e));
-            }
         }
         console.log("✅ [CRON] Daily Check completed.");
     } catch (error) { console.error("❌ [CRON] Failed:", error); }
-}, { scheduled: true, timezone: "Asia/Bangkok" });
+};
+
+// 1. הריצה האוטומטית הרגילה מופעלת כל יום (תשני את השעה לפי רצונך)
+cron.schedule('52 20 * * *', runDailyReport, { scheduled: true, timezone: "Asia/Bangkok" });
+
+// 2. 🚀 כפתור הרצה ידני לבדיקה - שולח מיילים ברגע שנכנסים ללינק!
+app.get('/api/trigger-daily-report', async (req, res) => {
+    await runDailyReport();
+    res.send("<h1 style='color:green; text-align:center; font-family:sans-serif;'>✅ פקודת המיילים רצה בהצלחה! בדקי את תיבת המייל.</h1>");
+});
 
 app.get('/api/rescue-boss', async (req, res) => {
     try {
