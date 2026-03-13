@@ -825,8 +825,9 @@ app.get('/tasks', authenticateToken, async (req, res) => {
 
 app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   try {
+    // 🚀 תיקון הענן: משיכת הלינק המאובטח מ-Cloudinary!
     const files = req.files || [];
-    const imageUrls = files.map(file => file.path);
+    const imageUrls = files.map(file => file.secure_url || file.path);
     
     console.log("📝 Creating Task:", { body: req.body, images: imageUrls });
 
@@ -884,20 +885,26 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         createdCount = tasksToInsert.length;
     }
     
+    // 🚀 תיקון ההתראות - מזהה את השפה של העובד!
     try {
-        const workerRes = await pool.query('SELECT device_token FROM users WHERE id = $1', [worker_id]);
-        const workerToken = workerRes.rows[0]?.device_token;
+        const workerRes = await pool.query('SELECT device_token, preferred_language FROM users WHERE id = $1', [worker_id]);
+        const workerData = workerRes.rows[0];
 
-        if (workerToken) {
+        if (workerData && workerData.device_token) {
+            const workerLang = workerData.preferred_language || 'he';
+            
+            const pushDict = {
+                he: { title: 'משימה חדשה! 📋', body: `הוקצתה לך משימה חדשה: ${title}` },
+                en: { title: 'New Task! 📋', body: `You have been assigned a new task: ${title}` },
+                th: { title: 'งานใหม่! 📋', body: `คุณได้รับมอบหมายงานใหม่: ${title}` }
+            };
+
             await admin.messaging().send({
-                token: workerToken,
-                notification: {
-                    title: 'משימה חדשה! 📋',
-                    body: `הוקצתה לך משימה חדשה: ${title}`
-                },
+                token: workerData.device_token,
+                notification: pushDict[workerLang],
                 webpush: { fcmOptions: { link: '/' } }
             });
-            console.log("🔔 Notification sent to worker!");
+            console.log(`🔔 Notification sent to worker in ${workerLang}!`);
         }
     } catch (err) {
         console.error("⚠️ Failed to send notification:", err.message);

@@ -5,22 +5,22 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   const [frequency, setFrequency] = useState('Once'); 
   const currentUser = user;
 
-  // 👇 תיקון מקיף: מזהה מנהלים ועובדים בכל השפות והגדלים
   const userRole = currentUser?.role ? String(currentUser.role).toUpperCase() : '';
   const isEmployee = userRole === 'EMPLOYEE' || userRole === 'WORKER' || userRole === 'עובד';
-  // אם יש משתמש והוא לא עובד - הוא מנהל ויכול להקצות משימות
   const isManager = currentUser && !isEmployee;
 
-  const getCurrentDateTime = () => {
+  // 🚀 שעון בנגקוק - תמיד ימשוך את השעה הנכונה בתאילנד!
+  const getCurrentBkkTime = () => {
       const now = new Date();
-      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-      return now.toISOString().slice(0, 16);
+      const bkkTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+      bkkTime.setMinutes(bkkTime.getMinutes() - bkkTime.getTimezoneOffset());
+      return bkkTime.toISOString().slice(0, 16);
   };
 
   const [formData, setFormData] = useState({
     title: '', 
     urgency: 'Normal', 
-    due_date: getCurrentDateTime(), 
+    due_date: getCurrentBkkTime(), 
     location_id: '', 
     asset_id: '', 
     assigned_worker_id: isEmployee ? currentUser?.id : '', 
@@ -69,13 +69,11 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
       ? assets.filter(a => a.category_id === parseInt(selectedCategory))
       : [];
 
-  // 👇 סינון חכם של העובדים בלבד (בכל השפות)
   const employeesOnly = teamMembers.filter(member => {
       const r = member?.role ? String(member.role).toUpperCase() : '';
       return r === 'EMPLOYEE' || r === 'WORKER' || r === 'עובד';
   });
   
-  // הגנה: אם אין עובדים, נציג את כל חברי הצוות כדי שהשדה לא יהיה ריק
   const optionsToRender = employeesOnly.length > 0 ? employeesOnly : teamMembers;
 
   const toggleDay = (dayIndex) => {
@@ -178,7 +176,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
             
-            <div className="bg-white p-4 rounded-xl border border-[#714B67] shadow-sm">
+            <div className="bg-white p-4 rounded-xl border border-[#714B67]/30 shadow-sm">
                 <label className="block text-sm font-bold text-[#714B67] mb-2 flex items-center gap-2">
                     <Calendar size={18}/> {t.frequency_label || "Frequency / Date"} 
                     <span className="text-red-500 ml-1">*</span>
@@ -201,7 +199,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                             {frequency === 'Once' ? (t.pick_date || "Pick Date & Time") : (t.start_date || "Start Date")}
                         </label>
                         <div className="relative w-full">
-                            <input type="datetime-local" className="w-full p-2 border border-[#714B67] rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-purple-200 min-w-0" 
+                            <input type="datetime-local" className="w-full p-2 border border-[#714B67]/30 rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-[#714B67]/30 min-w-0" 
                              value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
                             />
                         </div>
@@ -271,7 +269,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                  </div>
             </div>
 
-            {/* 👇 הצגת רשימת העובדים רק אם המשתמש הוא מנהל */}
             {isManager && (
                 <div>
                     <label className="text-sm font-bold text-gray-700 block mb-1">
@@ -311,12 +308,14 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 <label className="text-sm font-bold text-gray-700 block mb-1 flex items-center gap-1">
                     <Camera size={16}/> {t.add_image || "Add Photos/Video"}
                 </label>
+                
+                {/* 🚀 התיקון העיצובי לכפתור העלאת קבצים */}
                 <input 
                     type="file" 
                     multiple 
                     accept="image/*,video/*" 
                     onChange={handleFileChange} 
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] hover:file:bg-[#714B67]/10 cursor-pointer" 
                 />
                 
                 {selectedFiles.length > 0 && (
@@ -334,7 +333,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         </div>
 
         <div className="p-4 border-t bg-gray-50 shrink-0">
-            <button onClick={handleSubmit} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:#5a3b52 transition transform active:scale-95 text-lg">
+            <button onClick={handleSubmit} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:bg-[#5a3b52] transition transform active:scale-95 text-lg">
                 {t.save_task_btn || "Create Task"}
             </button>
         </div>

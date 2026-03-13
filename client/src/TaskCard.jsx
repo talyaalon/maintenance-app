@@ -2,10 +2,19 @@ import React from 'react';
 import { Clock, MapPin, Box, Image as ImageIcon, Video, User } from 'lucide-react';
 import { format, parseISO, isBefore, startOfDay } from 'date-fns';
 
+// 🚀 פונקציה חכמה שממירה כל שעה לשעון בנגקוק
+const getBkkTime = (dateInput) => {
+    if (!dateInput) return new Date();
+    const d = new Date(dateInput);
+    return new Date(d.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+};
+
 const TaskCard = ({ task, onClick, t, compact = false }) => {
-  const isOverdue = task.status === 'PENDING' && isBefore(parseISO(task.due_date), startOfDay(new Date()));
+  const taskBkkDate = getBkkTime(task.due_date);
+  const todayBkk = getBkkTime(new Date());
   
-  // צבעים עדינים יותר
+  const isOverdue = task.status === 'PENDING' && isBefore(taskBkkDate, startOfDay(todayBkk));
+  
   const urgencyColor = task.urgency === 'High' ? 'bg-red-50 text-red-700 border-red-100' 
                      : task.urgency === 'Low' ? 'bg-blue-50 text-blue-600 border-blue-100'
                      : 'bg-gray-50 text-gray-600 border-gray-100';
@@ -16,10 +25,9 @@ const TaskCard = ({ task, onClick, t, compact = false }) => {
 
   return (
     <div onClick={onClick} className="bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-all relative overflow-hidden group mb-2.5">
-        {/* פס צבע צדי בצבע הסגול הנכון */}
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${isOverdue ? 'bg-red-500' : task.status === 'COMPLETED' ? 'bg-green-500' : task.status === 'WAITING_APPROVAL' ? 'bg-orange-400' : 'bg-[#714B67]'}`}></div>
         
-        <div className="p-3 pl-4"> {/* הקטנו רווחים למובייל */}
+        <div className="p-3 pl-4">
             <div className="flex justify-between items-start mb-1.5">
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded-md">
                     <Box size={10} />
@@ -28,7 +36,6 @@ const TaskCard = ({ task, onClick, t, compact = false }) => {
                     </span>
                 </div>
                 <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${urgencyColor}`}>
-                    {/* הורדנו את האימוג'י של האש */}
                     {task.urgency === 'High' ? t.urgent_label : t.normal_label}
                 </div>
             </div>
@@ -47,7 +54,6 @@ const TaskCard = ({ task, onClick, t, compact = false }) => {
                         <MapPin size={12} className="text-[#714B67]"/>
                         <span>{task.location_name || "No Loc"}</span>
                     </div>
-                    {/* הוספת שם העובד */}
                     {task.worker_name && (
                         <div className="flex items-center gap-1 text-[#714B67] font-medium bg-[#fdf4ff] px-1.5 py-0.5 rounded-md text-[10px]">
                             <User size={10}/> {task.worker_name.split(' ')[0]}
@@ -57,8 +63,8 @@ const TaskCard = ({ task, onClick, t, compact = false }) => {
 
                 <div className={`flex items-center gap-1 font-medium ${isOverdue ? 'text-red-500' : ''}`}>
                     <Clock size={12}/>
-                    {/* הצגת שעה */}
-                    <span>{format(parseISO(task.due_date), 'dd/MM HH:mm')}</span>
+                    {/* 🚀 השעון מתורגם לבנגקוק אוטומטית */}
+                    <span>{format(taskBkkDate, 'dd/MM HH:mm')}</span>
                 </div>
             </div>
         </div>
