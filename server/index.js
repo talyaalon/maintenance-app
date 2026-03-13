@@ -38,24 +38,31 @@ const app = express();
 const port = 3001;
 const SECRET_KEY = 'my_super_secret_key';
 
-// ==========================================
-// ☁️ הגדרות Cloudinary - מקבל גם תמונות וגם מסמכים (ODF, PDF, אקסל)
-// ==========================================
 cloudinary.config({
   cloud_name: 'dojnc3j0r',
   api_key: '133411631835124',
   api_secret: '-7M6Z0dvS0fPFkQiEuWj66FWPXM'
 });
 
+
+// הגדרות העלאת קבצים
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
         folder: 'maintenance_app_files',
-        resource_type: 'auto' // מאפשר העלאה של כל סוגי הקבצים לענן!
+        resource_type: 'auto' // 🚀 חשוב! מאפשר גם תמונות, גם PDF, וגם ODF/אקסל
     }
 });
 
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+
+// 🚀 הסרנו את החסימה הנוקשה (fileFilter) כדי שתוכלי להעלות ODF, אקסל, ומסמכים מכל סוג בחופשיות!
 const upload = multer({ storage: storage });
+// 👆 התיקון הגדול מסתיים כאן 👆
 
 console.log("📧 Configuring Email using Brevo SMTP...");
 const transporter = nodemailer.createTransport({
@@ -324,7 +331,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         
         let profile_picture_url = req.body.existing_picture || null;
         if (req.file) {
-            profile_picture_url = req.file.path; // מעודכן לקחת מ-Cloudinary!
+            profile_picture_url = `/uploads/${req.file.filename}`;
         }
 
         const lang = preferred_language || 'en';
@@ -568,7 +575,7 @@ app.delete('/location-fields/:id', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// ניהול מיקומים - מותאם לענן ושומר קבצים מכל סוג
+// ניהול מיקומים
 // ==========================================
 app.get('/locations', authenticateToken, async (req, res) => {
     try {
@@ -588,11 +595,14 @@ app.get('/locations', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error'); }
 });
 
+// ==========================================
+// ניהול מיקומים - חסין תקלות ושומר ב-Cloudinary
+// ==========================================
 app.post('/locations', authenticateToken, (req, res) => {
     upload.any()(req, res, async (uploadErr) => {
         if (uploadErr) {
-            console.error("Upload Error:", uploadErr);
-            return res.status(500).json({ error: "שגיאה בהעלאת קובץ: " + uploadErr.message });
+            console.error("Multer Upload Error:", uploadErr);
+            return res.status(500).json({ error: "שגיאה בקליטת הקובץ: " + uploadErr.message });
         }
         
         try { 
@@ -620,13 +630,16 @@ app.post('/locations', authenticateToken, (req, res) => {
 
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => {
-                    // שימוש ב-file.path שמגיע ישירות מ-Cloudinary!
+                    // 🚀 התיקון הקריטי: שולף את הלינק של הענן במקום לשמור מקומית!
+                    const fileUrl = file.secure_url || file.path;
+                    
                     if (file.fieldname === 'main_image') {
-                        mainImageUrl = file.path;
+                        mainImageUrl = fileUrl;
                     } else if (file.fieldname.startsWith('dynamic_')) {
                         const fieldId = file.fieldname.replace('dynamic_', '');
-                        const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId));
-                        if (fieldObj) fieldObj.value = file.path;
+                        // תמיכה בשדות ישנים וחדשים
+                        const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId) || f.name === fieldId);
+                        if (fieldObj) fieldObj.value = fileUrl;
                     }
                 });
             }
@@ -639,7 +652,7 @@ app.post('/locations', authenticateToken, (req, res) => {
             res.json(r.rows[0]); 
         } catch (e) { 
             console.error("❌ Location POST Error:", e);
-            res.status(500).json({ error: 'תקלה בשמירת הנתונים: ' + e.message }); 
+            res.status(500).json({ error: 'תקלה בשמירת הנתונים במסד: ' + e.message }); 
         }
     });
 });
@@ -647,8 +660,8 @@ app.post('/locations', authenticateToken, (req, res) => {
 app.put('/locations/:id', authenticateToken, (req, res) => {
     upload.any()(req, res, async (uploadErr) => {
         if (uploadErr) {
-            console.error("Upload Error:", uploadErr);
-            return res.status(500).json({ error: "שגיאה בהעלאת קובץ: " + uploadErr.message });
+            console.error("Multer Upload Error:", uploadErr);
+            return res.status(500).json({ error: "שגיאה בקליטת הקובץ: " + uploadErr.message });
         }
 
         try { 
@@ -660,12 +673,15 @@ app.put('/locations/:id', authenticateToken, (req, res) => {
 
             if (req.files && req.files.length > 0) {
                 req.files.forEach(file => {
+                    // 🚀 התיקון הקריטי: שולף את הלינק של הענן!
+                    const fileUrl = file.secure_url || file.path;
+                    
                     if (file.fieldname === 'main_image') {
-                        mainImageUrl = file.path;
+                        mainImageUrl = fileUrl;
                     } else if (file.fieldname.startsWith('dynamic_')) {
                         const fieldId = file.fieldname.replace('dynamic_', '');
-                        const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId));
-                        if (fieldObj) fieldObj.value = file.path;
+                        const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId) || f.name === fieldId);
+                        if (fieldObj) fieldObj.value = fileUrl;
                     }
                 });
             }
@@ -677,7 +693,7 @@ app.put('/locations/:id', authenticateToken, (req, res) => {
             res.json(r.rows[0]); 
         } catch (e) { 
             console.error("❌ Location PUT Error:", e);
-            res.status(500).json({ error: 'תקלה בעדכון הנתונים: ' + e.message }); 
+            res.status(500).json({ error: 'תקלה בעדכון הנתונים במסד: ' + e.message }); 
         }
     });
 });
@@ -833,7 +849,8 @@ app.get('/tasks', authenticateToken, async (req, res) => {
 
 app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   try {
-    const imageUrls = req.files ? req.files.map(file => file.path) : [];
+    const files = req.files || [];
+    const imageUrls = files.map(file => file.path);
     
     console.log("📝 Creating Task:", { body: req.body, images: imageUrls });
 
@@ -1361,80 +1378,95 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
     }
 });
 
-// ==========================================
-// 🚀 מערכת הדוחות החכמה (CRON + API Test)
-// ==========================================
 const cron = require('node-cron');
 
 const runDailyReport = async () => {
-    console.log("⏰ [CRON] Starting Daily Task Check...");
+    console.log("⏰ Running Daily Task Check for EVERYONE...");
 
     const dict = {
         he: {
             dir: 'rtl', align: 'right',
             perf_subj: '🌟 אלופה! סיימת את כל המשימות',
             pend_subj: '⚠️ דוח יומי: עליך להשלים משימות פתוחות',
+            none_subj: '🏖️ איזה כיף! אין לך משימות להיום',
             w_perf_title: 'כל הכבוד סיימת הכל! 🎉',
             w_pend_title: 'לא סיימת את המשימות להיום! ⏰',
+            w_none_title: 'אין לך משימות להיום! 🏖️',
             w_perf_body: 'להלן הסיכום שלך להיום:',
             w_pend_body: 'פירוט המשימות שביצעת ואלו שעליך להשלים בדחיפות:',
+            w_none_body: 'תהנה מהיום שלך, אין משימות פתוחות שמשויכות אליך.',
             m_perf_subj: '🌟 סיכום יומי: כל הצוות סיים בהצטיינות!',
             m_pend_subj: '📊 סיכום יומי: יש משימות פתוחות בצוות',
+            m_none_subj: '🏖️ סיכום יומי: לצוות אין משימות היום',
             m_title: 'דוח ביצועי צוות יומי 📊',
             m_desc: 'להלן סטטוס המשימות של העובדים להיום.',
             btn_app: 'לכניסה לאפליקציה לחץ כאן',
             th_task: 'משימה', th_status: 'סטטוס', th_note: 'הערות ביצוע',
-            status_done: 'בוצע ✔️', status_not: 'לא בוצע ❌',
+            status_done: 'בוצע ✔️', status_not: 'לא בוצע ❌', status_none: 'ללא משימות היום 🏖️',
             perf_badge: 'סיים/ה הכל!', pend_badge: 'יש משימות פתוחות',
             out_of: 'מתוך',
             push_w_perf_title: 'סיימת הכל! 🏆', push_w_perf_body: 'כל הכבוד! הסיכום היומי נשלח למייל.',
             push_w_pend_title: 'יש משימות פתוחות! ⏰', push_w_pend_body: 'נותרו לך משימות להשלים.',
+            push_w_none_title: 'יום חופשי! 🏖️', push_w_none_body: 'אין לך משימות פתוחות להיום.',
             push_m_perf_title: 'הצוות סיים הכל! 🏆', push_m_perf_body: 'כל העובדים סיימו את המשימות.',
-            push_m_pend_title: 'דוח יומי מוכן 📊', push_m_pend_body: 'לצוות שלך יש משימות פתוחות. הדוח נשלח למייל.'
+            push_m_pend_title: 'דוח יומי מוכן 📊', push_m_pend_body: 'לצוות שלך יש משימות פתוחות. הדוח נשלח למייל.',
+            push_m_none_title: 'אין משימות לצוות 🏖️', push_m_none_body: 'הצוות שלך סיים הכל להיום.'
         },
         en: {
             dir: 'ltr', align: 'left',
             perf_subj: '🌟 Awesome! All tasks completed',
             pend_subj: '⚠️ Daily Report: Pending tasks to complete',
+            none_subj: '🏖️ Free day! No tasks for today',
             w_perf_title: 'Great job, you finished everything! 🎉',
             w_pend_title: 'You have pending tasks today! ⏰',
+            w_none_title: 'Enjoy, no tasks for today! 🏖️',
             w_perf_body: 'Here is your summary for today:',
             w_pend_body: 'Details of your tasks and what needs urgent completion:',
+            w_none_body: 'There are no tasks assigned to you today.',
             m_perf_subj: '🌟 Daily Summary: Entire team excelled!',
             m_pend_subj: '📊 Daily Summary: Pending tasks in your team',
+            m_none_subj: '🏖️ Daily Summary: Team has no tasks today',
             m_title: 'Daily Team Performance 📊',
             m_desc: 'Here is the task status of your employees for today.',
             btn_app: 'Click here to open the app',
             th_task: 'Task', th_status: 'Status', th_note: 'Notes',
-            status_done: 'Done ✔️', status_not: 'Pending ❌',
+            status_done: 'Done ✔️', status_not: 'Pending ❌', status_none: 'No tasks today 🏖️',
             perf_badge: 'Finished all!', pend_badge: 'Pending tasks',
             out_of: 'out of',
             push_w_perf_title: 'All done! 🏆', push_w_perf_body: 'Great job! Daily summary sent to email.',
             push_w_pend_title: 'Pending tasks! ⏰', push_w_pend_body: 'You have tasks left to complete.',
+            push_w_none_title: 'Free day! 🏖️', push_w_none_body: 'You have no tasks today.',
             push_m_perf_title: 'Team finished! 🏆', push_m_perf_body: 'All employees completed their tasks.',
-            push_m_pend_title: 'Daily Report 📊', push_m_pend_body: 'Your team has pending tasks. Report sent to email.'
+            push_m_pend_title: 'Daily Report 📊', push_m_pend_body: 'Your team has pending tasks. Report sent to email.',
+            push_m_none_title: 'No team tasks 🏖️', push_m_none_body: 'Your team has no tasks today.'
         },
         th: {
             dir: 'ltr', align: 'left',
             perf_subj: '🌟 ยอดเยี่ยม! ทำภารกิจเสร็จสิ้นทั้งหมด',
             pend_subj: '⚠️ รายงานประจำวัน: มีภารกิจที่ต้องทำ',
+            none_subj: '🏖️ วันว่าง! ไม่มีภารกิจสำหรับวันนี้',
             w_perf_title: 'ทำได้ดีมาก คุณทำเสร็จหมดแล้ว! 🎉',
             w_pend_title: 'คุณมีภารกิจค้างอยู่สำหรับวันนี้! ⏰',
+            w_none_title: 'วันนี้ไม่มีภารกิจ! 🏖️',
             w_perf_body: 'นี่คือสรุปของคุณสำหรับวันนี้:',
             w_pend_body: 'รายละเอียดภารกิจและสิ่งที่ต้องทำด่วน:',
+            w_none_body: 'วันนี้ไม่มีงานที่ได้รับมอบหมาย',
             m_perf_subj: '🌟 สรุปประจำวัน: ทีมทำงานยอดเยี่ยม!',
             m_pend_subj: '📊 สรุปประจำวัน: มีภารกิจค้างในทีม',
+            m_none_subj: '🏖️ สรุปประจำวัน: ทีมไม่มีภารกิจวันนี้',
             m_title: 'ผลงานทีมประจำวัน 📊',
             m_desc: 'สถานะภารกิจของพนักงานสำหรับวันนี้.',
             btn_app: 'คลิกที่นี่เพื่อเปิดแอป',
             th_task: 'งาน', th_status: 'สถานะ', th_note: 'หมายเหตุ',
-            status_done: 'เสร็จ ✔️', status_not: 'รอดำเนินการ ❌',
+            status_done: 'เสร็จ ✔️', status_not: 'รอดำเนินการ ❌', status_none: 'ไม่มีงาน 🏖️',
             perf_badge: 'เสร็จหมด!', pend_badge: 'มีงานค้าง',
             out_of: 'จาก',
             push_w_perf_title: 'เสร็จหมด! 🏆', push_w_perf_body: 'ยอดเยี่ยม! ส่งสรุปไปที่อีเมลแล้ว.',
             push_w_pend_title: 'มีงานค้าง! ⏰', push_w_pend_body: 'คุณมีงานที่ต้องทำต่อ.',
+            push_w_none_title: 'วันว่าง! 🏖️', push_w_none_body: 'วันนี้ไม่มีภารกิจ',
             push_m_perf_title: 'ทีมเสร็จงาน! 🏆', push_m_perf_body: 'พนักงานทุกคนทำงานเสร็จแล้ว.',
-            push_m_pend_title: 'รายงานประจำวัน 📊', push_m_pend_body: 'ทีมของคุณมีงานค้าง ส่งรายงานไปที่อีเมลแล้ว.'
+            push_m_pend_title: 'รายงานประจำวัน 📊', push_m_pend_body: 'ทีมของคุณมีงานค้าง ส่งรายงานไปที่อีเมลแล้ว.',
+            push_m_none_title: 'ไม่มีงานทีม 🏖️', push_m_none_body: 'ทีมของคุณไม่มีงานวันนี้'
         }
     };
 
@@ -1444,14 +1476,7 @@ const runDailyReport = async () => {
         const tasksRes = await pool.query("SELECT * FROM tasks WHERE DATE(due_date) = CURRENT_DATE");
         const todayTasks = tasksRes.rows;
 
-        if (todayTasks.length === 0) return console.log("No tasks for today.");
-
-        const employeeTasks = {};
-        allUsers.filter(u => u.role === 'EMPLOYEE').forEach(emp => {
-            const myTasks = todayTasks.filter(t => t.worker_id === emp.id);
-            if (myTasks.length > 0) employeeTasks[emp.id] = { user: emp, tasks: myTasks };
-        });
-
+        // הפונקציה המקורית שלך לעטיפת המייל
         const getEmailTemplate = (langDict, content) => `
         <!DOCTYPE html>
         <html>
@@ -1466,39 +1491,55 @@ const runDailyReport = async () => {
         </body>
         </html>`;
 
-        for (const empId in employeeTasks) {
-            const { user: emp, tasks: wTasks } = employeeTasks[empId];
+        // ==========================================
+        // 1. שליחת דוחות לכלל העובדים
+        // ==========================================
+        const employees = allUsers.filter(u => u.role === 'EMPLOYEE');
+        for (const emp of employees) {
             const l = dict[emp.preferred_language] || dict['he']; 
             
+            const wTasks = todayTasks.filter(t => t.worker_id === emp.id);
             const completed = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
             const pending = wTasks.filter(t => t.status === 'PENDING');
-            const isPerfect = pending.length === 0;
-
-            let tableHtml = `
-            <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:13px;">
-                <tr style="background:#f3f4f6; text-align:${l.align};">
-                    <th style="padding:8px 6px; border-bottom:1px solid #e5e7eb;">${l.th_task}</th>
-                    <th style="padding:8px 6px; border-bottom:1px solid #e5e7eb;">${l.th_status}</th>
-                </tr>`;
             
-            wTasks.forEach(t => {
-                const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
-                tableHtml += `
-                <tr>
-                    <td style="padding:8px 6px; border-bottom:1px solid #e5e7eb; color:#374151;">${t.title}</td>
-                    <td style="padding:8px 6px; border-bottom:1px solid #e5e7eb; font-size:11px;">
-                        <span style="background:${isDone ? '#dcfce7' : '#fee2e2'}; color:${isDone ? '#166534' : '#991b1b'}; padding:3px 6px; border-radius:12px; white-space:nowrap;">
-                            ${isDone ? l.status_done : l.status_not}
-                        </span>
-                    </td>
-                </tr>`;
-            });
-            tableHtml += `</table>`;
+            const isNone = wTasks.length === 0;
+            const isPerfect = !isNone && pending.length === 0;
+
+            let tableHtml = '';
+            if (!isNone) {
+                tableHtml = `
+                <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:13px;">
+                    <tr style="background:#f3f4f6; text-align:${l.align};">
+                        <th style="padding:8px 6px; border-bottom:1px solid #e5e7eb;">${l.th_task}</th>
+                        <th style="padding:8px 6px; border-bottom:1px solid #e5e7eb;">${l.th_status}</th>
+                    </tr>`;
+                
+                wTasks.forEach(t => {
+                    const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                    tableHtml += `
+                    <tr>
+                        <td style="padding:8px 6px; border-bottom:1px solid #e5e7eb; color:#374151;">${t.title}</td>
+                        <td style="padding:8px 6px; border-bottom:1px solid #e5e7eb; font-size:11px;">
+                            <span style="background:${isDone ? '#dcfce7' : '#fee2e2'}; color:${isDone ? '#166534' : '#991b1b'}; padding:3px 6px; border-radius:12px; white-space:nowrap;">
+                                ${isDone ? l.status_done : l.status_not}
+                            </span>
+                        </td>
+                    </tr>`;
+                });
+                tableHtml += `</table>`;
+            }
+
+            let emailSubj = isNone ? l.none_subj : (isPerfect ? l.perf_subj : l.pend_subj);
+            let bodyTitle = isNone ? l.w_none_title : (isPerfect ? l.w_perf_title : l.w_pend_title);
+            let bodyText = isNone ? l.w_none_body : (isPerfect ? l.w_perf_body : l.w_pend_body);
+            let titleColor = isNone ? '#3b82f6' : (isPerfect ? '#166534' : '#991b1b');
+            let pushTitle = isNone ? l.push_w_none_title : (isPerfect ? l.push_w_perf_title : l.push_w_pend_title);
+            let pushBody = isNone ? l.push_w_none_body : (isPerfect ? l.push_w_perf_body : l.push_w_pend_body);
 
             const htmlBody = getEmailTemplate(l, `
                 <div style="padding:15px;">
-                    <h3 style="margin:0 0 5px 0; font-size:16px; color:${isPerfect ? '#166534' : '#991b1b'};">${isPerfect ? l.w_perf_title : l.w_pend_title}</h3>
-                    <p style="margin:0; font-size:13px; color:#4b5563;">${emp.full_name}, ${isPerfect ? l.w_perf_body : l.w_pend_body}</p>
+                    <h3 style="margin:0 0 5px 0; font-size:16px; color:${titleColor};">${bodyTitle}</h3>
+                    <p style="margin:0; font-size:13px; color:#4b5563;">${emp.full_name}, ${bodyText}</p>
                     ${tableHtml}
                     <div style="text-align:center; margin-top:20px;">
                         <a href="https://air-manage-app.netlify.app/" style="display:inline-block; background:#714B67; color:#fff; padding:10px 20px; text-decoration:none; border-radius:6px; font-size:14px; font-weight:bold;">${l.btn_app}</a>
@@ -1506,97 +1547,97 @@ const runDailyReport = async () => {
                 </div>
             `);
 
-            if (emp.email) {
-                transporter.sendMail({
-                    from: '"OpsManager App" <maintenance.app.tkp@gmail.com>',
-                    to: emp.email,
-                    subject: isPerfect ? l.perf_subj : l.pend_subj,
-                    html: htmlBody
-                }).catch(e => console.log(e));
-            }
+            if (emp.email) transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: emp.email, subject: emailSubj, html: htmlBody }).catch(e => console.log(e));
+            if (emp.device_token) admin.messaging().send({ token: emp.device_token, notification: { title: pushTitle, body: pushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.log(e));
         }
 
+        // ==========================================
+        // 2. שליחת דוחות מלאים למנהלים (כולל מי שאין לו משימות)
+        // ==========================================
         const leaders = allUsers.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
         for (const leader of leaders) {
             const relevantEmps = leader.role === 'BIG_BOSS' 
-                ? Object.values(employeeTasks) 
-                : Object.values(employeeTasks).filter(e => e.user.parent_manager_id === leader.id);
+                ? employees 
+                : employees.filter(e => e.parent_manager_id === leader.id);
 
             if (relevantEmps.length === 0) continue;
 
             const l = dict[leader.preferred_language] || dict['he'];
             let allTeamPerfect = true;
-            
-            let leaderContent = `
-                <div style="background:${isPerfect ? '#f0fdf4' : '#fef2f2'}; padding:8px 10px; border-bottom:1px solid #e5e7eb;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                        <tr>
-                            <td align="${l.align}" style="font-weight:bold; font-size:14px; color:${isPerfect ? '#166534' : '#991b1b'};">
-                                הדוח היומי מוכן
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-            `;
+            let allTeamNone = true;
 
-            relevantEmps.forEach(empData => {
-                const { user: emp, tasks: wTasks } = empData;
+            let leaderContent = `<div>`;
+
+            relevantEmps.forEach(emp => {
+                const wTasks = todayTasks.filter(t => t.worker_id === emp.id);
                 const completed = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
-                const isPerfect = completed.length === wTasks.length;
-                if (!isPerfect) allTeamPerfect = false;
+                
+                const isEmpNone = wTasks.length === 0;
+                const isEmpPerfect = !isEmpNone && (completed.length === wTasks.length);
+
+                if (!isEmpNone) allTeamNone = false;
+                if (!isEmpPerfect && !isEmpNone) allTeamPerfect = false;
+
+                let empStatusColor = isEmpNone ? '#6b7280' : (isEmpPerfect ? '#166534' : '#991b1b');
+                let empBgColor = isEmpNone ? '#f9fafb' : (isEmpPerfect ? '#f0fdf4' : '#fef2f2');
+                let empIcon = isEmpNone ? '🏖️' : (isEmpPerfect ? '🌟' : '⚠️');
+                let empBadge = isEmpNone ? l.status_none : `${completed.length} ${l.out_of} ${wTasks.length}`;
 
                 leaderContent += `
                     <div style="margin-bottom:12px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden;">
-                        <div style="background:${isPerfect ? '#f0fdf4' : '#fef2f2'}; padding:8px 10px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-weight:bold; font-size:14px; color:${isPerfect ? '#166534' : '#991b1b'};">${isPerfect ? '🌟' : '⚠️'} ${emp.full_name}</span>
-                            <span style="font-size:11px; color:#6b7280; background:#fff; padding:2px 6px; border-radius:10px; border:1px solid #ddd;">${completed.length} ${l.out_of} ${wTasks.length}</span>
-                        </div>
+                        <div style="background:${empBgColor}; padding:8px 10px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:bold; font-size:14px; color:${empStatusColor};">${empIcon} ${emp.full_name}</span>
+                            <span style="font-size:11px; color:#6b7280; background:#fff; padding:2px 6px; border-radius:10px; border:1px solid #ddd;">${empBadge}</span>
+                        </div>`;
+                
+                if (!isEmpNone) {
+                    leaderContent += `
                         <table style="width:100%; border-collapse:collapse; font-size:12px;">
                             <tr style="background:#f9fafb; text-align:${l.align}; color:#4b5563;">
                                 <th style="padding:6px; border-bottom:1px solid #eee;">${l.th_task}</th>
                                 <th style="padding:6px; border-bottom:1px solid #eee;">${l.th_status}</th>
                             </tr>
-                `;
-
-                wTasks.forEach(t => {
-                    const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
-                    leaderContent += `
-                        <tr>
-                            <td style="padding:6px; border-bottom:1px solid #eee;">${t.title}</td>
-                            <td style="padding:6px; border-bottom:1px solid #eee;">
-                                <span style="background:${isDone ? '#dcfce7' : '#fee2e2'}; color:${isDone ? '#166534' : '#991b1b'}; padding:2px 4px; border-radius:4px; white-space:nowrap; font-size:10px;">
-                                    ${isDone ? l.status_done : l.status_not}
-                                </span>
-                            </td>
-                        </tr>
                     `;
-                });
-                leaderContent += `</table></div>`;
+
+                    wTasks.forEach(t => {
+                        const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                        leaderContent += `
+                            <tr>
+                                <td style="padding:6px; border-bottom:1px solid #eee;">${t.title}</td>
+                                <td style="padding:6px; border-bottom:1px solid #eee;">
+                                    <span style="background:${isDone ? '#dcfce7' : '#fee2e2'}; color:${isDone ? '#166534' : '#991b1b'}; padding:2px 4px; border-radius:4px; white-space:nowrap; font-size:10px;">
+                                        ${isDone ? l.status_done : l.status_not}
+                                    </span>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    leaderContent += `</table>`;
+                }
+                leaderContent += `</div>`;
             });
 
             leaderContent += `</div>`;
             const leaderHtml = getEmailTemplate(l, leaderContent);
 
-            if (leader.email) {
-                transporter.sendMail({
-                    from: '"OpsManager App" <maintenance.app.tkp@gmail.com>',
-                    to: leader.email,
-                    subject: allTeamPerfect ? l.m_perf_subj : l.m_pend_subj,
-                    html: leaderHtml
-                }).catch(e => console.log(e));
-            }
+            let lSubj = allTeamNone ? l.m_none_subj : (allTeamPerfect ? l.m_perf_subj : l.m_pend_subj);
+            let lPushTitle = allTeamNone ? l.push_m_none_title : (allTeamPerfect ? l.push_m_perf_title : l.push_m_pend_title);
+            let lPushBody = allTeamNone ? l.push_m_none_body : (allTeamPerfect ? l.push_m_perf_body : l.push_m_pend_body);
+
+            if (leader.email) transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: leader.email, subject: lSubj, html: leaderHtml }).catch(e => console.log(e));
+            if (leader.device_token) admin.messaging().send({ token: leader.device_token, notification: { title: lPushTitle, body: lPushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.log(e));
         }
-        console.log("✅ [CRON] Daily Check completed.");
+        console.log("✅ [CRON] Daily Check completed for everyone.");
     } catch (error) { console.error("❌ [CRON] Failed:", error); }
 };
 
-// 1. הריצה האוטומטית הרגילה מופעלת כל יום (תשני את השעה לפי רצונך)
+// 1. הריצה האוטומטית הרגילה מופעלת כל יום 
 cron.schedule('52 20 * * *', runDailyReport, { scheduled: true, timezone: "Asia/Bangkok" });
 
-// 2. 🚀 כפתור הרצה ידני לבדיקה - שולח מיילים ברגע שנכנסים ללינק!
+// 2. כפתור הרצה ידני לבדיקה - שולח את כל הדוחות באותו רגע!
 app.get('/api/trigger-daily-report', async (req, res) => {
     await runDailyReport();
-    res.send("<h1 style='color:green; text-align:center; font-family:sans-serif;'>✅ פקודת המיילים רצה בהצלחה! בדקי את תיבת המייל.</h1>");
+    res.send("<h1 style='color:green; text-align:center;'>✅ הדוחות נשלחו בהצלחה לכולם! (גם לאלו שאין להם משימות)</h1>");
 });
 
 app.get('/api/rescue-boss', async (req, res) => {

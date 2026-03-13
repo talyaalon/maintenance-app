@@ -46,7 +46,23 @@ function App() {
   const [tasks, setTasks] = useState([]);
   
   // הגדרת שפה: ברירת מחדל אנגלית
-  const [lang, setLang] = useState('en'); 
+  // שואב את השפה מהזיכרון כדי שלא תתאפס ברענון
+  const [lang, setLang] = useState(() => {
+      return localStorage.getItem('appLang') || 'he'; // ברירת מחדל לעברית
+  });
+
+  // ברגע שהשפה משתנה, נשמור אותה לזיכרון
+  useEffect(() => {
+      localStorage.setItem('appLang', lang);
+  }, [lang]);
+
+  // כשהמשתמש מתחבר, נעדכן את השפה לשפה שהגדיר בפרופיל
+  useEffect(() => {
+      if (user && user.preferred_language) {
+          setLang(user.preferred_language);
+      }
+  }, [user]);
+  
   const t = translations[lang]; // המילון הנוכחי
 
   // שואב את הטאב האחרון מהזיכרון (אם אין, יפתח את טאב 1)
