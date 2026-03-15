@@ -115,26 +115,6 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         setExpandedManager(expandedManager === managerId ? null : managerId);
     };
 
-    // 🚀 FIX #5: Big Boss can toggle "Field Settings Permission" for each manager
-    const handleToggleFieldPermission = async (member) => {
-        try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${member.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({
-                    full_name: member.full_name,
-                    email: member.email,
-                    phone: member.phone || '',
-                    role: member.role,
-                    // Toggle the boolean — treat null/undefined as true (default)
-                    can_manage_fields: !(member.can_manage_fields !== false)
-                })
-            });
-            if (res.ok) fetchTeam();
-            else alert(t.alert_update_error || "Error updating permission");
-        } catch (e) { alert(t.server_error || "Server error"); }
-    };
-
     const handleDelete = async (userId) => {
         if (!window.confirm(t.confirm_delete_user || "Are you sure you want to delete this user?")) return;
         try {
@@ -187,54 +167,54 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         } catch (e) { alert("Server error"); }
     };
 
-    const renderMemberRow = (member, isSub = false) => (
-        <div key={member.id} className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center ${isSub ? 'ml-6 border-l-4 border-l-purple-200' : 'mb-3'}`}>
-            <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full ${member.role === 'MANAGER' || member.role === 'BIG_BOSS' ? 'bg-purple-100 text-purple-600' : 'bg-green-100 text-green-600'}`}>
-                    <User size={20} />
-                </div>
-                
-                <div className="flex flex-col">
-                    <span 
-                        onClick={() => handleMemberClick(member)}
-                        className={`font-bold text-gray-800 text-lg ${user.role !== 'EMPLOYEE' ? 'cursor-pointer hover:text-purple-600 hover:underline' : ''}`}
-                    >
-                        {member.full_name}
-                    </span>
-                    <div className="text-xs text-gray-500">
-                        {member.email} {member.phone && `| ${member.phone}`}
+    const renderMemberRow = (member, isSub = false) => {
+        const isManagerRole = member.role === 'MANAGER' || member.role === 'BIG_BOSS';
+        const initial = (member.full_name || '?').charAt(0).toUpperCase();
+
+        return (
+            <div key={member.id} className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center ${isSub ? 'ml-6 border-l-4 border-l-[#714B67]/30' : 'mb-3'}`}>
+                <div className="flex items-center gap-3">
+                    {/* Circular profile picture with initial fallback */}
+                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-[#714B67]/20 bg-[#fdf4ff] flex items-center justify-center">
+                        {member.profile_picture_url ? (
+                            <img src={member.profile_picture_url} alt={member.full_name} className="w-full h-full object-cover" />
+                        ) : (
+                            <span className="text-sm font-bold text-[#714B67]">{initial}</span>
+                        )}
                     </div>
-                </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-                {(member.role === 'MANAGER' || member.role === 'BIG_BOSS') && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-bold">{member.role}</span>}
-
-                {/* 🚀 FIX #5: Field Settings Permission toggle — visible only to Big Boss, only for Managers */}
-                {user.role === 'BIG_BOSS' && member.role === 'MANAGER' && (
-                    <div className="flex items-center gap-1" title="Field Settings Permission">
-                        <span className="text-[9px] text-gray-400 leading-none">Fields</span>
-                        <button
-                            onClick={() => handleToggleFieldPermission(member)}
-                            className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none ${member.can_manage_fields !== false ? 'bg-[#714B67]' : 'bg-gray-300'}`}
+                    <div className="flex flex-col">
+                        <span
+                            onClick={() => handleMemberClick(member)}
+                            className={`font-bold text-gray-800 text-base leading-tight ${user.role !== 'EMPLOYEE' ? 'cursor-pointer hover:text-[#714B67] hover:underline' : ''}`}
                         >
-                            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${member.can_manage_fields !== false ? 'right-0.5' : 'left-0.5'}`} />
-                        </button>
+                            {member.full_name}
+                        </span>
+                        <div className="text-xs text-gray-500">
+                            {member.email}{member.phone && ` | ${member.phone}`}
+                        </div>
                     </div>
-                )}
+                </div>
 
-                <button onClick={() => openEditModal(member)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition"><Edit2 size={16}/></button>
-                <button onClick={() => handleDelete(member.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash2 size={16}/></button>
+                <div className="flex items-center gap-2">
+                    {isManagerRole && (
+                        <span className="text-[10px] bg-[#fdf4ff] text-[#714B67] border border-[#714B67]/20 px-2 py-0.5 rounded-full font-bold">
+                            {member.role}
+                        </span>
+                    )}
 
-                {/* Expand arrow — relevant for every manager */}
-                {(member.role === 'MANAGER' || member.role === 'BIG_BOSS') && (
-                    <button onClick={() => toggleManager(member.id)} className="p-1 text-gray-400">
-                        {expandedManager === member.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
-                    </button>
-                )}
+                    <button onClick={() => openEditModal(member)} className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-[#fdf4ff] rounded-full transition"><Edit2 size={16}/></button>
+                    <button onClick={() => handleDelete(member.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash2 size={16}/></button>
+
+                    {isManagerRole && (
+                        <button onClick={() => toggleManager(member.id)} className="p-1 text-gray-400 hover:text-[#714B67] transition">
+                            {expandedManager === member.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
+                        </button>
+                    )}
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     const managers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
     const directEmployees = team.filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === user.id);
@@ -358,7 +338,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
 
                             <div className="flex gap-2 mt-4">
                                 <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 py-2 border rounded">{t.cancel}</button>
-                                <button type="submit" className="flex-1 py-2 bg-purple-600 text-white rounded font-bold">{t.save}</button>
+                                <button type="submit" className="flex-1 py-2 bg-[#714B67] text-white rounded font-bold hover:bg-[#5a3b52] transition">{t.save}</button>
                             </div>
                         </form>
                     </div>

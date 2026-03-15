@@ -16,25 +16,27 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   const [previewImage, setPreviewImage] = useState(user.profile_picture_url);
   const [fileToUpload, setFileToUpload] = useState(null);
 
-  // 🚀 שאיבת נתונים בטוחה: מוודא שהמייל והתמונה תמיד מוצגים (גם ברענון!)
+  // Sync form fields whenever the user prop changes (e.g. on page load / after parent updates state).
+  // Falls back to localStorage so that a hard refresh still shows the correct data.
   useEffect(() => {
-      const localUserStr = localStorage.getItem('user');
       let localUser = {};
-      if (localUserStr) {
-          try { localUser = JSON.parse(localUserStr); } catch (e) {}
-      }
-      
-      // נותן עדיפות ל-user שמגיע מהאפליקציה, ואם הוא ריק בגלל רענון - לוקח מהזיכרון המקומי
-      const activeUser = (user && user.email) ? user : localUser;
+      try {
+          const raw = localStorage.getItem('user');
+          if (raw) localUser = JSON.parse(raw);
+      } catch (e) {}
+
+      // Prefer the live prop; fall back to localStorage only when the prop is missing key fields
+      const src = (user && user.email) ? user : localUser;
 
       setFormData({
-          full_name: activeUser.name || activeUser.full_name || '',
-          email: activeUser.email || '', 
-          phone: activeUser.phone || '',
-          password: '', 
-          preferred_language: activeUser.preferred_language || 'he'
+          full_name:          src.full_name || src.name || '',
+          email:              src.email     || '',
+          phone:              src.phone     || '',
+          password:           '',
+          // No 'he' hardcode — use the value stored in the DB/localStorage exactly
+          preferred_language: src.preferred_language || localUser.preferred_language || 'he',
       });
-      setPreviewImage(activeUser.profile_picture_url);
+      setPreviewImage(src.profile_picture_url || null);
   }, [user]);
 
   const handleImageChange = (e) => {
@@ -76,21 +78,37 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
       const data = await res.json();
       if (res.ok) {
         alert(t.alert_update_success || "Profile updated successfully!");
-        
-        // 🚀 התיקון הקריטי: מיזוג נתונים מושלם כדי שהרענון לא יאבד את המייל או התמונה!
-        const updatedUser = { 
-            ...user, 
-            ...data.user,
-            email: data.user.email || formData.email, // וידוא כפול למייל
-            profile_picture_url: data.user.profile_picture_url || previewImage // וידוא כפול לתמונה
+
+        // Build the definitive user object from the DB response (RETURNING *)
+        const dbUser = data.user || {};
+        const updatedUser = {
+            ...user,
+            ...dbUser,
+            // Hard-guarantee the two most volatile fields
+            email:               dbUser.email               || formData.email,
+            profile_picture_url: dbUser.profile_picture_url || previewImage,
+            preferred_language:  dbUser.preferred_language  || formData.preferred_language,
         };
-        
+
+        // 1. Persist to localStorage so a hard refresh restores everything
         localStorage.setItem('user', JSON.stringify(updatedUser));
-        onUpdateUser(updatedUser); 
-        
+
+        // 2. Bubble up to App so all tabs receive the fresh user immediately
+        onUpdateUser(updatedUser);
+
+        // 3. Immediately update local form state from DB response — don't wait for
+        //    the useEffect re-run, which could lag behind React batched renders
+        setFormData({
+            full_name:          dbUser.full_name          || formData.full_name,
+            email:              dbUser.email              || formData.email,
+            phone:              dbUser.phone              || formData.phone,
+            password:           '',
+            preferred_language: dbUser.preferred_language || formData.preferred_language,
+        });
+        setPreviewImage(dbUser.profile_picture_url || previewImage);
+        setFileToUpload(null);   // clear the staged file — picture is now saved
         setIsEditing(false);
-        setFormData(prev => ({ ...prev, password: '' })); 
-        setShowPassword(false); 
+        setShowPassword(false);
       } else {
         alert(data.error || t.alert_update_error || "Error updating profile");
       }

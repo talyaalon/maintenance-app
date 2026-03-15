@@ -142,13 +142,17 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     data.append('assigned_worker_id', formData.assigned_worker_id);
     data.append('description', formData.description);
 
+    // Convert Bangkok datetime-local value ("YYYY-MM-DDTHH:mm") to UTC ISO
+    // by appending the +07:00 offset before parsing — prevents double-shifting
+    const dueDateUtc = new Date(formData.due_date + ':00+07:00').toISOString();
+
     if (frequency === 'Once') {
         data.append('is_recurring', 'false');
-        data.append('due_date', formData.due_date);
+        data.append('due_date', dueDateUtc);
     } else {
         data.append('is_recurring', 'true');
-        data.append('recurring_type', frequency.toLowerCase()); 
-        data.append('due_date', formData.due_date); 
+        data.append('recurring_type', frequency.toLowerCase());
+        data.append('due_date', dueDateUtc);
 
         if (frequency === 'Weekly') {
             data.append('selected_days', JSON.stringify(formData.selected_days));

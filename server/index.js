@@ -261,8 +261,10 @@ app.get('/fix-db', async (req, res) => {
             await client.query('ALTER TABLE locations DROP CONSTRAINT IF EXISTS locations_name_key');
             await client.query('ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_code_key');
             
-            // 🚀 הוספת עמודת הרשאות הניהול למנהלים (ברירת מחדל: מותר)
+            // Field permissions for managers (default: allowed)
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_manage_fields BOOLEAN DEFAULT TRUE');
+            // Auto-approve tasks flag — when TRUE, task completion skips WAITING_APPROVAL
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_approve_tasks BOOLEAN DEFAULT FALSE');
             
             console.log("✅ DB Fix Completed!");
             res.send(`
@@ -319,7 +321,33 @@ app.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign({ id: user.id, role: user.role, name: user.full_name }, SECRET_KEY, { expiresIn: '24h' });
-    res.json({ token, user: { id: user.id, name: user.full_name, role: user.role, email: user.email, phone: user.phone, profile_picture_url: user.profile_picture_url } });
+
+    // For employees, fetch the manager's auto_approve_tasks so the UI can hide the waiting tab
+    let managerAutoApprove = false;
+    if (user.role === 'EMPLOYEE' && user.parent_manager_id) {
+        try {
+            const mgr = await pool.query('SELECT auto_approve_tasks FROM users WHERE id = $1', [user.parent_manager_id]);
+            managerAutoApprove = mgr.rows[0]?.auto_approve_tasks || false;
+        } catch (e) { /* non-critical, leave false */ }
+    }
+
+    res.json({
+        token,
+        user: {
+            id: user.id,
+            name: user.full_name,
+            role: user.role,
+            email: user.email,
+            phone: user.phone,
+            profile_picture_url: user.profile_picture_url,
+            preferred_language: user.preferred_language,
+            can_manage_fields: user.can_manage_fields,
+            auto_approve_tasks: user.auto_approve_tasks,
+            // Employee sees their manager's setting to conditionally hide Waiting tab
+            manager_auto_approve_tasks: managerAutoApprove,
+            parent_manager_id: user.parent_manager_id
+        }
+    });
   } catch (err) { 
       console.error(err);
       res.status(500).json({ error: "שגיאת שרת" }); 
@@ -390,7 +418,10 @@ app.get('/users', authenticateToken, async (req, res) => {
     try {
         let query = `
             SELECT u.id, u.full_name, u.email, u.phone, u.role, u.parent_manager_id,
-                   u.profile_picture_url, u.can_manage_fields, m.full_name as manager_name
+                   u.profile_picture_url, u.preferred_language,
+                   u.can_manage_fields, u.auto_approve_tasks,
+                   m.full_name AS manager_name,
+                   m.auto_approve_tasks AS manager_auto_approve_tasks
             FROM users u
             LEFT JOIN users m ON u.parent_manager_id = m.id
         `;
@@ -462,7 +493,7 @@ app.post('/users', authenticateToken, async (req, res) => {
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, email, phone, role, password, preferred_language, can_manage_fields } = req.body;
+    const { full_name, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks } = req.body;
 
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
@@ -482,13 +513,14 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         return res.status(500).json({ error: "שגיאה בעדכון פרטי ההתחברות." });
     }
 
-    // 🚀 משיכת הנתונים הישנים או שמירת החדשים (כולל ההרשאות מהביג בוס!)
-    const lang = preferred_language || oldUser.preferred_language || 'he';
-    const canManage = can_manage_fields !== undefined ? can_manage_fields : oldUser.can_manage_fields;
+    // Preserve existing values for fields the caller doesn't explicitly send
+    const lang        = preferred_language   !== undefined ? preferred_language   : (oldUser.preferred_language || 'he');
+    const canManage   = can_manage_fields    !== undefined ? can_manage_fields    : oldUser.can_manage_fields;
+    const autoApprove = auto_approve_tasks   !== undefined ? auto_approve_tasks   : oldUser.auto_approve_tasks;
 
-    let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4, preferred_language=$5, can_manage_fields=$6';
-    let params = [full_name, email, phone, role, lang, canManage];
-    let paramCount = 7;
+    let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4, preferred_language=$5, can_manage_fields=$6, auto_approve_tasks=$7';
+    let params = [full_name, email, phone, role, lang, canManage, autoApprove];
+    let paramCount = 8;
 
     if (password && password.trim() !== '') {
         const bcrypt = require('bcrypt');
@@ -511,8 +543,9 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     if (oldUser.preferred_language !== updatedUser.preferred_language) changes.push(`Language changed to: <strong>${updatedUser.preferred_language}</strong>`);
     if (password && password.trim() !== '') changes.push('Password has been changed');
     
-    // מעקב אם הביג בוס שינה הרשאות
-    if (oldUser.can_manage_fields !== updatedUser.can_manage_fields) changes.push(`Manager Field Permissions updated`);
+    // Track permission changes made by Big Boss
+    if (oldUser.can_manage_fields !== updatedUser.can_manage_fields) changes.push(`Field Settings Permission updated`);
+    if (oldUser.auto_approve_tasks !== updatedUser.auto_approve_tasks) changes.push(`Auto-Approve Tasks updated to: <strong>${updatedUser.auto_approve_tasks}</strong>`);
 
     if (changes.length > 0) {
         sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes).catch(err => console.error("Email send error:", err));
@@ -1020,21 +1053,27 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
 
         const completionImageUrl = req.file ? req.file.path : null;
 
+        // Check if the task's direct manager has auto_approve_tasks enabled
+        const managerCheckQuery = `
+            SELECT m.auto_approve_tasks, m.device_token
+            FROM tasks t
+            JOIN users w ON t.worker_id = w.id
+            JOIN users m ON w.parent_manager_id = m.id
+            WHERE t.id = $1
+        `;
+        const managerCheck = await pool.query(managerCheckQuery, [id]);
+        const managerRow = managerCheck.rows[0];
+        // If manager has auto-approve ON → jump straight to COMPLETED
+        const newStatus = managerRow?.auto_approve_tasks ? 'COMPLETED' : 'WAITING_APPROVAL';
+
         await pool.query(
-            `UPDATE tasks SET status = 'WAITING_APPROVAL', completion_note = $1, completion_image_url = $2 WHERE id = $3`,
-            [completion_note, completionImageUrl, id]
+            `UPDATE tasks SET status = $1, completion_note = $2, completion_image_url = $3 WHERE id = $4`,
+            [newStatus, completion_note, completionImageUrl, id]
         );
 
+        // Only notify manager when task still needs manual approval
         try {
-            const managerQuery = `
-                SELECT m.device_token 
-                FROM tasks t
-                JOIN users w ON t.worker_id = w.id
-                JOIN users m ON w.parent_manager_id = m.id
-                WHERE t.id = $1
-            `;
-            const managerRes = await pool.query(managerQuery, [id]);
-            const managerToken = managerRes.rows[0]?.device_token;
+            const managerToken = newStatus === 'WAITING_APPROVAL' ? managerRow?.device_token : null;
 
             if (managerToken) {
                 await admin.messaging().send({

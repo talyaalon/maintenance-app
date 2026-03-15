@@ -12,20 +12,47 @@ const getLocale = (lang) => {
     return 'en-US';
 };
 
-// 🚀 Bangkok timezone helpers — all date logic strictly uses Asia/Bangkok
+// ─── Bangkok timezone helpers ────────────────────────────────────────────────
+// Uses Intl.DateTimeFormat throughout — no fragile locale-string reparsing.
+
+/** Returns a plain object with Bangkok date/time parts for the given date. */
+const getBkkParts = (dateString) => {
+    const parts = {};
+    new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).formatToParts(new Date(dateString)).forEach(p => { parts[p.type] = p.value; });
+    return parts;
+};
+
+/**
+ * Returns a Date whose LOCAL fields (getFullYear, getMonth…) match Bangkok time.
+ * Used for date-fns helpers (isSameDay, isBefore, startOfDay).
+ */
 const getBkkDateObj = (dateString) => {
     if (!dateString) return new Date();
-    return new Date(new Date(dateString).toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+    const p = getBkkParts(dateString);
+    const h = parseInt(p.hour, 10);
+    return new Date(
+        parseInt(p.year,   10),
+        parseInt(p.month,  10) - 1,
+        parseInt(p.day,    10),
+        h === 24 ? 0 : h,        // Intl sometimes returns "24" for midnight
+        parseInt(p.minute, 10),
+        parseInt(p.second, 10)
+    );
 };
 
+/** Formats a stored UTC date string for display in Bangkok time (DD/MM HH:mm). */
 const formatBkkDate = (dateString) => {
     if (!dateString) return '';
-    const d = getBkkDateObj(dateString);
-    const pad = (n) => n.toString().padStart(2, '0');
-    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const p = getBkkParts(dateString);
+    const h = p.hour === '24' ? '00' : p.hour;
+    return `${p.day}/${p.month} ${h}:${p.minute}`;
 };
 
-// Returns current Bangkok time formatted for <input type="datetime-local">
+/** Returns current Bangkok time as "YYYY-MM-DDTHH:mm" for datetime-local inputs. */
 const getCurrentBkkTimeForInput = () => {
     const parts = {};
     new Intl.DateTimeFormat('en-GB', {
@@ -35,6 +62,7 @@ const getCurrentBkkTimeForInput = () => {
     }).formatToParts(new Date()).forEach(p => { parts[p.type] = p.value; });
     return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 };
+// ─────────────────────────────────────────────────────────────────────────────
 
 const calendarStyles = `
   .react-calendar { width: 100%; border: none; font-family: inherit; background: white; border-radius: 1rem; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
@@ -68,6 +96,10 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   });
 
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
+  // Hide Waiting Approval tab when auto-approve is enabled for this user's manager (or themselves)
+  const hideWaitingTab = user.role === 'MANAGER'
+      ? !!user.auto_approve_tasks
+      : !!user.manager_auto_approve_tasks;
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
   const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), selectedDate));
 
@@ -193,7 +225,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
 
       <div className="flex bg-white p-1.5 rounded-2xl shadow-sm mb-8 mx-auto max-w-3xl">
           <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={pendingTasks.length} color="purple" />
-          <TabButton active={mainTab === 'waiting'} onClick={() => setMainTab('waiting')} label={t.tab_waiting} icon={<AlertCircle size={18}/>} count={waitingTasks.length} color="orange" />
+          {!hideWaitingTab && <TabButton active={mainTab === 'waiting'} onClick={() => setMainTab('waiting')} label={t.tab_waiting} icon={<AlertCircle size={18}/>} count={waitingTasks.length} color="orange" />}
           <TabButton active={mainTab === 'completed'} onClick={() => setMainTab('completed')} label={t.tab_completed} icon={<CheckCircle size={18}/>} count={completedTasks.length} color="green" />
       </div>
 
@@ -206,7 +238,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       )}
 
       {mainTab === 'todo' && renderTodoView()}
-      {mainTab === 'waiting' && renderApprovalView()}
+      {mainTab === 'waiting' && !hideWaitingTab && renderApprovalView()}
       {mainTab === 'completed' && renderCompletedView()}
 
       {/* העברת רשימת כל המשתמשים (subordinates) לחלון המשימה כדי למצוא את המנהל */}

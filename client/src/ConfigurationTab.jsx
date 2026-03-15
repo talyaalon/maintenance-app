@@ -16,6 +16,9 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   const [globalFields, setGlobalFields] = useState([]); 
   const [managers, setManagers] = useState([]); 
 
+  // Top-level tab for Big Boss: 'workspaces' | 'permissions'
+  const [bossMainTab, setBossMainTab] = useState('workspaces');
+
   const [expandedBossManager, setExpandedBossManager] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState([]);
 
@@ -61,6 +64,42 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           if (res.ok) setManagers(await res.json());
       } catch (e) {}
   };
+
+  // Toggle a boolean permission field on a manager via PUT /users/:id
+  const handleTogglePermission = async (manager, field) => {
+      const newValue = !manager[field];
+      try {
+          const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${manager.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                  full_name: manager.full_name,
+                  email: manager.email,
+                  phone: manager.phone || '',
+                  role: manager.role,
+                  [field]: newValue          // only toggle the target field
+              })
+          });
+          if (res.ok) fetchManagers();
+          else { const d = await res.json(); alert(d.error || 'Error updating permission'); }
+      } catch (e) { alert('Server error'); }
+  };
+
+  // Reusable inline toggle switch — strict #714B67 palette
+  const PermissionToggle = ({ label, hint, value, onToggle }) => (
+      <div className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+          <div>
+              <p className="font-bold text-gray-800 text-sm">{label}</p>
+              {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+          </div>
+          <button
+              onClick={onToggle}
+              className={`relative w-12 h-6 rounded-full transition-colors focus:outline-none shrink-0 ${value ? 'bg-[#714B67]' : 'bg-gray-300'}`}
+          >
+              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${value ? 'right-1' : 'left-1'}`} />
+          </button>
+      </div>
+  );
 
   const getFieldName = (nameStr) => {
       try {
@@ -412,14 +451,74 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       
       {user?.role === 'BIG_BOSS' ? (
           <div className="space-y-4">
-              <p className="text-sm text-gray-500 mb-4">אתה מחובר כ-Big Boss. בחר מנהל כדי לנהל את אזור העבודה שלו.</p>
-              {managers.map(manager => {
+              {/* ── Top-level tab bar for Big Boss ── */}
+              <div className="flex gap-2 bg-gray-100 p-1.5 rounded-xl shadow-inner border mb-6">
+                  <button
+                      onClick={() => setBossMainTab('workspaces')}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${bossMainTab === 'workspaces' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                  >
+                      <Settings size={15}/> {t.config_title || 'Workspaces'}
+                  </button>
+                  <button
+                      onClick={() => setBossMainTab('permissions')}
+                      className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${bossMainTab === 'permissions' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                  >
+                      <User size={15}/> {t.permissions_tab || 'Permissions / General'}
+                  </button>
+              </div>
+
+              {/* ── Permissions / General panel ── */}
+              {bossMainTab === 'permissions' && (
+                  <div className="space-y-4 animate-fade-in">
+                      <p className="text-sm text-gray-500">{t.permissions_desc || 'Manage field-level permissions and task behaviour for each manager.'}</p>
+                      {managers.length === 0 && <p className="text-center text-gray-400 py-6">No managers found.</p>}
+                      {managers.map(manager => {
+                          const initial = (manager.full_name || '?').charAt(0).toUpperCase();
+                          return (
+                              <div key={manager.id} className="bg-white rounded-2xl border border-[#714B67]/15 shadow-sm overflow-hidden">
+                                  {/* Manager header */}
+                                  <div className="flex items-center gap-3 p-4 bg-[#fdf4ff] border-b border-[#714B67]/10">
+                                      <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-[#714B67]/20 bg-[#714B67]/10 flex items-center justify-center">
+                                          {manager.profile_picture_url ? (
+                                              <img src={manager.profile_picture_url} alt={manager.full_name} className="w-full h-full object-cover" />
+                                          ) : (
+                                              <span className="text-sm font-bold text-[#714B67]">{initial}</span>
+                                          )}
+                                      </div>
+                                      <div>
+                                          <p className="font-bold text-gray-800">{manager.full_name}</p>
+                                          <p className="text-xs text-gray-400">{manager.email}</p>
+                                      </div>
+                                  </div>
+                                  {/* Toggle rows */}
+                                  <div className="px-4 py-2">
+                                      <PermissionToggle
+                                          label={t.perm_can_manage_fields || 'Field Settings Permission'}
+                                          hint={t.perm_can_manage_fields_hint || 'Allow this manager to create/edit custom location fields'}
+                                          value={manager.can_manage_fields !== false}
+                                          onToggle={() => handleTogglePermission(manager, 'can_manage_fields')}
+                                      />
+                                      <PermissionToggle
+                                          label={t.perm_auto_approve || 'Auto-Approve Tasks'}
+                                          hint={t.perm_auto_approve_hint || "Skip 'Waiting Approval' — tasks complete instantly when workers submit"}
+                                          value={!!manager.auto_approve_tasks}
+                                          onToggle={() => handleTogglePermission(manager, 'auto_approve_tasks')}
+                                      />
+                                  </div>
+                              </div>
+                          );
+                      })}
+                  </div>
+              )}
+
+              {/* ── Workspaces panel (existing) ── */}
+              {bossMainTab === 'workspaces' && managers.map(manager => {
                   const isExpanded = expandedBossManager === manager.id;
                   return (
-                      <div key={manager.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${isExpanded ? 'ring-2 ring-purple-400' : ''}`}>
-                          <div className={`p-4 flex justify-between items-center cursor-pointer transition ${isExpanded ? 'bg-purple-50' : 'hover:bg-gray-50'}`} onClick={() => setExpandedBossManager(isExpanded ? null : manager.id)}>
+                      <div key={manager.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${isExpanded ? 'ring-2 ring-[#714B67]/40' : ''}`}>
+                          <div className={`p-4 flex justify-between items-center cursor-pointer transition ${isExpanded ? 'bg-[#fdf4ff]' : 'hover:bg-gray-50'}`} onClick={() => setExpandedBossManager(isExpanded ? null : manager.id)}>
                               <div className="flex items-center gap-3">
-                                  <div className={`p-2 rounded-full ${isExpanded ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-500'}`}><User size={20}/></div>
+                                  <div className={`p-2 rounded-full ${isExpanded ? 'bg-[#714B67] text-white' : 'bg-gray-100 text-gray-500'}`}><User size={20}/></div>
                                   <div><h3 className="font-bold text-gray-800 text-lg">{manager.full_name}</h3><span className="text-xs text-gray-500">ניהול סביבת עבודה</span></div>
                               </div>
                               <div className="text-gray-400">{isExpanded ? <ChevronUp size={24}/> : <ChevronDown size={24}/>}</div>
