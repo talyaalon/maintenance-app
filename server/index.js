@@ -1572,16 +1572,17 @@ app.post('/api/forgot-password', async (req, res) => {
         if (result.rows.length === 0) return res.json({ success: true });
 
         const user = result.rows[0];
-        const token = crypto.randomBytes(32).toString('hex');
+        const plainCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const hashedCode = crypto.createHash('sha256').update(plainCode).digest('hex');
         const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
         await pool.query(
             'UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3',
-            [token, expires, user.id]
+            [hashedCode, expires, user.id]
         );
 
         const lang = user.preferred_language || 'en';
-        await sendResetPasswordEmail(email, user.full_name, token, lang);
+        await sendResetPasswordEmail(email, user.full_name, plainCode, lang);
 
         res.json({ success: true });
     } catch (err) {
@@ -1599,9 +1600,10 @@ app.post('/api/reset-password', async (req, res) => {
         if (!token || !new_password) return res.status(400).json({ error: 'Token and new password are required' });
         if (new_password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
+        const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
         const result = await pool.query(
             'SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()',
-            [token]
+            [hashedToken]
         );
 
         if (result.rows.length === 0) return res.status(400).json({ error: 'Invalid or expired reset token' });
