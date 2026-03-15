@@ -90,8 +90,13 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
       ? categories.filter(c => !c.created_by || String(c.created_by) === String(targetManagerId))
       : categories;
 
-  const filteredAssets = selectedCategory 
-      ? assets.filter(a => String(a.category_id) === String(selectedCategory))
+  // 🚀 FIX: Filter assets by BOTH selected category AND the target manager's ownership
+  const filteredAssets = selectedCategory
+      ? assets.filter(a => {
+          const categoryMatch = String(a.category_id) === String(selectedCategory);
+          const managerMatch = !targetManagerId || !a.created_by || String(a.created_by) === String(targetManagerId);
+          return categoryMatch && managerMatch;
+      })
       : [];
 
   const employeesOnly = teamMembers.filter(member => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Edit2, ChevronDown, ChevronUp, User, X, Plus, Save, Eye, EyeOff } from 'lucide-react';
-import TasksTab from './TasksTab'; 
+import TasksTab from './TasksTab';
 
 const TeamTab = ({ token, t, user, onRefresh, lang }) => {
     // --- 1. State for Team Management ---
@@ -115,6 +115,26 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         setExpandedManager(expandedManager === managerId ? null : managerId);
     };
 
+    // 🚀 FIX #5: Big Boss can toggle "Field Settings Permission" for each manager
+    const handleToggleFieldPermission = async (member) => {
+        try {
+            const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${member.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                    full_name: member.full_name,
+                    email: member.email,
+                    phone: member.phone || '',
+                    role: member.role,
+                    // Toggle the boolean — treat null/undefined as true (default)
+                    can_manage_fields: !(member.can_manage_fields !== false)
+                })
+            });
+            if (res.ok) fetchTeam();
+            else alert(t.alert_update_error || "Error updating permission");
+        } catch (e) { alert(t.server_error || "Server error"); }
+    };
+
     const handleDelete = async (userId) => {
         if (!window.confirm(t.confirm_delete_user || "Are you sure you want to delete this user?")) return;
         try {
@@ -189,11 +209,24 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
 
             <div className="flex items-center gap-2">
                 {(member.role === 'MANAGER' || member.role === 'BIG_BOSS') && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-bold">{member.role}</span>}
-                
+
+                {/* 🚀 FIX #5: Field Settings Permission toggle — visible only to Big Boss, only for Managers */}
+                {user.role === 'BIG_BOSS' && member.role === 'MANAGER' && (
+                    <div className="flex items-center gap-1" title="Field Settings Permission">
+                        <span className="text-[9px] text-gray-400 leading-none">Fields</span>
+                        <button
+                            onClick={() => handleToggleFieldPermission(member)}
+                            className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none ${member.can_manage_fields !== false ? 'bg-[#714B67]' : 'bg-gray-300'}`}
+                        >
+                            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${member.can_manage_fields !== false ? 'right-0.5' : 'left-0.5'}`} />
+                        </button>
+                    </div>
+                )}
+
                 <button onClick={() => openEditModal(member)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition"><Edit2 size={16}/></button>
                 <button onClick={() => handleDelete(member.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash2 size={16}/></button>
-                
-                {/* חץ להרחבה - רלוונטי לכל מנהל */}
+
+                {/* Expand arrow — relevant for every manager */}
                 {(member.role === 'MANAGER' || member.role === 'BIG_BOSS') && (
                     <button onClick={() => toggleManager(member.id)} className="p-1 text-gray-400">
                         {expandedManager === member.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}

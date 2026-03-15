@@ -30,12 +30,27 @@ function App() {
         }).join(''));
         
         const decodedUser = JSON.parse(jsonPayload);
-        
+
         // בודקים שהטוקן לא פג תוקף (הוא מוגדר ל-24 שעות)
         if (decodedUser.exp * 1000 > Date.now()) {
-            setUser({ id: decodedUser.id, role: decodedUser.role, name: decodedUser.name });
+            // 🚀 FIX: Merge JWT (auth fields) with full localStorage user object
+            // so email, profile_picture_url, phone etc. survive page refresh
+            let storedUser = {};
+            try {
+                const raw = localStorage.getItem('user');
+                if (raw) storedUser = JSON.parse(raw);
+            } catch (e) {}
+
+            setUser({
+                ...storedUser,             // extended profile fields from localStorage
+                id:   decodedUser.id,      // JWT auth fields always take priority
+                role: decodedUser.role,
+                name: decodedUser.name,
+            });
         } else {
-            localStorage.removeItem('token'); // אם פג תוקף - מוחקים
+            // Token expired — clear both token and cached user
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
         }
       } catch (e) {
         console.error("Token decoding failed", e);
@@ -102,10 +117,12 @@ function App() {
   };
 
   const handleUserUpdate = (updatedUser) => {
-      setUser(prevUser => ({
-          ...prevUser,
-          ...updatedUser
-      }));
+      setUser(prevUser => {
+          const merged = { ...prevUser, ...updatedUser };
+          // 🚀 FIX: Keep localStorage in sync so the merged user survives refresh
+          localStorage.setItem('user', JSON.stringify(merged));
+          return merged;
+      });
   };
 
   // --- הקוד החדש (רענון כל 30 שניות) ---

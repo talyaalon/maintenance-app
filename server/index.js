@@ -333,7 +333,8 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         
         let profile_picture_url = req.body.existing_picture || null;
         if (req.file) {
-            profile_picture_url = `/uploads/${req.file.filename}`;
+            // Use the Cloudinary URL (req.file.path) — NOT a local /uploads/ path
+            profile_picture_url = req.file.path || req.file.secure_url || null;
         }
 
         const lang = preferred_language || 'en';
@@ -388,7 +389,8 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
 app.get('/users', authenticateToken, async (req, res) => {
     try {
         let query = `
-            SELECT u.id, u.full_name, u.email, u.phone, u.role, u.parent_manager_id, u.profile_picture_url, m.full_name as manager_name
+            SELECT u.id, u.full_name, u.email, u.phone, u.role, u.parent_manager_id,
+                   u.profile_picture_url, u.can_manage_fields, m.full_name as manager_name
             FROM users u
             LEFT JOIN users m ON u.parent_manager_id = m.id
         `;

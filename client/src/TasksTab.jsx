@@ -12,17 +12,28 @@ const getLocale = (lang) => {
     return 'en-US';
 };
 
-// 🚀 פונקציות שעון בנגקוק חסינות לכל חישובי הזמן והתצוגה
+// 🚀 Bangkok timezone helpers — all date logic strictly uses Asia/Bangkok
 const getBkkDateObj = (dateString) => {
     if (!dateString) return new Date();
-    return new Date(new Date(dateString).toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+    return new Date(new Date(dateString).toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
 };
 
 const formatBkkDate = (dateString) => {
     if (!dateString) return '';
     const d = getBkkDateObj(dateString);
     const pad = (n) => n.toString().padStart(2, '0');
-    return `${pad(d.getDate())}/${pad(d.getMonth()+1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+// Returns current Bangkok time formatted for <input type="datetime-local">
+const getCurrentBkkTimeForInput = () => {
+    const parts = {};
+    new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    }).formatToParts(new Date()).forEach(p => { parts[p.type] = p.value; });
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 };
 
 const calendarStyles = `
@@ -270,8 +281,9 @@ const TaskCard = ({ task, onClick, t, compact = false }) => {
 const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
-    const [followUpDate, setFollowUpDate] = useState('');
-    const [mode, setMode] = useState('view'); 
+    // 🚀 FIX: Default follow-up date strictly to Bangkok time, not OS local time
+    const [followUpDate, setFollowUpDate] = useState(getCurrentBkkTimeForInput);
+    const [mode, setMode] = useState('view');
     const [showSuccess, setShowSuccess] = useState(false);
 
     const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS') && task.status === 'WAITING_APPROVAL';
@@ -307,17 +319,33 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
 
     if(showSuccess) return <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]"><div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center"><Check size={40} className="text-green-600 mb-2"/><h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2></div></div>;
 
-    // 🚀 מציאת שם המנהל המדויק (גיבוי מלא כדי למנוע System)
+    // 🚀 FIX: Resolve manager name with multi-level fallback to prevent "System" / "הנהלה"
     let displayManagerName = task.manager_name;
+
     if (!displayManagerName && allUsers) {
+        // Step 1: find the worker entry to get their parent_manager_id
         const workerInfo = allUsers.find(u => String(u.id) === String(task.worker_id));
         if (workerInfo) {
+            // Step 2: find the manager inside allUsers
             const managerInfo = allUsers.find(u => String(u.id) === String(workerInfo.parent_manager_id));
-            if (managerInfo) displayManagerName = managerInfo.full_name;
+            if (managerInfo) {
+                displayManagerName = managerInfo.full_name;
+            } else if (String(workerInfo.parent_manager_id) === String(user.id)) {
+                // Step 3: the logged-in user IS the manager (not in subordinates list)
+                displayManagerName = user.full_name || user.name;
+            }
         }
     }
-    if (!displayManagerName && user.role !== 'EMPLOYEE') displayManagerName = user.full_name;
-    if (!displayManagerName) displayManagerName = user.manager_name || t.management || 'הנהלה';
+
+    // Step 4: fall back to the logged-in manager's name for non-employee views
+    if (!displayManagerName && (user.role === 'MANAGER' || user.role === 'BIG_BOSS')) {
+        displayManagerName = user.full_name || user.name;
+    }
+
+    // Step 5: absolute last resort — use task field or translation key, never raw Hebrew
+    if (!displayManagerName) {
+        displayManagerName = task.manager_name || t.management || t.manager_label || 'Manager';
+    }
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-[100] backdrop-blur-sm p-4">

@@ -21,6 +21,8 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
 
       if (response.ok) {
         localStorage.setItem('token', data.token);
+        // 🚀 FIX: Persist full user object so email/picture survive page refresh
+        localStorage.setItem('user', JSON.stringify(data.user));
         onLoginSuccess(data.user);
       } else {
         // שימוש בתרגום לשגיאה
