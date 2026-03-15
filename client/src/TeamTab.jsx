@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Edit2, ChevronDown, ChevronUp, User, X, Plus, Save, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Edit2, ChevronDown, ChevronUp, User, X, Plus, Save, Eye, EyeOff, Send, Loader2 } from 'lucide-react';
 import TasksTab from './TasksTab';
 
 // ─── Branded delete-confirm modal ────────────────────────────────────────────
@@ -56,6 +56,21 @@ const TeamTab = ({ token, t, user, lang }) => {
 
     // Branded confirm-delete state
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
+    // Report trigger state
+    const [sendingReportId, setSendingReportId] = useState(null);
+
+    const handleSendReport = async (managerId) => {
+        setSendingReportId(managerId);
+        try {
+            await fetch('https://maintenance-app-h84v.onrender.com/api/trigger-daily-reports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ manager_id: managerId }),
+            });
+        } catch (e) { console.error(e); }
+        finally { setSendingReportId(null); }
+    };
 
     const activeManagers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
 
@@ -223,6 +238,16 @@ const TeamTab = ({ token, t, user, lang }) => {
                         <span className="text-[10px] bg-[#fdf4ff] text-[#714B67] border border-[#714B67]/20 px-2 py-0.5 rounded-full font-bold">
                             {t.role_employee || 'Employee'}
                         </span>
+                    )}
+                    {member.role === 'MANAGER' && user.role === 'BIG_BOSS' && (
+                        <button
+                            onClick={() => handleSendReport(member.id)}
+                            disabled={sendingReportId === member.id}
+                            title={t.send_report_btn || 'Send Daily Report'}
+                            className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-[#fdf4ff] rounded-full transition disabled:opacity-50"
+                        >
+                            {sendingReportId === member.id ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                        </button>
                     )}
                     <button onClick={() => openEditModal(member)} className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-[#fdf4ff] rounded-full transition"><Edit2 size={16}/></button>
                     <button onClick={() => setDeleteConfirmId(member.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash2 size={16}/></button>
