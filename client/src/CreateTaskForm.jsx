@@ -73,14 +73,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     }
   }, [token, isManager, isEmployee, subordinates, currentUser?.parent_manager_id]);
 
-  // Re-fetch locations whenever the target manager changes (worker selection)
-  useEffect(() => {
-    if (!isManager || !targetManagerId) return;
-    const headers = { 'Authorization': `Bearer ${token}` };
-    fetch(`https://maintenance-app-h84v.onrender.com/locations?manager_id=${targetManagerId}`, { headers })
-        .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
-  }, [targetManagerId, token, isManager]);
-
   // 🚀 אלגוריתם סינון חכם: מיהו המנהל שכרגע "נבחר" (או מי שהעובד שייך אליו)?
   let targetManagerId = null;
   if (isEmployee) {
@@ -94,6 +86,14 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   } else if (userRole === 'MANAGER') {
       targetManagerId = currentUser.id;
   }
+
+  // Re-fetch locations whenever the target manager changes (worker selection)
+  useEffect(() => {
+    if (!isManager || !targetManagerId) return;
+    const headers = { 'Authorization': `Bearer ${token}` };
+    fetch(`https://maintenance-app-h84v.onrender.com/locations?manager_id=${targetManagerId}`, { headers })
+        .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
+  }, [targetManagerId, token, isManager]);
 
   // Show only locations that belong strictly to the target manager
   const filteredLocations = targetManagerId
