@@ -16,6 +16,25 @@ export const translations = {
     login_failed: "Invalid email or password",
     server_error: "Server error",
 
+    // --- Forgot / Reset Password ---
+    forgot_password_link: "Forgot Password?",
+    forgot_password_title: "Reset Password",
+    forgot_password_desc: "Enter your email address and we'll send you a reset code.",
+    forgot_password_email_placeholder: "name@example.com",
+    forgot_password_send_btn: "Send Reset Code",
+    forgot_password_sending: "Sending...",
+    forgot_password_sent: "Reset code sent! Check your email.",
+    reset_password_title: "Enter New Password",
+    reset_password_token_label: "Reset Code (from email)",
+    reset_password_token_placeholder: "Paste code here",
+    reset_password_new_label: "New Password",
+    reset_password_new_placeholder: "Min. 6 characters",
+    reset_password_submit_btn: "Set New Password",
+    reset_password_submitting: "Updating...",
+    reset_password_success: "Password updated! You can now log in.",
+    reset_password_invalid_token: "Invalid or expired reset code.",
+    reset_back_to_login: "Back to Login",
+
     // --- General Actions ---
     save: "Save",
     cancel: "Cancel",
@@ -372,6 +391,25 @@ export const translations = {
     login_failed: "אימייל או סיסמה שגויים",
     server_error: "שגיאת שרת",
 
+    // --- שכחתי סיסמה / איפוס סיסמה ---
+    forgot_password_link: "שכחתי סיסמה",
+    forgot_password_title: "איפוס סיסמה",
+    forgot_password_desc: "הזן את כתובת האימייל שלך ונשלח לך קוד לאיפוס.",
+    forgot_password_email_placeholder: "name@example.com",
+    forgot_password_send_btn: "שלח קוד איפוס",
+    forgot_password_sending: "שולח...",
+    forgot_password_sent: "קוד האיפוס נשלח! בדוק את האימייל שלך.",
+    reset_password_title: "הזן סיסמה חדשה",
+    reset_password_token_label: "קוד איפוס (מהאימייל)",
+    reset_password_token_placeholder: "הדבק את הקוד כאן",
+    reset_password_new_label: "סיסמה חדשה",
+    reset_password_new_placeholder: "מינימום 6 תווים",
+    reset_password_submit_btn: "עדכן סיסמה",
+    reset_password_submitting: "מעדכן...",
+    reset_password_success: "הסיסמה עודכנה! כעת ניתן להתחבר.",
+    reset_password_invalid_token: "קוד איפוס לא תקין או פג תוקף.",
+    reset_back_to_login: "חזרה להתחברות",
+
     // --- General Actions ---
     save: "שמור",
     cancel: "ביטול",
@@ -727,6 +765,25 @@ export const translations = {
     login_btn: "ลงชื่อเข้าใช้",
     login_failed: "อีเมลหรือรหัสผ่านไม่ถูกต้อง",
     server_error: "ข้อผิดพลาดของเซิร์ฟเวอร์",
+
+    // --- ลืมรหัสผ่าน / รีเซ็ตรหัสผ่าน ---
+    forgot_password_link: "ลืมรหัสผ่าน?",
+    forgot_password_title: "รีเซ็ตรหัสผ่าน",
+    forgot_password_desc: "ป้อนอีเมลของคุณแล้วเราจะส่งรหัสรีเซ็ตให้",
+    forgot_password_email_placeholder: "name@example.com",
+    forgot_password_send_btn: "ส่งรหัสรีเซ็ต",
+    forgot_password_sending: "กำลังส่ง...",
+    forgot_password_sent: "ส่งรหัสรีเซ็ตแล้ว! ตรวจสอบอีเมลของคุณ",
+    reset_password_title: "ตั้งรหัสผ่านใหม่",
+    reset_password_token_label: "รหัสรีเซ็ต (จากอีเมล)",
+    reset_password_token_placeholder: "วางรหัสที่นี่",
+    reset_password_new_label: "รหัสผ่านใหม่",
+    reset_password_new_placeholder: "อย่างน้อย 6 ตัวอักษร",
+    reset_password_submit_btn: "ตั้งรหัสผ่านใหม่",
+    reset_password_submitting: "กำลังอัปเดต...",
+    reset_password_success: "อัปเดตรหัสผ่านแล้ว! ตอนนี้คุณสามารถเข้าสู่ระบบได้",
+    reset_password_invalid_token: "รหัสรีเซ็ตไม่ถูกต้องหรือหมดอายุแล้ว",
+    reset_back_to_login: "กลับไปเข้าสู่ระบบ",
 
     // --- General Actions ---
     save: "บันทึก",

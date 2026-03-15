@@ -33,6 +33,7 @@ const fs = require('fs');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const crypto = require('crypto');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -83,8 +84,16 @@ transporter.verify((error, success) => {
   }
 });
 
-const sendUpdateEmail = async (email, fullName, changes) => {
+const sendUpdateEmail = async (email, fullName, changes, lang = 'en') => {
     const appLink = "https://air-manage-app.netlify.app/";
+
+    const dict = {
+        en: { dir: 'ltr', subject: 'Account Update - OpsManager App', title: 'Account Profile Updated', hello: 'Hello', body: 'The following changes were made to your profile:', note: 'If you did not request these changes, please contact your manager.', btn: 'Login to System' },
+        he: { dir: 'rtl', subject: 'עדכון חשבון - אפליקציית OpsManager', title: 'פרופיל החשבון עודכן', hello: 'שלום', body: 'השינויים הבאים בוצעו בפרופיל שלך:', note: 'אם לא ביקשת שינויים אלו, פנה למנהל שלך.', btn: 'כניסה למערכת' },
+        th: { dir: 'ltr', subject: 'อัปเดตบัญชี - แอป OpsManager', title: 'อัปเดตโปรไฟล์บัญชีแล้ว', hello: 'สวัสดี', body: 'มีการเปลี่ยนแปลงต่อไปนี้ในโปรไฟล์ของคุณ:', note: 'หากคุณไม่ได้ขอการเปลี่ยนแปลงเหล่านี้ โปรดติดต่อผู้จัดการของคุณ', btn: 'เข้าสู่ระบบ' }
+    };
+    const l = dict[lang] || dict['en'];
+
     let changesHtml = '<ul style="padding-left: 20px; color: #333;">';
     changes.forEach(change => { changesHtml += `<li style="margin-bottom: 5px;">${change}</li>`; });
     changesHtml += '</ul>';
@@ -92,25 +101,25 @@ const sendUpdateEmail = async (email, fullName, changes) => {
     const mailOptions = {
       from: '"OpsManager App" <maintenance.app.tkp@gmail.com>',
       to: email,
-      subject: 'Account Update - OpsManager App',
+      subject: l.subject,
       html: `
-        <div dir="ltr" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;border:1px solid #e0e0e0;">
-          <h2 style="color:#714B67;text-align:center;">Account Profile Updated</h2>
+        <div dir="${l.dir}" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;border:1px solid #e0e0e0;">
+          <h2 style="color:#714B67;text-align:center;">${l.title}</h2>
           <div style="background:white;padding:20px;border-radius:8px;">
-            <p style="font-size:16px;">Hello <strong>${fullName}</strong>,</p>
-            <p>The following changes were made to your profile:</p>
+            <p style="font-size:16px;">${l.hello} <strong>${fullName}</strong>,</p>
+            <p>${l.body}</p>
             <div style="background-color:#f0f9ff; border-left: 4px solid #0ea5e9; padding: 10px; margin: 15px 0;">
                 ${changesHtml}
             </div>
-            <p style="font-size:14px; color:#666;">If you did not request these changes, please contact your manager.</p>
+            <p style="font-size:14px; color:#666;">${l.note}</p>
             <div style="text-align:center;margin-top:30px;">
-              <a href="${appLink}" style="background:#714B67;color:white;padding:10px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">Login to System</a>
+              <a href="${appLink}" style="background:#714B67;color:white;padding:10px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">${l.btn}</a>
             </div>
           </div>
         </div>
       `
     };
-    try { await transporter.sendMail(mailOptions); } 
+    try { await transporter.sendMail(mailOptions); }
     catch (error) { console.error('Error sending update email:', error); }
 };
 
@@ -200,6 +209,78 @@ const sendWelcomeEmail = async (email, fullName, password, role, lang = 'he') =>
         console.log(`📧 Welcome email sent to ${email} in ${lang}`);
     } catch (error) { 
         console.error("❌ Error sending welcome email:", error); 
+    }
+};
+
+// ==========================================
+// 📧 Password Reset Email (localized)
+// ==========================================
+const sendResetPasswordEmail = async (email, fullName, token, lang = 'en') => {
+    const appLink = "https://air-manage-app.netlify.app/";
+
+    const dict = {
+        en: {
+            dir: 'ltr', align: 'left',
+            subject: '🔑 Password Reset - OpsManager App',
+            title: 'Password Reset Request',
+            hello: 'Hello',
+            body: 'We received a request to reset your password. Use the code below — it expires in 1 hour.',
+            code_label: 'Your Reset Code:',
+            note: 'If you did not request this, please ignore this email.',
+            btn: 'Open App'
+        },
+        he: {
+            dir: 'rtl', align: 'right',
+            subject: '🔑 איפוס סיסמה - אפליקציית OpsManager',
+            title: 'בקשה לאיפוס סיסמה',
+            hello: 'שלום',
+            body: 'קיבלנו בקשה לאיפוס הסיסמה שלך. השתמש בקוד הבא — תוקפו פג תוך שעה.',
+            code_label: 'קוד האיפוס שלך:',
+            note: 'אם לא ביקשת זאת, התעלם מהמייל הזה.',
+            btn: 'כניסה לאפליקציה'
+        },
+        th: {
+            dir: 'ltr', align: 'left',
+            subject: '🔑 รีเซ็ตรหัสผ่าน - แอป OpsManager',
+            title: 'คำขอรีเซ็ตรหัสผ่าน',
+            hello: 'สวัสดี',
+            body: 'เราได้รับคำขอรีเซ็ตรหัสผ่านของคุณ ใช้รหัสด้านล่าง — หมดอายุใน 1 ชั่วโมง',
+            code_label: 'รหัสรีเซ็ตของคุณ:',
+            note: 'หากคุณไม่ได้ขอ โปรดเพิกเฉยต่ออีเมลนี้',
+            btn: 'เปิดแอป'
+        }
+    };
+    const l = dict[lang] || dict['en'];
+
+    const mailOptions = {
+        from: '"OpsManager App" <maintenance.app.tkp@gmail.com>',
+        to: email,
+        subject: l.subject,
+        html: `
+        <div dir="${l.dir}" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;text-align:${l.align};">
+          <h1 style="color:#714B67;text-align:center;">OpsManager APP</h1>
+          <div style="background:white;padding:20px;border-radius:8px;">
+            <h2 style="color:#374151;">${l.title}</h2>
+            <p>${l.hello} <strong>${fullName}</strong>,</p>
+            <p>${l.body}</p>
+            <div style="background:#f3f4f6;padding:20px;border-radius:8px;margin:20px 0;text-align:center;border:2px dashed #714B67;">
+              <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;">${l.code_label}</p>
+              <span style="font-size:28px;font-weight:bold;letter-spacing:4px;color:#714B67;font-family:monospace;">${token}</span>
+            </div>
+            <p style="font-size:13px;color:#9ca3af;">${l.note}</p>
+            <div style="text-align:center;margin-top:20px;">
+              <a href="${appLink}" style="background:#714B67;color:white;padding:10px 25px;text-decoration:none;border-radius:25px;font-weight:bold;display:inline-block;">${l.btn}</a>
+            </div>
+          </div>
+        </div>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`📧 Password reset email sent to ${email}`);
+    } catch (error) {
+        console.error("❌ Error sending reset email:", error);
     }
 };
 
@@ -1478,8 +1559,68 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
 
 const cron = require('node-cron');
 
-const runDailyReport = async () => {
-    console.log("⏰ Running Daily Task Check for EVERYONE...");
+// ==========================================
+// 🔑 POST /api/forgot-password
+// ==========================================
+app.post('/api/forgot-password', async (req, res) => {
+    try {
+        const email = req.body.email ? req.body.email.toLowerCase() : '';
+        if (!email) return res.status(400).json({ error: 'Email is required' });
+
+        const result = await pool.query('SELECT id, full_name, preferred_language FROM users WHERE email = $1', [email]);
+        // Always respond success to prevent email enumeration
+        if (result.rows.length === 0) return res.json({ success: true });
+
+        const user = result.rows[0];
+        const token = crypto.randomBytes(32).toString('hex');
+        const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        await pool.query(
+            'UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3',
+            [token, expires, user.id]
+        );
+
+        const lang = user.preferred_language || 'en';
+        await sendResetPasswordEmail(email, user.full_name, token, lang);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ /api/forgot-password error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// ==========================================
+// 🔑 POST /api/reset-password
+// ==========================================
+app.post('/api/reset-password', async (req, res) => {
+    try {
+        const { token, new_password } = req.body;
+        if (!token || !new_password) return res.status(400).json({ error: 'Token and new password are required' });
+        if (new_password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+        const result = await pool.query(
+            'SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()',
+            [token]
+        );
+
+        if (result.rows.length === 0) return res.status(400).json({ error: 'Invalid or expired reset token' });
+
+        const hashedPassword = await bcrypt.hash(new_password, 10);
+        await pool.query(
+            'UPDATE users SET password = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
+            [hashedPassword, result.rows[0].id]
+        );
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ /api/reset-password error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+const runDailyReport = async (manager_id = null) => {
+    console.log(`⏰ Running Daily Task Check${manager_id ? ` for manager ${manager_id}'s team` : ' for EVERYONE'}...`);
 
     const dict = {
         he: {
@@ -1592,7 +1733,7 @@ const runDailyReport = async () => {
         // ==========================================
         // 1. שליחת דוחות לכלל העובדים
         // ==========================================
-        const employees = allUsers.filter(u => u.role === 'EMPLOYEE');
+        const employees = allUsers.filter(u => u.role === 'EMPLOYEE' && (!manager_id || u.parent_manager_id === manager_id));
         for (const emp of employees) {
             const l = dict[emp.preferred_language] || dict['he']; 
             
@@ -1652,7 +1793,7 @@ const runDailyReport = async () => {
         // ==========================================
         // 2. שליחת דוחות מלאים למנהלים (כולל מי שאין לו משימות)
         // ==========================================
-        const leaders = allUsers.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
+        const leaders = allUsers.filter(u => (u.role === 'MANAGER' || u.role === 'BIG_BOSS') && (!manager_id || u.id === manager_id));
         for (const leader of leaders) {
             const relevantEmps = leader.role === 'BIG_BOSS' 
                 ? employees 
@@ -1729,13 +1870,14 @@ const runDailyReport = async () => {
     } catch (error) { console.error("❌ [CRON] Failed:", error); }
 };
 
-// 1. הריצה האוטומטית הרגילה מופעלת כל יום 
-cron.schedule('52 20 * * *', runDailyReport, { scheduled: true, timezone: "Asia/Bangkok" });
+// 1. Automatic daily run at 15:00 Asia/Bangkok
+cron.schedule('0 15 * * *', runDailyReport, { scheduled: true, timezone: "Asia/Bangkok" });
 
-// 2. כפתור הרצה ידני לבדיקה - שולח את כל הדוחות באותו רגע!
-app.get('/api/trigger-daily-report', async (req, res) => {
-    await runDailyReport();
-    res.send("<h1 style='color:green; text-align:center;'>✅ הדוחות נשלחו בהצלחה לכולם! (גם לאלו שאין להם משימות)</h1>");
+// 2. POST /api/trigger-daily-reports — manual trigger with optional manager_id filter
+app.post('/api/trigger-daily-reports', async (req, res) => {
+    const manager_id = req.body?.manager_id ? parseInt(req.body.manager_id, 10) : null;
+    await runDailyReport(manager_id);
+    res.json({ success: true, message: manager_id ? `Reports sent for manager ${manager_id}'s team.` : 'Reports sent for everyone.' });
 });
 
 app.get('/api/rescue-boss', async (req, res) => {
@@ -1773,6 +1915,8 @@ app.listen(port, async () => {
     try {
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_manage_fields BOOLEAN DEFAULT TRUE');
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_approve_tasks BOOLEAN DEFAULT FALSE');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ');
 
         // Multilingual name columns — required by GET /tasks, /locations, /categories, /assets
         await pool.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_he TEXT');
