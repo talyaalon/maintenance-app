@@ -12,11 +12,17 @@ const getLocale = (lang) => {
     return 'en-US';
 };
 
-// 🚀 פונקציה חסינה להצגת השעה שנשמרה במסד כפי שהיא, עם כיוון לתצוגת בנגקוק
+// 🚀 פונקציות שעון בנגקוק חסינות לכל חישובי הזמן והתצוגה
+const getBkkDateObj = (dateString) => {
+    if (!dateString) return new Date();
+    return new Date(new Date(dateString).toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+};
+
 const formatBkkDate = (dateString) => {
     if (!dateString) return '';
-    const d = new Date(dateString);
-    return d.toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
+    const d = getBkkDateObj(dateString);
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth()+1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 const calendarStyles = `
@@ -41,15 +47,18 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
 
   const isTeamView = Array.isArray(subordinates);
 
+  // שימוש בבנגקוק לסינון המשימות של היום
+  const todayBkk = getBkkDateObj(new Date());
+  
   const pendingTasks = tasks.filter(task => {
       if (task.status !== 'PENDING') return false;
-      const taskDate = new Date(task.due_date);
-      return isSameDay(taskDate, new Date()) || isBefore(taskDate, startOfDay(new Date()));
+      const taskDate = getBkkDateObj(task.due_date);
+      return isSameDay(taskDate, todayBkk) || isBefore(taskDate, startOfDay(todayBkk));
   });
 
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
-  const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(new Date(t.due_date), selectedDate));
+  const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), selectedDate));
 
   const renderTodoView = () => {
       if (viewMode === 'daily') {
@@ -57,7 +66,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto">
                   <div className="bg-white p-4 rounded-2xl shadow-sm border border-[#714B67]/20 text-center mb-6">
                       <h3 className="text-xl font-bold text-gray-800">{t.tab_todo}</h3>
-                      <p className="text-[#714B67] font-medium">{format(new Date(), 'dd/MM/yyyy')}</p>
+                      <p className="text-[#714B67] font-medium">{format(todayBkk, 'dd/MM/yyyy')}</p>
                   </div>
                   {pendingTasks.length === 0 ? (
                       <div className="text-center py-10 opacity-70">
@@ -67,7 +76,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                   ) : (
                       <div className="space-y-3">
                           {pendingTasks.map(task => {
-                              const isOverdue = isBefore(new Date(task.due_date), startOfDay(new Date()));
+                              const isOverdue = isBefore(getBkkDateObj(task.due_date), startOfDay(todayBkk));
                               return (
                                   <div key={task.id}>
                                       {isOverdue && <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1"><AlertTriangle size={12}/> {t.overdue} {formatBkkDate(task.due_date)}</div>}
@@ -82,12 +91,12 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       }
       
       if (viewMode === 'weekly') {
-          const next7Days = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(new Date()), i));
+          const next7Days = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(todayBkk), i));
           return (
               <div className="space-y-4 animate-fade-in h-[65vh] overflow-y-auto max-w-2xl mx-auto pr-1">
                   {next7Days.map(day => {
-                      const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(new Date(t.due_date), day));
-                      const isToday = isSameDay(day, new Date());
+                      const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), day));
+                      const isToday = isSameDay(day, todayBkk);
                       return (
                           <div key={day.toString()} className={`rounded-xl border transition-all ${isToday ? 'border-[#714B67]/40 shadow-md bg-[#fdf4ff]' : 'border-gray-200 bg-white'}`}>
                               <div className={`p-3 font-bold flex justify-between items-center ${isToday ? 'text-[#714B67]' : 'text-gray-600'}`}>
@@ -117,7 +126,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                     locale={getLocale(lang)} 
                     tileContent={({ date, view }) => {
                         if (view === 'month') {
-                            const count = tasks.filter(t => t.status === 'PENDING' && isSameDay(new Date(t.due_date), date)).length;
+                            const count = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), date)).length;
                             if (count > 0) return <div className="flex flex-col items-center"><span className="task-count-badge">{count} {count === 1 ? (t.task_singular || "Task") : (t.tasks_plural || "Tasks")}</span></div>;
                         }
                     }}
@@ -189,9 +198,10 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       {mainTab === 'waiting' && renderApprovalView()}
       {mainTab === 'completed' && renderCompletedView()}
 
-      {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} token={token} user={user} onRefresh={onRefresh} t={t} />}
+      {/* העברת רשימת כל המשתמשים (subordinates) לחלון המשימה כדי למצוא את המנהל */}
+      {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} token={token} user={user} onRefresh={onRefresh} t={t} allUsers={subordinates} />}
 
-      {/* רק כפתור אחד שממוקם בצד שמאל עבור עברית וימין לשפות אחרות */}
+      {/* כפתור פלוס אחד בלבד, ממוקם חכם לפי השפה */}
       {!isTeamView && (
         <button onClick={() => setShowCreateModal(true)} className={`fixed bottom-24 ${lang === 'he' ? 'left-6' : 'right-6'} w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:bg-[#5a3b52] transition transform hover:scale-105 active:scale-95`}>
             <Plus size={32} />
@@ -223,7 +233,7 @@ const ViewBtn = ({ active, onClick, label }) => (
 );
 
 const TaskCard = ({ task, onClick, t, compact = false }) => {
-  const isOverdue = task.status === 'PENDING' && isBefore(new Date(task.due_date), startOfDay(new Date()));
+  const isOverdue = task.status === 'PENDING' && isBefore(getBkkDateObj(task.due_date), startOfDay(getBkkDateObj(new Date())));
   const urgencyColor = task.urgency === 'High' ? 'bg-red-50 text-red-700 border-red-100' : task.urgency === 'Low' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-600 border-gray-100';
   const hasMedia = task.images && task.images.length > 0;
   const isVideo = hasMedia && (task.images[0].includes('mp4') || task.images[0].includes('video'));
@@ -257,7 +267,7 @@ const TaskCard = ({ task, onClick, t, compact = false }) => {
   );
 };
 
-const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
+const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
     const [followUpDate, setFollowUpDate] = useState('');
@@ -297,8 +307,17 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
 
     if(showSuccess) return <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]"><div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center"><Check size={40} className="text-green-600 mb-2"/><h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2></div></div>;
 
-    // 🚀 תיקון שם המנהל: עדיפות למנהל ששמור במשימה (מתוך ה-JOIN), אם לא - למנהל של המשתמש הנוכחי, ואם לא - System.
-    const displayManagerName = task.manager_name || user.manager_name || t.management || 'הנהלה';
+    // 🚀 מציאת שם המנהל המדויק (גיבוי מלא כדי למנוע System)
+    let displayManagerName = task.manager_name;
+    if (!displayManagerName && allUsers) {
+        const workerInfo = allUsers.find(u => String(u.id) === String(task.worker_id));
+        if (workerInfo) {
+            const managerInfo = allUsers.find(u => String(u.id) === String(workerInfo.parent_manager_id));
+            if (managerInfo) displayManagerName = managerInfo.full_name;
+        }
+    }
+    if (!displayManagerName && user.role !== 'EMPLOYEE') displayManagerName = user.full_name;
+    if (!displayManagerName) displayManagerName = user.manager_name || t.management || 'הנהלה';
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-[100] backdrop-blur-sm p-4">
@@ -335,18 +354,15 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     )}
 
                     <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
-                        {/* 🚀 תצוגת שעה מדויקת מהמסד לבנגקוק */}
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.date_label}</span><span className="font-medium">{formatBkkDate(task.due_date)}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.urgency_label || "Urgency"}</span><span className={`px-2 py-0.5 rounded text-xs font-bold ${task.urgency === 'High' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{task.urgency}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.location}</span><span className="font-medium">{task.location_name || '-'}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.category_label || "Category"}</span><span className="font-medium">{task.category_name || '-'}</span></div>
                         <div className="col-span-2 border-t pt-2 mt-2"></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.assigned_to}</span><span className="font-medium">{task.worker_name}</span></div>
-                        {/* 🚀 שם המנהל */}
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.manager_label || "Manager"}</span><span className="font-medium">{displayManagerName}</span></div>
                     </div>
 
-                    {/* 🚀 ללא רקע כחול למנהל */}
                     {task.description && (
                         <div className="bg-[#fdf4ff] p-3 rounded-lg border border-[#714B67]/20">
                             <span className="block text-xs text-[#714B67] font-bold mb-1">{t.manager_notes}:</span>
@@ -377,7 +393,6 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     <div className="pt-4">
                         {canComplete && mode === 'view' && (
                             <div className="flex flex-col sm:flex-row gap-3">
-                                {/* 🚀 עיצוב כפתורים: סגול ראשי מול סגול קו-מתאר (Outline) שקוף למשימת המשך */}
                                 <button onClick={() => setMode('complete')} className="flex-1 bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-md hover:bg-[#5a3b52] transition transform active:scale-95">{t.complete_task_btn}</button>
                                 <button onClick={() => setMode('followup')} className="flex-1 bg-white text-[#714B67] border-2 border-[#714B67] py-3 rounded-xl font-bold shadow-sm hover:bg-[#fdf4ff] transition transform active:scale-95">{t.followup_task_btn}</button>
                             </div>

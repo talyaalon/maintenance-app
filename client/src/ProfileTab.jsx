@@ -16,16 +16,25 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   const [previewImage, setPreviewImage] = useState(user.profile_picture_url);
   const [fileToUpload, setFileToUpload] = useState(null);
 
-  // 🚀 שאיבת נתונים בטוחה: מוודא שהמייל והתמונה תמיד מוצגים
+  // 🚀 שאיבת נתונים בטוחה: מוודא שהמייל והתמונה תמיד מוצגים (גם ברענון!)
   useEffect(() => {
+      const localUserStr = localStorage.getItem('user');
+      let localUser = {};
+      if (localUserStr) {
+          try { localUser = JSON.parse(localUserStr); } catch (e) {}
+      }
+      
+      // נותן עדיפות ל-user שמגיע מהאפליקציה, ואם הוא ריק בגלל רענון - לוקח מהזיכרון המקומי
+      const activeUser = (user && user.email) ? user : localUser;
+
       setFormData({
-          full_name: user.name || user.full_name || '',
-          email: user.email || '', 
-          phone: user.phone || '',
+          full_name: activeUser.name || activeUser.full_name || '',
+          email: activeUser.email || '', 
+          phone: activeUser.phone || '',
           password: '', 
-          preferred_language: user.preferred_language || 'he'
+          preferred_language: activeUser.preferred_language || 'he'
       });
-      setPreviewImage(user.profile_picture_url);
+      setPreviewImage(activeUser.profile_picture_url);
   }, [user]);
 
   const handleImageChange = (e) => {
@@ -45,15 +54,22 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
     dataToSend.append('phone', formData.phone);
     dataToSend.append('preferred_language', formData.preferred_language); 
     
-    if (formData.password) dataToSend.append('password', formData.password);
+    if (formData.password) {
+        dataToSend.append('password', formData.password);
+    }
     
-    if (fileToUpload) dataToSend.append('profile_picture', fileToUpload);
-    else dataToSend.append('existing_picture', user.profile_picture_url || '');
+    if (fileToUpload) {
+        dataToSend.append('profile_picture', fileToUpload);
+    } else {
+        dataToSend.append('existing_picture', previewImage || '');
+    }
 
     try {
       const res = await fetch('https://maintenance-app-h84v.onrender.com/users/profile', {
         method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: {
+            'Authorization': `Bearer ${token}` 
+        },
         body: dataToSend
       });
 
@@ -65,8 +81,8 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         const updatedUser = { 
             ...user, 
             ...data.user,
-            email: data.user.email || formData.email, // וידוא כפול
-            profile_picture_url: data.user.profile_picture_url || user.profile_picture_url
+            email: data.user.email || formData.email, // וידוא כפול למייל
+            profile_picture_url: data.user.profile_picture_url || previewImage // וידוא כפול לתמונה
         };
         
         localStorage.setItem('user', JSON.stringify(updatedUser));
@@ -90,7 +106,8 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
 
       <div className="relative mb-6 group flex flex-col items-center">
         <div className="relative">
-            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-[#fdf4ff] flex items-center justify-center">
+            {/* 🚀 תוקן צבע הרקע כאן לסגול המדויק */}
+            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-[#714B67] bg-opacity-10 flex items-center justify-center">
                 {previewImage ? (
                     <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
@@ -110,7 +127,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         
         <div className="mt-3 text-center">
             <h3 className="text-xl font-bold text-gray-900">{formData.full_name}</h3>
-            <p className="text-sm text-gray-500">{user.role}</p>
+            <p className="text-sm text-gray-500">{user?.role || 'User'}</p>
         </div>
       </div>
 

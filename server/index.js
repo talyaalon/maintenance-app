@@ -228,7 +228,6 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// פונקציה לעדכון ותיקון בסיס הנתונים
 app.get('/fix-db', async (req, res) => {
     try {
         const client = await pool.connect();
@@ -262,12 +261,15 @@ app.get('/fix-db', async (req, res) => {
             await client.query('ALTER TABLE locations DROP CONSTRAINT IF EXISTS locations_name_key');
             await client.query('ALTER TABLE assets DROP CONSTRAINT IF EXISTS assets_code_key');
             
+            // 🚀 הוספת עמודת הרשאות הניהול למנהלים (ברירת מחדל: מותר)
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_manage_fields BOOLEAN DEFAULT TRUE');
+            
             console.log("✅ DB Fix Completed!");
             res.send(`
                 <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
                     <h1 style="color: #166534;">✅ מסד הנתונים תוקן בהצלחה!</h1>
-                    <p>חוקי הכפילות הישנים הוסרו. המערכת עכשיו תומכת רשמית במספר מנהלים (Multi-Tenant).</p>
-                    <p>את יכולה לחזור לאפליקציה וליצור את הקטגוריה!</p>
+                    <p>חוקי הכפילות הישנים הוסרו והתווספו הרשאות ניהול. המערכת עכשיו תומכת רשמית במספר מנהלים (Multi-Tenant).</p>
+                    <p>את יכולה לחזור לאפליקציה!</p>
                 </div>
             `);
         } catch (dbError) {
@@ -458,7 +460,7 @@ app.post('/users', authenticateToken, async (req, res) => {
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, email, phone, role, password, preferred_language } = req.body;
+    const { full_name, email, phone, role, password, preferred_language, can_manage_fields } = req.body;
 
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
@@ -478,10 +480,13 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         return res.status(500).json({ error: "שגיאה בעדכון פרטי ההתחברות." });
     }
 
+    // 🚀 משיכת הנתונים הישנים או שמירת החדשים (כולל ההרשאות מהביג בוס!)
     const lang = preferred_language || oldUser.preferred_language || 'he';
-    let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4, preferred_language=$5';
-    let params = [full_name, email, phone, role, lang];
-    let paramCount = 6;
+    const canManage = can_manage_fields !== undefined ? can_manage_fields : oldUser.can_manage_fields;
+
+    let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4, preferred_language=$5, can_manage_fields=$6';
+    let params = [full_name, email, phone, role, lang, canManage];
+    let paramCount = 7;
 
     if (password && password.trim() !== '') {
         const bcrypt = require('bcrypt');
@@ -503,6 +508,9 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     if (oldUser.phone !== updatedUser.phone) changes.push(`Phone updated`);
     if (oldUser.preferred_language !== updatedUser.preferred_language) changes.push(`Language changed to: <strong>${updatedUser.preferred_language}</strong>`);
     if (password && password.trim() !== '') changes.push('Password has been changed');
+    
+    // מעקב אם הביג בוס שינה הרשאות
+    if (oldUser.can_manage_fields !== updatedUser.can_manage_fields) changes.push(`Manager Field Permissions updated`);
 
     if (changes.length > 0) {
         sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes).catch(err => console.error("Email send error:", err));

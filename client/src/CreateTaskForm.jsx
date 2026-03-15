@@ -11,9 +11,12 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
   // 🚀 שעון בנגקוק חסין תקלות - לוקח את השעה הנוכחית בבנגקוק ומעצב אותה במדויק לשדה התאריך
   const getCurrentBkkTimeForInput = () => {
-      const bkkDate = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
-      const pad = (n) => n.toString().padStart(2, '0');
-      return `${bkkDate.getFullYear()}-${pad(bkkDate.getMonth()+1)}-${pad(bkkDate.getDate())}T${pad(bkkDate.getHours())}:${pad(bkkDate.getMinutes())}`;
+      const formatter = new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+      });
+      const parts = formatter.formatToParts(new Date());
+      const vals = {}; parts.forEach(p => vals[p.type] = p.value);
+      return `${vals.year}-${vals.month}-${vals.day}T${vals.hour}:${vals.minute}`;
   };
 
   const [formData, setFormData] = useState({
@@ -64,14 +67,31 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     }
   }, [token, isManager, subordinates]);
 
-  // 🚀 הגדרת המנהל הרלוונטי לצורך סינון הקטגוריות
-  const relevantManagerId = isEmployee ? currentUser.parent_manager_id : currentUser.id;
+  // 🚀 אלגוריתם סינון חכם: מיהו המנהל שכרגע "נבחר" (או מי שהעובד שייך אליו)?
+  let targetManagerId = null;
+  if (isEmployee) {
+      targetManagerId = currentUser.parent_manager_id;
+  } else if (formData.assigned_worker_id) {
+      // אם בחרנו עובד בטופס, נמצא את המנהל שלו
+      const selectedWorker = teamMembers.find(u => String(u.id) === String(formData.assigned_worker_id));
+      if (selectedWorker) {
+          targetManagerId = selectedWorker.role === 'MANAGER' ? selectedWorker.id : selectedWorker.parent_manager_id;
+      }
+  } else if (userRole === 'MANAGER') {
+      targetManagerId = currentUser.id;
+  }
 
-  // 🚀 סינון חכם: מציג רק קטגוריות שייכות למנהל הרלוונטי
-  const filteredCategories = categories.filter(c => c.created_by === relevantManagerId || !c.created_by);
+  // 🚀 מחיל את הסינון על הלוקיישנים והקטגוריות!
+  const filteredLocations = targetManagerId 
+      ? locations.filter(l => !l.created_by || String(l.created_by) === String(targetManagerId))
+      : locations;
+
+  const filteredCategories = targetManagerId
+      ? categories.filter(c => !c.created_by || String(c.created_by) === String(targetManagerId))
+      : categories;
 
   const filteredAssets = selectedCategory 
-      ? assets.filter(a => a.category_id === parseInt(selectedCategory))
+      ? assets.filter(a => String(a.category_id) === String(selectedCategory))
       : [];
 
   const employeesOnly = teamMembers.filter(member => {
@@ -181,6 +201,23 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
             
+            {isManager && (
+                <div className="bg-[#fdf4ff] p-3 rounded-xl border border-[#714B67]/20 shadow-sm">
+                    <label className="text-sm font-bold text-[#714B67] block mb-1">
+                        {t.assign_to_label || "Assign To"} <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <select required className="w-full p-3 border rounded-lg bg-white outline-none focus:ring-2 focus:ring-[#714B67]/30 font-bold" 
+                        value={formData.assigned_worker_id} 
+                        onChange={e => {
+                            setFormData({...formData, assigned_worker_id: e.target.value, location_id: '', asset_id: ''});
+                            setSelectedCategory('');
+                        }}>
+                        <option value="">{t.select_worker || "Select Worker..."}</option>
+                        {optionsToRender.map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.role})</option>)}
+                    </select>
+                </div>
+            )}
+
             <div className="bg-white p-4 rounded-xl border border-[#714B67]/30 shadow-sm">
                 <label className="block text-sm font-bold text-[#714B67] mb-2 flex items-center gap-2">
                     <Calendar size={18}/> {t.frequency_label || "Frequency / Date"} 
@@ -258,10 +295,12 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                     <label className="text-sm font-bold text-gray-700 block mb-1">
                         {t.location} <span className="text-red-500 ml-1">*</span>
                     </label>
-                    <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
-                        value={formData.location_id} onChange={e => setFormData({...formData, location_id: e.target.value})}>
+                    <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67] disabled:opacity-50" 
+                        value={formData.location_id} 
+                        onChange={e => setFormData({...formData, location_id: e.target.value})}
+                        disabled={isManager && !formData.assigned_worker_id}>
                         <option value="">{t.select_location}</option>
-                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        {filteredLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select>
                  </div>
                  <div className="flex-1">
@@ -274,20 +313,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                  </div>
             </div>
 
-            {isManager && (
-                <div>
-                    <label className="text-sm font-bold text-gray-700 block mb-1">
-                        {t.assign_to_label} <span className="text-red-500 ml-1">*</span>
-                    </label>
-                    <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
-                        value={formData.assigned_worker_id} onChange={e => setFormData({...formData, assigned_worker_id: e.target.value})}>
-                        <option value="">בחר עובד לביצוע המשימה...</option>
-                        {optionsToRender.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-                    </select>
-                </div>
-            )}
-
-            <div className="border rounded-xl p-3 bg-gray-50">
+            <div className={`border rounded-xl p-3 bg-gray-50 transition ${isManager && !formData.assigned_worker_id ? 'opacity-50 pointer-events-none' : ''}`}>
                  <label className="text-xs font-bold text-gray-500 mb-2 block flex items-center gap-1"><Box size={14}/> {t.select_asset_title || "Asset (Optional)"}</label>
                  <div className="flex gap-2">
                     <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]" 
