@@ -206,7 +206,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                     <button onClick={() => openEditModal(member)} className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-[#fdf4ff] rounded-full transition"><Edit2 size={16}/></button>
                     <button onClick={() => handleDelete(member.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash2 size={16}/></button>
 
-                    {isManagerRole && (
+                    {/* Only show expand toggle for MANAGERs (to reveal their employees); BIG_BOSS always shows managers nested below */}
+                    {member.role === 'MANAGER' && (
                         <button onClick={() => toggleManager(member.id)} className="p-1 text-gray-400 hover:text-[#714B67] transition">
                             {expandedManager === member.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
                         </button>
@@ -216,7 +217,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
         );
     };
 
-    const managers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
+    const bigBosses = team.filter(u => u.role === 'BIG_BOSS');
+    const regularManagers = team.filter(u => u.role === 'MANAGER');
     const directEmployees = team.filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === user.id);
 
     return (
@@ -229,16 +231,44 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                 </button>
             </div>
 
-            {/* Team List */}
+            {/* Team List — BIG_BOSS → MANAGERs → EMPLOYEEs tree */}
             <div className="space-y-4 max-w-3xl mx-auto">
-                {managers.map(manager => {
+                {/* Big Boss rows — managers always nested below */}
+                {bigBosses.map(boss => (
+                    <div key={boss.id} className="space-y-2">
+                        {renderMemberRow(boss)}
+                        {/* Managers nested under Big Boss (always visible, indented) */}
+                        <div className="ml-6 pl-4 border-l-2 border-[#714B67]/20 space-y-2">
+                            {regularManagers.map(manager => {
+                                const subEmployees = team.filter(u => u.parent_manager_id === manager.id);
+                                return (
+                                    <div key={manager.id} className="space-y-2">
+                                        {renderMemberRow(manager, true)}
+                                        {expandedManager === manager.id && (
+                                            <div className="space-y-2 animate-fade-in">
+                                                {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">{t.no_employees_assigned || "No employees assigned"}</p>}
+                                                {subEmployees.map(sub => renderMemberRow(sub, true))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            {regularManagers.length === 0 && (
+                                <p className="text-sm text-gray-400 text-center py-2">{t.no_managers_assigned || "No managers assigned"}</p>
+                            )}
+                        </div>
+                    </div>
+                ))}
+
+                {/* Fallback: no BIG_BOSS visible (Manager's own view) */}
+                {bigBosses.length === 0 && regularManagers.map(manager => {
                     const subEmployees = team.filter(u => u.parent_manager_id === manager.id);
                     return (
                         <div key={manager.id} className="space-y-2">
                             {renderMemberRow(manager)}
                             {expandedManager === manager.id && (
                                 <div className="space-y-2 animate-fade-in">
-                                    {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">No employees assigned</p>}
+                                    {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">{t.no_employees_assigned || "No employees assigned"}</p>}
                                     {subEmployees.map(sub => renderMemberRow(sub, true))}
                                 </div>
                             )}
@@ -246,7 +276,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                     );
                 })}
 
-                {managers.length === 0 && directEmployees.length > 0 && (
+                {bigBosses.length === 0 && regularManagers.length === 0 && directEmployees.length > 0 && (
                     <>
                         <h3 className="text-sm font-bold text-gray-500 mt-6 mb-2">{t.direct_employees || "Direct Employees"}</h3>
                         {directEmployees.map(emp => renderMemberRow(emp))}

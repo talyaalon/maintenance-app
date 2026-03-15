@@ -278,6 +278,8 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   };
 
   const renderWorkspace = (targetManagerId) => {
+      // MANAGER with can_manage_fields explicitly set to false loses access to Field Settings
+      const canManageFields = !(user?.role === 'MANAGER' && user?.can_manage_fields === false);
       const wCategories = categories.filter(c => c.created_by === targetManagerId);
       const wAssets = assets.filter(a => a.created_by === targetManagerId);
       const wLocations = locations.filter(l => l.created_by === targetManagerId);
@@ -286,18 +288,18 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       return (
           <div className="space-y-6 mt-4 border-t pt-4">
               <div className="flex gap-2 mb-4 bg-gray-100 p-1.5 rounded-xl shadow-inner border">
-                  <button onClick={() => setActiveSubTab('tree')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'tree' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><FolderTree size={16}/> קטגוריות ונכסים</button>
-                  <button onClick={() => setActiveSubTab('locations')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'locations' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><MapPin size={16}/> מיקומים</button>
+                  <button onClick={() => setActiveSubTab('tree')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'tree' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><FolderTree size={16}/> {t.tab_categories_assets || 'קטגוריות ונכסים'}</button>
+                  <button onClick={() => setActiveSubTab('locations')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'locations' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><MapPin size={16}/> {t.nav_locations || 'מיקומים'}</button>
               </div>
 
               {activeSubTab === 'tree' && (
                   <div className="animate-fade-in space-y-4">
                       <div className="flex justify-between items-center mb-4">
-                          <h3 className="text-md font-bold text-gray-700">עץ היררכיה</h3>
-                          <button onClick={() => openTreeModal('category', targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={14}/> הוסף קטגוריה</button>
+                          <h3 className="text-md font-bold text-gray-700">{t.hierarchy_tree_title || 'עץ היררכיה'}</h3>
+                          <button onClick={() => openTreeModal('category', targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={14}/> {t.add_category_btn || 'הוסף קטגוריה'}</button>
                       </div>
                       <div className="space-y-3">
-                          {wCategories.length === 0 && <p className="text-gray-400 text-center text-sm py-4">אין קטגוריות למנהל זה.</p>}
+                          {wCategories.length === 0 && <p className="text-gray-400 text-center text-sm py-4">{t.no_categories_for_manager || 'אין קטגוריות למנהל זה.'}</p>}
                           {wCategories.map(category => {
                               const categoryAssets = wAssets.filter(a => a.category_id === category.id);
                               const isExpanded = expandedCategories.includes(category.id);
@@ -320,7 +322,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                       {isExpanded && (
                                           <div className="bg-white border-t animate-slide-down">
                                               {categoryAssets.length === 0 ? (
-                                                  <div className="p-3 text-center text-xs text-gray-400">אין נכסים תחת קטגוריה זו.</div>
+                                                  <div className="p-3 text-center text-xs text-gray-400">{t.no_assets_in_category_tree || 'אין נכסים תחת קטגוריה זו.'}</div>
                                               ) : (
                                                   <div className="divide-y divide-gray-50">
                                                       {categoryAssets.map(asset => {
@@ -358,15 +360,17 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
               {activeSubTab === 'locations' && (
                   <div className="animate-fade-in space-y-4">
                       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
-                          <h3 className="text-sm sm:text-base font-bold text-gray-700">ניהול מיקומים</h3>
+                          <h3 className="text-sm sm:text-base font-bold text-gray-700">{t.manage_locations_title || 'ניהול מיקומים'}</h3>
                           <div className="flex gap-2">
-                              <button onClick={() => setShowFieldsSettingsModal(true)} className="bg-gray-200 text-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold hover:bg-gray-300 flex items-center gap-1 shadow-sm"><Settings size={13}/> <span>הגדרות שדות</span></button>
-                              <button onClick={() => openLocationModal(targetManagerId)} className="bg-[#714B67] text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={13}/> <span>הוסף מיקום</span></button>
+                              {canManageFields && (
+                                  <button onClick={() => setShowFieldsSettingsModal(true)} className="bg-gray-200 text-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold hover:bg-gray-300 flex items-center gap-1 shadow-sm"><Settings size={13}/> <span>{t.field_settings || 'הגדרות שדות'}</span></button>
+                              )}
+                              <button onClick={() => openLocationModal(targetManagerId)} className="bg-[#714B67] text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={13}/> <span>{t.add_location_btn || 'הוסף מיקום'}</span></button>
                           </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {wLocations.length === 0 && <p className="text-gray-400 text-center text-sm py-4 col-span-2">אין מיקומים למנהל זה.</p>}
+                          {wLocations.length === 0 && <p className="text-gray-400 text-center text-sm py-4 col-span-2">{t.no_locations_for_manager || 'אין מיקומים למנהל זה.'}</p>}
                           {wLocations.map(loc => {
                               let fieldsCount = 0;
                               try { fieldsCount = (typeof loc.dynamic_fields === 'string' ? JSON.parse(loc.dynamic_fields) : (loc.dynamic_fields || [])).length; } catch(e){}
@@ -393,7 +397,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                           </div>
                                       </div>
                                       <div className="flex gap-3 text-[10px] text-gray-500 border-t pt-2 mt-2">
-                                          <span className="flex items-center gap-1"><Layers size={12}/> {fieldsCount} שדות מותאמים</span>
+                                          <span className="flex items-center gap-1"><Layers size={12}/> {fieldsCount} {t.custom_fields_count || 'שדות מותאמים'}</span>
                                       </div>
                                   </div>
                               );
@@ -404,12 +408,12 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
                               <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
                                   <div className="flex justify-between items-center mb-4 border-b pb-3">
-                                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> שדות מיקום מותאמים</h3>
+                                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> {t.custom_fields_title || 'שדות מיקום מותאמים'}</h3>
                                       <button onClick={() => setShowFieldsSettingsModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={20}/></button>
                                   </div>
                                   
                                   <div className="space-y-2 mb-6 max-h-48 overflow-y-auto">
-                                      {mFields.length === 0 && <p className="text-center text-sm text-gray-400 italic">לא הוגדרו שדות.</p>}
+                                      {mFields.length === 0 && <p className="text-center text-sm text-gray-400 italic">{t.no_fields_defined || 'לא הוגדרו שדות.'}</p>}
                                       {mFields.map(f => (
                                           <div key={f.id} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border text-sm">
                                               <div className="flex items-center gap-2 font-medium">
@@ -423,9 +427,9 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                   </div>
 
                                   <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 space-y-3">
-                                      <h4 className="text-xs font-bold text-purple-800">הוספת שדה חדש (הזן שפות):</h4>
+                                      <h4 className="text-xs font-bold text-purple-800">{t.add_field_title || 'הוספת שדה חדש (הזן שפות):'}</h4>
                                       <div className="grid grid-cols-2 gap-2">
-                                          <input type="text" placeholder="שם בעברית (חובה)" className="w-full p-2 border rounded-lg text-xs outline-none" value={newField.name_he} onChange={e => setNewField({...newField, name_he: e.target.value})} />
+                                          <input type="text" placeholder={t.field_name_he_placeholder || 'שם בעברית (חובה)'} className="w-full p-2 border rounded-lg text-xs outline-none" value={newField.name_he} onChange={e => setNewField({...newField, name_he: e.target.value})} />
                                           <input type="text" placeholder="Name in English" className="w-full p-2 border rounded-lg text-xs outline-none" value={newField.name_en} onChange={e => setNewField({...newField, name_en: e.target.value})} />
                                           <input type="text" placeholder="ชื่อภาษาไทย" className="w-full p-2 border rounded-lg text-xs outline-none" value={newField.name_th} onChange={e => setNewField({...newField, name_th: e.target.value})} />
                                           <select className="w-full p-2 border rounded-lg text-xs outline-none bg-white" value={newField.type} onChange={e => setNewField({...newField, type: e.target.value})}>
@@ -434,7 +438,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                               <option value="file">קובץ / מסמך / תמונה</option>
                                           </select>
                                       </div>
-                                      <button onClick={() => handleAddGlobalField(targetManagerId)} className="w-full bg-purple-600 text-white p-2 rounded-lg hover:bg-purple-700 shadow-sm text-sm font-bold mt-2">הוסף שדה למערכת</button>
+                                      <button onClick={() => handleAddGlobalField(targetManagerId)} className="w-full bg-purple-600 text-white p-2 rounded-lg hover:bg-purple-700 shadow-sm text-sm font-bold mt-2">{t.add_field_btn || 'הוסף שדה למערכת'}</button>
                                   </div>
                               </div>
                           </div>
@@ -519,7 +523,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           <div className={`p-4 flex justify-between items-center cursor-pointer transition ${isExpanded ? 'bg-[#fdf4ff]' : 'hover:bg-gray-50'}`} onClick={() => setExpandedBossManager(isExpanded ? null : manager.id)}>
                               <div className="flex items-center gap-3">
                                   <div className={`p-2 rounded-full ${isExpanded ? 'bg-[#714B67] text-white' : 'bg-gray-100 text-gray-500'}`}><User size={20}/></div>
-                                  <div><h3 className="font-bold text-gray-800 text-lg">{manager.full_name}</h3><span className="text-xs text-gray-500">ניהול סביבת עבודה</span></div>
+                                  <div><h3 className="font-bold text-gray-800 text-lg">{manager.full_name}</h3><span className="text-xs text-gray-500">{t.manage_workspace_subtitle || 'ניהול סביבת עבודה'}</span></div>
                               </div>
                               <div className="text-gray-400">{isExpanded ? <ChevronUp size={24}/> : <ChevronDown size={24}/>}</div>
                           </div>
@@ -535,22 +539,22 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       {showTreeModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
-                  <div className="flex justify-between mb-4 border-b pb-2"><h3 className="font-bold text-lg">{treeNodeType === 'category' ? 'הגדרת קטגוריה' : 'הגדרת נכס'}</h3><button onClick={() => setShowTreeModal(false)} className="hover:bg-gray-100 p-1 rounded-full"><X/></button></div>
+                  <div className="flex justify-between mb-4 border-b pb-2"><h3 className="font-bold text-lg">{treeNodeType === 'category' ? (categoryForm.id ? (t.category_modal_title_edit || 'עריכת קטגוריה') : (t.category_modal_title_add || 'הגדרת קטגוריה')) : (assetForm.id ? (t.asset_modal_title_edit || 'עריכת נכס') : (t.asset_modal_title_add || 'הגדרת נכס'))}</h3><button onClick={() => setShowTreeModal(false)} className="hover:bg-gray-100 p-1 rounded-full"><X/></button></div>
                   <form onSubmit={handleSaveTreeItem} className="space-y-4">
                       {treeNodeType === 'category' ? (
                           <>
-                              <div><label className="block text-sm font-bold text-gray-700 mb-1">שם הקטגוריה</label><input type="text" required className="w-full p-3 border rounded-lg bg-gray-50" value={categoryForm.name} onChange={e => setCategoryForm({...categoryForm, name: e.target.value})} /></div>
-                              <div><label className="block text-sm font-bold text-gray-700 mb-1">קוד זיהוי (3 אותיות)</label><input type="text" required maxLength="3" className="w-full p-3 border rounded-lg bg-gray-50 uppercase font-mono" value={categoryForm.code} onChange={e => setCategoryForm({...categoryForm, code: e.target.value.toUpperCase()})} /></div>
+                              <div><label className="block text-sm font-bold text-gray-700 mb-1">{t.category_name_label || 'שם הקטגוריה'}</label><input type="text" required className="w-full p-3 border rounded-lg bg-gray-50" value={categoryForm.name} onChange={e => setCategoryForm({...categoryForm, name: e.target.value})} /></div>
+                              <div><label className="block text-sm font-bold text-gray-700 mb-1">{t.category_code_label || 'קוד זיהוי (3 אותיות)'}</label><input type="text" required maxLength="3" className="w-full p-3 border rounded-lg bg-gray-50 uppercase font-mono" value={categoryForm.code} onChange={e => setCategoryForm({...categoryForm, code: e.target.value.toUpperCase()})} /></div>
                           </>
                       ) : (
                           <>
-                              <div><label className="block text-sm font-bold text-gray-700 mb-1">שם הנכס</label><input type="text" required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.name} onChange={e => setAssetForm({...assetForm, name: e.target.value})} /></div>
+                              <div><label className="block text-sm font-bold text-gray-700 mb-1">{t.asset_name_label || 'שם הנכס'}</label><input type="text" required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.name} onChange={e => setAssetForm({...assetForm, name: e.target.value})} /></div>
                               <div><label className="block text-sm font-bold text-gray-700 mb-1">קטגוריה</label><select required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.category_id} onChange={e => setAssetForm({...assetForm, category_id: e.target.value})}><option value="">בחר...</option>{categories.filter(c => c.created_by === assetForm.created_by).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                               <div><label className="block text-sm font-bold text-gray-700 mb-1">מיקום</label><select required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.location_id} onChange={e => setAssetForm({...assetForm, location_id: e.target.value})}><option value="">בחר...</option>{locations.filter(l => l.created_by === assetForm.created_by).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
                               {assetForm.id && <div><label className="block text-sm font-bold text-gray-700 mb-1">קוד (נוצר אוטומטית)</label><input type="text" disabled className="w-full p-3 border rounded-lg bg-gray-100 font-mono text-gray-500" value={assetForm.code} /></div>}
                           </>
                       )}
-                      <button type="submit" className="w-full py-3 bg-[#714B67] text-white rounded-xl font-bold mt-2 shadow">שמור</button>
+                      <button type="submit" className="w-full py-3 bg-[#714B67] text-white rounded-xl font-bold mt-2 shadow">{t.save || 'שמור'}</button>
                   </form>
               </div>
           </div>
@@ -559,7 +563,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       {showLocationModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] animate-scale-in">
-                  <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl"><h3 className="font-bold text-lg text-gray-800">כרטיסיית מיקום</h3><button onClick={() => setShowLocationModal(false)} className="hover:bg-gray-200 p-1 rounded-full"><X/></button></div>
+                  <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl"><h3 className="font-bold text-lg text-gray-800">{t.location_modal_title || 'כרטיסיית מיקום'}</h3><button onClick={() => setShowLocationModal(false)} className="hover:bg-gray-200 p-1 rounded-full"><X/></button></div>
                   <div className="p-6 overflow-y-auto space-y-5">
                       
                       <div className="flex flex-col items-center">
@@ -576,12 +580,12 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                       </div>
 
                       <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">שם המיקום <span className="text-red-500">*</span></label>
+                          <label className="block text-sm font-bold text-gray-700 mb-1">{t.location_name_label || 'שם המיקום'} <span className="text-red-500">*</span></label>
                           <input type="text" required placeholder="למשל: סניף תל אביב מרכז" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none" value={locationForm.name} onChange={e => setLocationForm({...locationForm, name: e.target.value})} />
                       </div>
                       
                       <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> קישור מגוגל מפות</label>
+                          <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> {t.google_maps_link || 'קישור מגוגל מפות'}</label>
                           <input 
                               type="url" 
                               placeholder="הדבק כאן קישור שיתוף (למשל: https://maps.app.goo.gl/...)" 
@@ -638,7 +642,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                       )}
                   </div>
                   <div className="p-4 border-t bg-white rounded-b-2xl">
-                      <button type="button" onClick={handleSaveLocation} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:opacity-90 transition transform hover:scale-[1.01]">שמור כרטיסיית מיקום</button>
+                      <button type="button" onClick={handleSaveLocation} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:opacity-90 transition transform hover:scale-[1.01]">{t.save_location_btn || 'שמור כרטיסיית מיקום'}</button>
                   </div>
               </div>
           </div>

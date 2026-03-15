@@ -332,16 +332,16 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
 
             const result = await res.json();
             if (res.ok) {
-                alert(t.alert_created || "יבוא המשימות הושלם בהצלחה!");
+                alert(t.alert_created || 'יבוא המשימות הושלם בהצלחה!');
                 onRefresh();
                 onClose();
             } else {
                 setValidationStatus("error");
-                setErrorList([result.error || "שגיאת שרת בהעלאה"]);
+                setErrorList([result.error || t.server_error || 'שגיאת שרת בהעלאה']);
             }
         } catch (err) {
             setValidationStatus("error");
-            setErrorList(["שגיאת תקשורת מול השרת"]);
+            setErrorList([t.server_error || 'שגיאת תקשורת מול השרת']);
         } finally {
             setIsProcessing(false);
         }
@@ -412,8 +412,8 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                     </div>
                     
                     <div className="flex bg-gray-100 p-1 rounded-lg">
-                        <button onClick={() => setActiveTab('import')} className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'import' ? 'bg-white shadow text-[#714B67]' : 'text-gray-500 hover:text-gray-700'}`}>Import / ייבוא חכם</button>
-                        <button onClick={() => setActiveTab('export')} className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'export' ? 'bg-white shadow text-[#714B67]' : 'text-gray-500 hover:text-gray-700'}`}>Export / ייצוא</button>
+                        <button onClick={() => setActiveTab('import')} className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'import' ? 'bg-white shadow text-[#714B67]' : 'text-gray-500 hover:text-gray-700'}`}>{t.import_data || 'ייבוא'}</button>
+                        <button onClick={() => setActiveTab('export')} className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'export' ? 'bg-white shadow text-[#714B67]' : 'text-gray-500 hover:text-gray-700'}`}>{t.export_data || 'ייצוא'}</button>
                     </div>
 
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition"><X size={20}/></button>
@@ -447,7 +447,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                                     <div className="flex items-center gap-2">
                                         <Filter size={14} className="text-gray-500"/>
                                         <select className="border border-gray-200 rounded p-1 text-gray-700 text-xs focus:ring-[#714B67] focus:border-[#714B67]" value={filterWorker} onChange={e => setFilterWorker(e.target.value)}>
-                                            <option value="">{user.role === 'BIG_BOSS' ? "All Employees" : "My Team"}</option>
+                                            <option value="">{user.role === 'BIG_BOSS' ? (t.all_employees || 'All Employees') : (t.my_team_filter || 'My Team')}</option>
                                             {relevantUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                                         </select>
                                     </div>
@@ -464,10 +464,10 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                                     <div className="flex items-center gap-1 ml-2">
                                         <ListFilter size={14} className="text-gray-500"/>
                                         <select className="border border-gray-200 rounded p-1 text-gray-700 text-xs focus:ring-[#714B67] focus:border-[#714B67]" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-                                            <option value="">All Statuses</option>
-                                            <option value="PENDING">Pending (Not Performed)</option>
-                                            <option value="WAITING_APPROVAL">Waiting Approval</option>
-                                            <option value="COMPLETED">Completed</option>
+                                            <option value="">{t.all_statuses || 'All Statuses'}</option>
+                                            <option value="PENDING">{t.status_pending_filter || 'Pending (Not Performed)'}</option>
+                                            <option value="WAITING_APPROVAL">{t.status_waiting_filter || 'Waiting Approval'}</option>
+                                            <option value="COMPLETED">{t.status_completed_filter || 'Completed'}</option>
                                         </select>
                                     </div>
                                 </div>
@@ -476,10 +476,10 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                             <div className="flex-1 flex gap-4 overflow-hidden min-h-0">
                                 <div className="flex-1 flex flex-col min-h-0">
                                     <div className="mb-2">
-                                        <h4 className="text-xs font-bold text-gray-800 mb-1 uppercase">Available fields</h4>
+                                        <h4 className="text-xs font-bold text-gray-800 mb-1 uppercase">{t.available_fields_label || t.available_fields || 'Available Fields'}</h4>
                                         <div className="relative">
                                             <Search size={14} className="absolute left-2 top-2.5 text-gray-400"/>
-                                            <input type="text" placeholder="Search..." className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#714B67]" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
+                                            <input type="text" placeholder={t.search_placeholder || 'Search...'} className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#714B67]" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
                                         </div>
                                     </div>
                                     <div className="flex-1 overflow-y-auto border border-gray-200 rounded bg-white shadow-sm">
@@ -494,7 +494,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
 
                                 <div className="flex-1 flex flex-col min-h-0">
                                     <div className="mb-2 h-[58px] flex items-end"> 
-                                        <h4 className="text-xs font-bold text-gray-800 mb-1 uppercase">Fields to export</h4>
+                                        <h4 className="text-xs font-bold text-gray-800 mb-1 uppercase">{t.fields_to_export_label || t.fields_to_export || 'Fields to Export'}</h4>
                                     </div>
                                     <div className="flex-1 overflow-y-auto border border-gray-200 rounded bg-white shadow-sm">
                                         {selectedFields.map((field) => (
@@ -505,7 +505,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                                                 ) : <span className="text-[10px] italic">Req</span>}
                                             </div>
                                         ))}
-                                        {selectedFields.length === 0 && <div className="h-full flex items-center justify-center text-gray-400 text-xs italic">No fields selected</div>}
+                                        {selectedFields.length === 0 && <div className="h-full flex items-center justify-center text-gray-400 text-xs italic">{t.no_fields_selected || 'No fields selected'}</div>}
                                     </div>
                                 </div>
                             </div>
@@ -517,14 +517,14 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                         <div className="h-full flex flex-col gap-4">
                             <div className="bg-white p-6 rounded border border-dashed border-gray-300 flex flex-col items-center justify-center gap-2 hover:bg-gray-50 transition cursor-pointer relative flex-1">
                                 <Upload size={32} className="text-gray-400"/>
-                                <p className="text-gray-600 font-medium text-sm">{fileName || "Drag & Drop Excel File / גרור לפה קובץ אקסל"}</p>
+                                <p className="text-gray-600 font-medium text-sm">{fileName || (t.drag_drop_excel || 'Drag & Drop Excel File')}</p>
                                 <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
                             </div>
 
                             <div className="flex justify-between items-center bg-purple-50 p-3 rounded border border-purple-100">
-                                <span className="text-xs text-purple-800 font-medium">✨ תבנית מיוחדת ב-3 שפות קיימת להורדה, כולל עמודת תמונות ודוגמאות!</span>
+                                <span className="text-xs text-purple-800 font-medium">✨ {t.template_download_hint || 'תבנית מיוחדת ב-3 שפות קיימת להורדה, כולל עמודת תמונות ודוגמאות!'}</span>
                                 <button onClick={handleDownloadTemplate} className="bg-purple-600 text-white px-4 py-2 rounded text-xs font-bold hover:bg-purple-700 shadow-sm flex items-center gap-1 transition">
-                                    <Download size={14}/> הורד תבנית מתקדמת
+                                    <Download size={14}/> {t.download_template_btn || 'הורד תבנית מתקדמת'}
                                 </button>
                             </div>
 
@@ -532,8 +532,8 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                                 <div className="bg-green-50 border border-green-200 p-3 rounded flex gap-2 text-green-800 items-start animate-fade-in">
                                     <CheckCircle size={18} className="mt-0.5"/>
                                     <div>
-                                        <p className="font-bold text-sm">הקובץ נבדק ותקין לחלוטין!</p>
-                                        <p className="text-xs">{mappedTasks.length} משימות מוכנות להעלאה למערכת.</p>
+                                        <p className="font-bold text-sm">{t.file_valid_title || 'הקובץ נבדק ותקין לחלוטין!'}</p>
+                                        <p className="text-xs">{mappedTasks.length} {t.tasks_ready_prefix || 'משימות מוכנות להעלאה למערכת.'}</p>
                                     </div>
                                 </div>
                             )}
@@ -542,7 +542,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                                 <div className="bg-red-50 border border-red-200 p-3 rounded flex gap-2 text-red-800 items-start animate-fade-in overflow-y-auto max-h-40">
                                     <AlertTriangle size={18} className="mt-0.5 shrink-0"/>
                                     <div>
-                                        <p className="font-bold text-sm text-red-700 mb-1">נמצאו שגיאות בקובץ! (לא ניתן להעלות)</p>
+                                        <p className="font-bold text-sm text-red-700 mb-1">{t.errors_found_title || 'נמצאו שגיאות בקובץ! (לא ניתן להעלות)'}</p>
                                         <ul className="list-disc list-inside text-xs mt-1 text-red-600 space-y-1">
                                             {errorList.map((e, i) => <li key={i}>{e}</li>)}
                                         </ul>
@@ -558,21 +558,21 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                     {activeTab === 'export' ? (
                         <>
                             <button onClick={handleExport} disabled={isExporting} className="bg-[#714B67] text-white px-5 py-2 rounded font-bold hover:bg-[#5a3b52] transition shadow-sm disabled:opacity-50 text-sm">
-                                {isExporting ? "Exporting..." : "Export"}
+                                {isExporting ? (t.exporting || 'Exporting...') : (t.export_data || 'Export')}
                             </button>
-                            <button onClick={onClose} className="bg-white border border-gray-300 text-gray-700 px-5 py-2 rounded font-medium hover:bg-gray-50 transition text-sm">Close</button>
+                            <button onClick={onClose} className="bg-white border border-gray-300 text-gray-700 px-5 py-2 rounded font-medium hover:bg-gray-50 transition text-sm">{t.close || t.cancel || 'Close'}</button>
                         </>
                     ) : (
                         <>
                             {previewData.length > 0 && validationStatus !== 'valid' && (
                                 <button onClick={() => processFile(true)} disabled={isProcessing} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 transition text-sm flex items-center gap-2">
-                                    {isProcessing ? "בודק..." : "1. בצע בדיקת תקינות"}
+                                    {isProcessing ? (t.validating || 'בודק...') : (t.validate_import || '1. בצע בדיקת תקינות')}
                                 </button>
                             )}
                             <button onClick={() => processFile(false)} disabled={validationStatus !== 'valid' || isProcessing} className="bg-green-600 text-white px-5 py-2 rounded font-bold hover:bg-green-700 transition shadow-sm disabled:opacity-50 disabled:bg-gray-300 text-sm">
-                                {isProcessing ? "מעלה..." : "2. העלה נתונים מאושרים"}
+                                {isProcessing ? (t.uploading || 'מעלה...') : (t.upload_approved_btn || '2. העלה נתונים מאושרים')}
                             </button>
-                            <button onClick={onClose} className="bg-white border border-gray-300 text-gray-700 px-5 py-2 rounded hover:bg-gray-50 transition text-sm">סגור</button>
+                            <button onClick={onClose} className="bg-white border border-gray-300 text-gray-700 px-5 py-2 rounded hover:bg-gray-50 transition text-sm">{t.close || t.cancel || 'סגור'}</button>
                         </>
                     )}
                 </div>

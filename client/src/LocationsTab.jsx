@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Pencil, MapPin, Plus, X, Save } from 'lucide-react';
 
-const LocationsTab = ({ token, t }) => {
+const LocationsTab = ({ token, t, user }) => {
     const [locations, setLocations] = useState([]);
     const [isAdding, setIsAdding] = useState(false); // האם אנחנו במצב הוספה?
     const [newLocName, setNewLocName] = useState('');
@@ -43,28 +43,28 @@ const LocationsTab = ({ token, t }) => {
             });
 
             if (res.ok) {
-                setNewLocName(''); // ניקוי השדה
-                setIsAdding(false); // סגירת מצב הוספה
-                fetchLocations(); // רענון הרשימה מיד
+                setNewLocName('');
+                setIsAdding(false);
+                fetchLocations();
             } else {
-                alert("שגיאה בהוספה");
+                alert(t.error_adding_location || "שגיאה בהוספה");
             }
-        } catch (e) { 
-            alert("שגיאת שרת"); 
+        } catch (e) {
+            alert(t.server_error || "שגיאת שרת");
         }
     };
 
     // מחיקת מיקום
     const handleDelete = async (id) => {
-        if(!window.confirm("למחוק מיקום זה? זה ימחק גם את המשימות שקשורות אליו!")) return;
+        if (!window.confirm(t.confirm_delete_location || "למחוק מיקום זה? זה ימחק גם את המשימות שקשורות אליו!")) return;
         try {
             await fetch(`https://maintenance-app-h84v.onrender.com/locations/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            fetchLocations(); // רענון הרשימה מיד
-        } catch (e) { 
-            alert("שגיאה במחיקה"); 
+            fetchLocations();
+        } catch (e) {
+            alert(t.error_deleting_location || "שגיאה במחיקה");
         }
     };
 
@@ -85,12 +85,12 @@ const LocationsTab = ({ token, t }) => {
                 },
                 body: JSON.stringify({ name: editName })
             });
-            if(res.ok) {
+            if (res.ok) {
                 setEditingId(null);
-                fetchLocations(); // רענון הרשימה מיד
+                fetchLocations();
             }
-        } catch(e) { 
-            alert("שגיאה בעדכון"); 
+        } catch (e) {
+            alert(t.error_updating_location || "שגיאה בעדכון");
         }
     };
 
@@ -103,22 +103,22 @@ const LocationsTab = ({ token, t }) => {
                     onClick={() => setIsAdding(!isAdding)} 
                     className="bg-[#714B67] text-white px-4 py-2 rounded-full shadow flex items-center gap-2 text-sm hover:#5a3b52 transition">
                     {isAdding ? <X size={18}/> : <Plus size={18}/>}
-                    {isAdding ? 'ביטול' : t.add_location}
+                    {isAdding ? (t.cancel || 'ביטול') : (t.add_location || t.add_location_btn || '+')}
                 </button>
             </div>
 
             {/* טופס הוספה - מופיע רק כשלוחצים על הפלוס */}
             {isAdding && (
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-purple-100 mb-4 animate-fade-in">
-                    <h3 className="font-bold text-gray-700 mb-2">הוספת מיקום חדש</h3>
+                    <h3 className="font-bold text-gray-700 mb-2">{t.add_location_title || 'הוספת מיקום חדש'}</h3>
                     <div className="flex gap-2">
-                        <input 
+                        <input
                             value={newLocName}
                             onChange={(e) => setNewLocName(e.target.value)}
-                            placeholder="שם המיקום (למשל: מחסן ראשי)"
+                            placeholder={t.location_name_placeholder || 'שם המיקום (למשל: מחסן ראשי)'}
                             className="flex-1 p-2 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none"
                         />
-                        <button onClick={handleAddLocation} className="bg-green-600 text-white px-4 rounded-lg font-bold">שמור</button>
+                        <button onClick={handleAddLocation} className="bg-green-600 text-white px-4 rounded-lg font-bold">{t.save || 'שמור'}</button>
                     </div>
                 </div>
             )}
@@ -158,7 +158,7 @@ const LocationsTab = ({ token, t }) => {
                                 <div>
                                     <h3 className="font-bold text-gray-800 text-lg">{loc.name}</h3>
                                     <p className="text-xs text-gray-400">
-                                        נוצר ע"י: {loc.creator_name || 'לא ידוע'}
+                                        {t.created_by_label || 'נוצר ע"י'}: {loc.creator_name || '—'}
                                     </p>
                                 </div>
                             )}
@@ -183,7 +183,7 @@ const LocationsTab = ({ token, t }) => {
             {/* הודעה אם אין מיקומים */}
             {locations.length === 0 && !isAdding && (
                 <div className="text-center text-gray-400 mt-10">
-                    <p>עדיין אין מיקומים במערכת.</p>
+                    <p>{t.no_locations_yet || 'עדיין אין מיקומים במערכת.'}</p>
                 </div>
             )}
         </div>

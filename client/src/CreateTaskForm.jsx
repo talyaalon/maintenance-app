@@ -86,8 +86,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
       ? locations.filter(l => !l.created_by || String(l.created_by) === String(targetManagerId))
       : locations;
 
+  // Strict filter: only show categories that explicitly belong to the target manager (same logic as locations)
   const filteredCategories = targetManagerId
-      ? categories.filter(c => !c.created_by || String(c.created_by) === String(targetManagerId))
+      ? categories.filter(c => String(c.created_by) === String(targetManagerId))
       : categories;
 
   // 🚀 FIX: Filter assets by BOTH selected category AND the target manager's ownership
@@ -130,8 +131,14 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     e.preventDefault();
     
     if (!formData.title || !formData.due_date || !formData.location_id || (isManager && !formData.assigned_worker_id)) {
-        alert("עליך למלא את כל שדות החובה: תאריך, שם המשימה, מיקום, ובחירת עובד לביצוע.");
-        return; 
+        alert(t.alert_required_fields || "עליך למלא את כל שדות החובה: תאריך, שם המשימה, מיקום, ובחירת עובד לביצוע.");
+        return;
+    }
+
+    // If a category was selected, an asset MUST also be selected
+    if (selectedCategory && !formData.asset_id) {
+        alert(t.alert_category_requires_asset || "אם בחרת קטגוריה, חובה לבחור גם נכס.");
+        return;
     }
 
     const data = new FormData();
