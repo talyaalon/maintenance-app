@@ -436,7 +436,7 @@ app.get('/users', authenticateToken, async (req, res) => {
         query += ` ORDER BY u.role, u.full_name`;
         const result = await pool.query(query, params);
         res.json(result.rows);
-    } catch (err) { res.status(500).send('Server Error'); }
+    } catch (err) { console.error("❌ GET /users error:", err.message); res.status(500).send('Server Error'); }
 });
 
 app.post('/users', authenticateToken, async (req, res) => {
@@ -508,9 +508,9 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     try {
         await admin.auth().updateUser(id, firebaseUpdateData);
     } catch (firebaseErr) {
-        console.error("Firebase update failed:", firebaseErr);
+        console.error("Firebase update failed (non-critical, continuing DB update):", firebaseErr.code);
         if (firebaseErr.code === 'auth/email-already-exists') return res.status(400).json({ error: "האימייל הזה כבר תפוס על ידי משתמש אחר." });
-        return res.status(500).json({ error: "שגיאה בעדכון פרטי ההתחברות." });
+        // For non-Firebase users (bcrypt/DB auth), user-not-found is expected — continue to DB update
     }
 
     // Preserve existing values for fields the caller doesn't explicitly send
@@ -583,7 +583,7 @@ app.delete('/users/:id', authenticateToken, async (req, res) => {
 
 app.get('/managers', authenticateToken, async (req, res) => {
   try {
-    const managers = await pool.query("SELECT id, full_name FROM users WHERE role = 'MANAGER' OR role = 'BIG_BOSS'");
+    const managers = await pool.query("SELECT id, full_name, email, phone, role, profile_picture_url, can_manage_fields, auto_approve_tasks FROM users WHERE role = 'MANAGER' OR role = 'BIG_BOSS' ORDER BY full_name");
     res.json(managers.rows);
   } catch (err) { res.status(500).send('Server Error'); }
 });
@@ -1702,4 +1702,14 @@ app.get('/api/rescue-boss', async (req, res) => {
     }
 });
 
-app.listen(port, () => { console.log(`Server running on ${port}`); });
+app.listen(port, async () => {
+    // Ensure permission columns exist without requiring a manual /fix-db call
+    try {
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_manage_fields BOOLEAN DEFAULT TRUE');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_approve_tasks BOOLEAN DEFAULT FALSE');
+        console.log("✅ DB columns verified.");
+    } catch (e) {
+        console.error("⚠️ Startup migration warning:", e.message);
+    }
+    console.log(`Server running on ${port}`);
+});

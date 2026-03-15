@@ -357,11 +357,11 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
               {activeSubTab === 'locations' && (
                   <div className="animate-fade-in space-y-4">
-                      <div className="flex justify-between items-center mb-4">
-                          <h3 className="text-md font-bold text-gray-700">ניהול מיקומים</h3>
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
+                          <h3 className="text-sm sm:text-base font-bold text-gray-700">ניהול מיקומים</h3>
                           <div className="flex gap-2">
-                              <button onClick={() => setShowFieldsSettingsModal(true)} className="bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-gray-300 flex items-center gap-1 shadow-sm"><Settings size={14}/> הגדרות שדות</button>
-                              <button onClick={() => openLocationModal(targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={14}/> הוסף מיקום</button>
+                              <button onClick={() => setShowFieldsSettingsModal(true)} className="bg-gray-200 text-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold hover:bg-gray-300 flex items-center gap-1 shadow-sm"><Settings size={13}/> <span>הגדרות שדות</span></button>
+                              <button onClick={() => openLocationModal(targetManagerId)} className="bg-[#714B67] text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={13}/> <span>הוסף מיקום</span></button>
                           </div>
                       </div>
 

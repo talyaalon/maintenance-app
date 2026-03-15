@@ -128,7 +128,18 @@ const LocationsTab = ({ token, t }) => {
                 {locations.map(loc => (
                     <div key={loc.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
                         <div className="flex items-center gap-3">
-                            <div className="bg-blue-50 p-2 rounded-full text-blue-600">
+                            {loc.image_url ? (
+                                <img
+                                    src={loc.image_url}
+                                    alt={loc.name}
+                                    className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0"
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+                                />
+                            ) : null}
+                            <div
+                                className="bg-blue-50 p-2 rounded-full text-blue-600 shrink-0"
+                                style={{ display: loc.image_url ? 'none' : 'flex' }}
+                            >
                                 <MapPin size={20} />
                             </div>
                             
