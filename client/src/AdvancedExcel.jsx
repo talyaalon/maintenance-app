@@ -13,22 +13,22 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
 
     // --- EXPORT STATE ---
     const allFields = [
-        { id: 'id', label: 'ID (Required for Update)' },
+        { id: 'id', label: t.col_id || 'ID' },
         { id: 'title', label: t.task_title_label || 'Title' },
         { id: 'description', label: t.description_label || 'Description' },
         { id: 'urgency', label: t.urgency_label || 'Urgency' },
         { id: 'status', label: t.status_label || 'Status' },
         { id: 'due_date', label: t.date_label || 'Due Date' },
         { id: 'worker_name', label: t.assigned_to || 'Worker Name' },
-        { id: 'manager_name', label: t.manager_name_label || 'Manager Name' },
+        { id: 'manager_name', label: t.col_manager_name || 'Manager Name' },
         { id: 'location_name', label: t.location || 'Location' },
-        { id: 'asset_code', label: t.asset_code_label || 'Asset Code' },
+        { id: 'asset_code', label: t.col_asset_code || 'Asset Code' },
         { id: 'asset_name', label: t.asset_name_label || 'Asset Name' },
         { id: 'category_name', label: t.category_label || 'Category' },
-        { id: 'notes', label: t.notes_label || 'Notes' },
-        { id: 'image_url', label: t.image_label || 'Image URL' },
-        { id: 'completion_note', label: t.completion_note_label || 'Completion Note' },
-        { id: 'images', label: t.images_label || 'Images (URLs)' }
+        { id: 'notes', label: t.col_notes || 'Notes' },
+        { id: 'image_url', label: t.col_image_url || 'Image URL' },
+        { id: 'completion_note', label: t.col_completion_note || 'Completion Note' },
+        { id: 'images', label: t.col_images || 'Images (URLs)' }
     ];
 
     const [availableFields, setAvailableFields] = useState(allFields);

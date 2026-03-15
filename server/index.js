@@ -376,8 +376,8 @@ app.post('/login', async (req, res) => {
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
         const id = req.user.id;
-        const { full_name, email, phone, password, preferred_language } = req.body;
-        
+        const { full_name, full_name_he, full_name_en, full_name_th, email, phone, password, preferred_language } = req.body;
+
         let profile_picture_url = req.body.existing_picture || null;
         if (req.file) {
             // Use the Cloudinary URL (req.file.path) — NOT a local /uploads/ path
@@ -401,9 +401,9 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
             }
         }
 
-        let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, profile_picture_url=$4, preferred_language=$5';
-        let params = [full_name, email, phone, profile_picture_url, lang];
-        let paramCount = 6;
+        let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, profile_picture_url=$4, preferred_language=$5, full_name_he=$6, full_name_en=$7, full_name_th=$8';
+        let params = [full_name, email, phone, profile_picture_url, lang, full_name_he || null, full_name_en || null, full_name_th || null];
+        let paramCount = 9;
 
         if (password && password.trim() !== '') {
             const bcrypt = require('bcrypt');
@@ -829,20 +829,42 @@ app.post('/assets', authenticateToken, async (req, res) => {
         const ownerId = created_by || req.user.id;
         const primaryName = name_en || name_he || name || '';
 
-        if (code) {
-            const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
-            if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: קוד הנכס כבר קיים במערכת!" });
+        // Auto-generate a unique code server-side — never reject with a duplicate error
+        let finalCode = (code && String(code).trim()) ? String(code).trim() : null;
+        if (category_id) {
+            const catRes = await pool.query('SELECT code FROM categories WHERE id = $1', [category_id]);
+            if (catRes.rows.length > 0) {
+                const catCode = (catRes.rows[0].code || 'GEN').toUpperCase();
+                const isDuplicate = finalCode
+                    ? (await pool.query('SELECT id FROM assets WHERE code = $1', [finalCode])).rows.length > 0
+                    : true;
+                if (!finalCode || isDuplicate) {
+                    const existing = await pool.query(
+                        "SELECT code FROM assets WHERE code ~ $1",
+                        [`^${catCode}-[0-9]+$`]
+                    );
+                    let maxNum = 0;
+                    existing.rows.forEach(r => {
+                        const parts = r.code.split('-');
+                        if (parts.length === 2) {
+                            const n = parseInt(parts[1]);
+                            if (!isNaN(n) && n > maxNum) maxNum = n;
+                        }
+                    });
+                    finalCode = `${catCode}-${String(maxNum + 1).padStart(4, '0')}`;
+                }
+            }
         }
 
         const result = await pool.query(
             `INSERT INTO assets (name, name_he, name_en, name_th, code, category_id, location_id, created_by)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-            [primaryName, name_he || null, name_en || null, name_th || null, code, category_id, location_id || null, ownerId]
+            [primaryName, name_he || null, name_en || null, name_th || null, finalCode, category_id, location_id || null, ownerId]
         );
         res.json(result.rows[0]);
-    } catch (err) { 
+    } catch (err) {
         if (err.code === '23505') return res.status(400).json({ error: "כפילות: הערך כבר קיים במערכת." });
-        res.status(500).send('Error saving asset'); 
+        res.status(500).send('Error saving asset');
     }
 });
 
@@ -1747,10 +1769,27 @@ app.get('/api/rescue-boss', async (req, res) => {
 });
 
 app.listen(port, async () => {
-    // Ensure permission columns exist without requiring a manual /fix-db call
+    // Ensure all required columns exist without requiring a manual /fix-db call
     try {
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_manage_fields BOOLEAN DEFAULT TRUE');
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_approve_tasks BOOLEAN DEFAULT FALSE');
+
+        // Multilingual name columns — required by GET /tasks, /locations, /categories, /assets
+        await pool.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_he TEXT');
+        await pool.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_en TEXT');
+        await pool.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_th TEXT');
+        await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT');
+        await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_en TEXT');
+        await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_th TEXT');
+        await pool.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS name_he TEXT');
+        await pool.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS name_en TEXT');
+        await pool.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS name_th TEXT');
+
+        // Seed English name from legacy single-name column (idempotent)
+        await pool.query("UPDATE locations  SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
+        await pool.query("UPDATE categories SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
+        await pool.query("UPDATE assets     SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
+
         console.log("✅ DB columns verified.");
     } catch (e) {
         console.error("⚠️ Startup migration warning:", e.message);

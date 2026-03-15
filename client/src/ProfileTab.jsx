@@ -7,10 +7,13 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   
   const [formData, setFormData] = useState({
     full_name: user.name || user.full_name || '',
-    email: user.email || '', 
+    full_name_he: user.full_name_he || '',
+    full_name_en: user.full_name_en || '',
+    full_name_th: user.full_name_th || '',
+    email: user.email || '',
     phone: user.phone || '',
-    password: '', 
-    preferred_language: user.preferred_language || 'he' 
+    password: '',
+    preferred_language: user.preferred_language || 'he'
   });
 
   const [previewImage, setPreviewImage] = useState(user.profile_picture_url);
@@ -29,11 +32,13 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
       const src = (user && user.email) ? user : localUser;
 
       setFormData({
-          full_name:          src.full_name || src.name || '',
-          email:              src.email     || '',
-          phone:              src.phone     || '',
+          full_name:          src.full_name     || src.name || '',
+          full_name_he:       src.full_name_he  || '',
+          full_name_en:       src.full_name_en  || '',
+          full_name_th:       src.full_name_th  || '',
+          email:              src.email         || '',
+          phone:              src.phone         || '',
           password:           '',
-          // No 'he' hardcode — use the value stored in the DB/localStorage exactly
           preferred_language: src.preferred_language || localUser.preferred_language || 'he',
       });
       setPreviewImage(src.profile_picture_url || null);
@@ -52,6 +57,9 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
 
     const dataToSend = new FormData();
     dataToSend.append('full_name', formData.full_name);
+    dataToSend.append('full_name_he', formData.full_name_he);
+    dataToSend.append('full_name_en', formData.full_name_en);
+    dataToSend.append('full_name_th', formData.full_name_th);
     dataToSend.append('email', formData.email);
     dataToSend.append('phone', formData.phone);
     dataToSend.append('preferred_language', formData.preferred_language); 
@@ -100,6 +108,9 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         //    the useEffect re-run, which could lag behind React batched renders
         setFormData({
             full_name:          dbUser.full_name          || formData.full_name,
+            full_name_he:       dbUser.full_name_he       ?? formData.full_name_he,
+            full_name_en:       dbUser.full_name_en       ?? formData.full_name_en,
+            full_name_th:       dbUser.full_name_th       ?? formData.full_name_th,
             email:              dbUser.email              || formData.email,
             phone:              dbUser.phone              || formData.phone,
             password:           '',
@@ -153,13 +164,35 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         
         <div>
             <label className="block text-sm font-medium text-gray-500 mb-1">{t.full_name_label || 'Full Name'}</label>
-            <input 
-                type="text" 
-                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
-                value={formData.full_name}
-                onChange={e => setFormData({...formData, full_name: e.target.value})}
-                disabled={!isEditing}
-            />
+            <div className="space-y-2">
+                <input
+                    type="text"
+                    dir="rtl"
+                    placeholder={t.name_he_placeholder || 'שם בעברית'}
+                    className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                    value={formData.full_name_he}
+                    onChange={e => setFormData({...formData, full_name_he: e.target.value})}
+                    disabled={!isEditing}
+                />
+                <input
+                    type="text"
+                    dir="ltr"
+                    placeholder={t.name_en_placeholder || 'Name in English'}
+                    className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                    value={formData.full_name_en}
+                    onChange={e => setFormData({...formData, full_name_en: e.target.value})}
+                    disabled={!isEditing}
+                />
+                <input
+                    type="text"
+                    dir="ltr"
+                    placeholder={t.name_th_placeholder || 'ชื่อภาษาไทย'}
+                    className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                    value={formData.full_name_th}
+                    onChange={e => setFormData({...formData, full_name_th: e.target.value})}
+                    disabled={!isEditing}
+                />
+            </div>
         </div>
 
         <div>

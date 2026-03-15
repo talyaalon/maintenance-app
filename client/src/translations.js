@@ -338,7 +338,21 @@ export const translations = {
     upload_approved_btn: "2. Upload Validated Data",
     uploading: "Uploading...",
     exporting: "Exporting...",
-    close: "Close"
+    close: "Close",
+
+    // --- Excel column headers ---
+    col_id: "ID",
+    col_manager_name: "Manager Name",
+    col_asset_code: "Asset Code",
+    col_notes: "Notes",
+    col_image_url: "Image URL",
+    col_completion_note: "Completion Note",
+    col_images: "Images (URLs)",
+
+    // --- Profile multilingual name labels ---
+    name_he_placeholder: "Name in Hebrew",
+    name_en_placeholder: "Name in English",
+    name_th_placeholder: "ชื่อภาษาไทย"
   },
 
   // --- Hebrew ---
@@ -680,7 +694,21 @@ export const translations = {
     upload_approved_btn: "2. העלה נתונים מאושרים",
     uploading: "מעלה...",
     exporting: "מייצא...",
-    close: "סגור"
+    close: "סגור",
+
+    // --- Excel column headers ---
+    col_id: "מזהה",
+    col_manager_name: "שם המנהל",
+    col_asset_code: "קוד נכס",
+    col_notes: "הערות",
+    col_image_url: "קישור תמונה",
+    col_completion_note: "הערת סיום",
+    col_images: "תמונות (קישורים)",
+
+    // --- Profile multilingual name labels ---
+    name_he_placeholder: "שם בעברית",
+    name_en_placeholder: "Name in English",
+    name_th_placeholder: "ชื่อภาษาไทย"
   },
 
   // --- Thai ---
@@ -1060,6 +1088,20 @@ export const translations = {
     upload_approved_btn: "2. อัปโหลดข้อมูลที่ตรวจสอบแล้ว",
     uploading: "กำลังอัปโหลด...",
     exporting: "กำลังส่งออก...",
-    close: "ปิด"
+    close: "ปิด",
+
+    // --- Excel column headers ---
+    col_id: "รหัส",
+    col_manager_name: "ชื่อผู้จัดการ",
+    col_asset_code: "รหัสทรัพย์สิน",
+    col_notes: "หมายเหตุ",
+    col_image_url: "ลิงก์รูปภาพ",
+    col_completion_note: "บันทึกการเสร็จสิ้น",
+    col_images: "รูปภาพ (ลิงก์)",
+
+    // --- Profile multilingual name labels ---
+    name_he_placeholder: "ชื่อภาษาฮีบรู",
+    name_en_placeholder: "Name in English",
+    name_th_placeholder: "ชื่อภาษาไทย"
   }
 };

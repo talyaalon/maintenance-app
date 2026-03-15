@@ -15,6 +15,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
 
     // --- משתנים להוספת משתמש חדש (כולל שפה!) ---
     const [showAddModal, setShowAddModal] = useState(false);
+    const [managerDropdownOpen, setManagerDropdownOpen] = useState(false);
     const [addForm, setAddForm] = useState({
         full_name: '',
         full_name_he: '',
@@ -438,15 +439,46 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                     </select>
                                     
                                     {addForm.role === 'EMPLOYEE' && (
-                                        <select 
-                                            className="w-full p-3 border rounded-xl bg-white" 
-                                            value={addForm.parent_manager_id} 
-                                            onChange={e => setAddForm({...addForm, parent_manager_id: e.target.value})}
-                                            required={addForm.role === 'EMPLOYEE'} 
-                                        >
-                                            <option value="">{t.select_manager || "Select Manager..."}</option>
-                                            {activeManagers.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>)}
-                                        </select>
+                                        <div className="relative">
+                                            <button
+                                                type="button"
+                                                onClick={() => setManagerDropdownOpen(o => !o)}
+                                                className="w-full p-3 border rounded-xl bg-white flex items-center gap-2 text-left"
+                                            >
+                                                {addForm.parent_manager_id ? (() => {
+                                                    const m = activeManagers.find(m => String(m.id) === String(addForm.parent_manager_id));
+                                                    return m ? (
+                                                        <>
+                                                            <span className="w-7 h-7 rounded-full overflow-hidden shrink-0 bg-[#714B67]/10 border border-[#714B67]/20 flex items-center justify-center">
+                                                                {m.profile_picture_url
+                                                                    ? <img src={m.profile_picture_url} alt={m.full_name} className="w-full h-full object-cover"/>
+                                                                    : <span className="text-xs font-bold text-[#714B67]">{(m.full_name||'?').charAt(0).toUpperCase()}</span>}
+                                                            </span>
+                                                            <span className="text-gray-800 font-medium text-sm">{m.full_name}</span>
+                                                        </>
+                                                    ) : <span className="text-gray-400 text-sm">{t.select_manager || "Select Manager..."}</span>;
+                                                })() : <span className="text-gray-400 text-sm">{t.select_manager || "Select Manager..."}</span>}
+                                                <ChevronDown size={16} className="ml-auto text-gray-400 shrink-0"/>
+                                            </button>
+                                            {managerDropdownOpen && (
+                                                <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                    {activeManagers.map(m => (
+                                                        <div
+                                                            key={m.id}
+                                                            onClick={() => { setAddForm({...addForm, parent_manager_id: m.id}); setManagerDropdownOpen(false); }}
+                                                            className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-purple-50 transition ${String(addForm.parent_manager_id) === String(m.id) ? 'bg-purple-50' : ''}`}
+                                                        >
+                                                            <span className="w-7 h-7 rounded-full overflow-hidden shrink-0 bg-[#714B67]/10 border border-[#714B67]/20 flex items-center justify-center">
+                                                                {m.profile_picture_url
+                                                                    ? <img src={m.profile_picture_url} alt={m.full_name} className="w-full h-full object-cover"/>
+                                                                    : <span className="text-xs font-bold text-[#714B67]">{(m.full_name||'?').charAt(0).toUpperCase()}</span>}
+                                                            </span>
+                                                            <span className="text-sm text-gray-700">{m.full_name} <span className="text-xs text-gray-400">({m.role})</span></span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             )}

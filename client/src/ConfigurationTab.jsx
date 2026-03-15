@@ -588,7 +588,13 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                       <div key={manager.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${isExpanded ? 'ring-2 ring-[#714B67]/40' : ''}`}>
                           <div className={`p-4 flex justify-between items-center cursor-pointer transition ${isExpanded ? 'bg-[#fdf4ff]' : 'hover:bg-gray-50'}`} onClick={() => setExpandedBossManager(isExpanded ? null : manager.id)}>
                               <div className="flex items-center gap-3">
-                                  <div className={`p-2 rounded-full ${isExpanded ? 'bg-[#714B67] text-white' : 'bg-gray-100 text-gray-500'}`}><User size={20}/></div>
+                                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-[#714B67]/20 bg-[#714B67]/10 flex items-center justify-center">
+                                      {manager.profile_picture_url ? (
+                                          <img src={manager.profile_picture_url} alt={manager.full_name} className="w-full h-full object-cover" />
+                                      ) : (
+                                          <span className="text-sm font-bold text-[#714B67]">{(manager.full_name || '?').charAt(0).toUpperCase()}</span>
+                                      )}
+                                  </div>
                                   <div><h3 className="font-bold text-gray-800 text-lg">{manager.full_name}</h3><span className="text-xs text-gray-500">{t.manage_workspace_subtitle || 'ניהול סביבת עבודה'}</span></div>
                               </div>
                               <div className="text-gray-400">{isExpanded ? <ChevronUp size={24}/> : <ChevronDown size={24}/>}</div>
