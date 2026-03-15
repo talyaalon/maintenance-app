@@ -46,14 +46,20 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   useEffect(() => {
     const headers = { 'Authorization': `Bearer ${token}` };
 
-    fetch('https://maintenance-app-h84v.onrender.com/locations', { headers })
-        .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
-
     fetch('https://maintenance-app-h84v.onrender.com/categories', { headers })
         .then(res => res.json()).then(setCategories).catch(err => console.error("Error categories", err));
 
     fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
         .then(res => res.json()).then(setAssets).catch(err => console.error("Error assets", err));
+
+    // For employees, load locations for their own manager immediately
+    if (isEmployee && currentUser?.parent_manager_id) {
+        fetch(`https://maintenance-app-h84v.onrender.com/locations?manager_id=${currentUser.parent_manager_id}`, { headers })
+            .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
+    } else if (!isManager) {
+        fetch('https://maintenance-app-h84v.onrender.com/locations', { headers })
+            .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
+    }
 
     if (isManager) {
         if (subordinates && subordinates.length > 0) {
@@ -65,7 +71,15 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 .catch(err => console.error("Error users", err));
         }
     }
-  }, [token, isManager, subordinates]);
+  }, [token, isManager, isEmployee, subordinates, currentUser?.parent_manager_id]);
+
+  // Re-fetch locations whenever the target manager changes (worker selection)
+  useEffect(() => {
+    if (!isManager || !targetManagerId) return;
+    const headers = { 'Authorization': `Bearer ${token}` };
+    fetch(`https://maintenance-app-h84v.onrender.com/locations?manager_id=${targetManagerId}`, { headers })
+        .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
+  }, [targetManagerId, token, isManager]);
 
   // 🚀 אלגוריתם סינון חכם: מיהו המנהל שכרגע "נבחר" (או מי שהעובד שייך אליו)?
   let targetManagerId = null;
@@ -81,9 +95,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
       targetManagerId = currentUser.id;
   }
 
-  // 🚀 מחיל את הסינון על הלוקיישנים והקטגוריות!
-  const filteredLocations = targetManagerId 
-      ? locations.filter(l => !l.created_by || String(l.created_by) === String(targetManagerId))
+  // Show only locations that belong strictly to the target manager
+  const filteredLocations = targetManagerId
+      ? locations.filter(l => String(l.created_by) === String(targetManagerId))
       : locations;
 
   // Strict filter: only show categories that explicitly belong to the target manager (same logic as locations)

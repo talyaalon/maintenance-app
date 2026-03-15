@@ -547,7 +547,7 @@ app.post('/users', authenticateToken, async (req, res) => {
     
     email = email ? email.toLowerCase() : '';
 
-    if (!full_name || !email || !password || !role) {
+    if (!effectiveFullName || !email || !password || !role) {
         return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -752,12 +752,16 @@ app.delete('/location-fields/:id', authenticateToken, async (req, res) => {
 app.get('/locations', authenticateToken, async (req, res) => {
     try {
         let query = `
-            SELECT locations.*, users.full_name as creator_name 
-            FROM locations 
+            SELECT locations.*, users.full_name as creator_name
+            FROM locations
             LEFT JOIN users ON locations.created_by = users.id
         `;
         let params = [];
-        if (req.user.role === 'MANAGER') {
+        // ?manager_id=X: return only that manager's locations (used by task creation form)
+        if (req.query.manager_id) {
+            query += ` WHERE locations.created_by = $1`;
+            params.push(req.query.manager_id);
+        } else if (req.user.role === 'MANAGER') {
             query += ` WHERE locations.created_by = $1 OR locations.created_by IS NULL`;
             params.push(req.user.id);
         }
@@ -1623,15 +1627,25 @@ app.post('/api/forgot-password', async (req, res) => {
 // ==========================================
 app.post('/api/reset-password', async (req, res) => {
     try {
-        const { token, new_password } = req.body;
+        // Accept both 'token' and 'code' key names from the client
+        const token = req.body.token || req.body.code;
+        const { new_password, email } = req.body;
         if (!token || !new_password) return res.status(400).json({ error: 'Token and new password are required' });
         if (new_password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
         const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-        const result = await pool.query(
-            'SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()',
-            [hashedToken]
-        );
+        let result;
+        if (email) {
+            result = await pool.query(
+                'SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires > NOW() AND email = $2',
+                [hashedToken, email.toLowerCase()]
+            );
+        } else {
+            result = await pool.query(
+                'SELECT id FROM users WHERE reset_token = $1 AND reset_token_expires > NOW()',
+                [hashedToken]
+            );
+        }
 
         if (result.rows.length === 0) return res.status(400).json({ error: 'Invalid or expired reset token' });
 
@@ -1958,10 +1972,17 @@ app.listen(port, async () => {
         await pool.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS name_en TEXT');
         await pool.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS name_th TEXT');
 
+        // Multilingual name columns for users — required by user management endpoints
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_he VARCHAR(255)');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_en VARCHAR(255)');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_th VARCHAR(255)');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(10) DEFAULT \'he\'');
+
         // Seed English name from legacy single-name column (idempotent)
         await pool.query("UPDATE locations  SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
         await pool.query("UPDATE categories SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
         await pool.query("UPDATE assets     SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
+        await pool.query("UPDATE users SET full_name_en = full_name WHERE full_name_en IS NULL AND full_name IS NOT NULL");
 
         console.log("✅ DB columns verified.");
     } catch (e) {

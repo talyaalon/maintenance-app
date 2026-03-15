@@ -87,7 +87,7 @@ const ForgotPasswordModal = ({ t, lang, onClose }) => {
       const res = await fetch(`${API}/api/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: otp.join(''), new_password: newPassword }),
+        body: JSON.stringify({ token: otp.join(''), new_password: newPassword, email }),
       });
       const d = await res.json();
       if (res.ok) {
