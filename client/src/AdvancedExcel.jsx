@@ -20,13 +20,15 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
         { id: 'status', label: t.status_label || 'Status' },
         { id: 'due_date', label: t.date_label || 'Due Date' },
         { id: 'worker_name', label: t.assigned_to || 'Worker Name' },
-        { id: 'manager_name', label: 'Manager Name' }, 
+        { id: 'manager_name', label: t.manager_name_label || 'Manager Name' },
         { id: 'location_name', label: t.location || 'Location' },
-        { id: 'asset_code', label: 'Asset Code' },
-        { id: 'asset_name', label: 'Asset Name' },
-        { id: 'category_name', label: 'Category' },
-        { id: 'completion_note', label: 'Completion Note' },
-        { id: 'images', label: 'Images (URLs)' }
+        { id: 'asset_code', label: t.asset_code_label || 'Asset Code' },
+        { id: 'asset_name', label: t.asset_name_label || 'Asset Name' },
+        { id: 'category_name', label: t.category_label || 'Category' },
+        { id: 'notes', label: t.notes_label || 'Notes' },
+        { id: 'image_url', label: t.image_label || 'Image URL' },
+        { id: 'completion_note', label: t.completion_note_label || 'Completion Note' },
+        { id: 'images', label: t.images_label || 'Images (URLs)' }
     ];
 
     const [availableFields, setAvailableFields] = useState(allFields);
@@ -379,13 +381,16 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
             const rawData = await res.json();
             if (rawData.length === 0) { alert("No tasks found matching filters."); setIsExporting(false); return; }
 
+            // Build a live label map from current `t` so language changes are reflected in headers
+            const liveLabelMap = Object.fromEntries(allFields.map(f => [f.id, f.label]));
             const excelData = rawData.map(task => {
                 const row = {};
                 selectedFields.forEach(field => {
+                    const header = liveLabelMap[field.id] || field.label;
                     let value = task[field.id];
                     if (field.id === 'due_date' && value) value = new Date(value).toISOString().split('T')[0];
                     if (field.id === 'images' && Array.isArray(value)) value = value.join(', ');
-                    row[field.label] = value || "";
+                    row[header] = value ?? "";
                 });
                 return row;
             });

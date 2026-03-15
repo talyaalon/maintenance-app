@@ -316,7 +316,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                         onChange={e => setFormData({...formData, location_id: e.target.value})}
                         disabled={isManager && !formData.assigned_worker_id}>
                         <option value="">{t.select_location}</option>
-                        {filteredLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        {filteredLocations.map(l => <option key={l.id} value={l.id}>{l['name_' + lang] || l.name_en || l.name}</option>)}
                     </select>
                  </div>
                  <div className="flex-1">
@@ -336,12 +336,12 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                         value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setFormData({...formData, asset_id: ''}); }}>
                         <option value="">{t.category_label}</option>
                         {/* 🚀 מציג רק קטגוריות של המנהל הנוכחי */}
-                        {filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {filteredCategories.map(c => <option key={c.id} value={c.id}>{c['name_' + lang] || c.name_en || c.name}</option>)}
                     </select>
                     <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]" 
                         disabled={!selectedCategory} value={formData.asset_id} onChange={e => setFormData({...formData, asset_id: e.target.value})}>
                         <option value="">{t.select_asset}</option>
-                        {filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        {filteredAssets.map(a => <option key={a.id} value={a.id}>{a['name_' + lang] || a.name_en || a.name}</option>)}
                     </select>
                  </div>
             </div>

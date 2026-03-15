@@ -123,7 +123,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                               return (
                                   <div key={task.id}>
                                       {isOverdue && <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1"><AlertTriangle size={12}/> {t.overdue} {formatBkkDate(task.due_date)}</div>}
-                                      <TaskCard task={task} t={t} onClick={() => setSelectedTask(task)} />
+                                      <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
                                   </div>
                               )
                           })}
@@ -148,7 +148,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                               </div>
                               <div className="p-2 pt-0 space-y-2">
                                   {dayTasks.length > 0 ? (
-                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} compact={true} />)
+                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} compact={true} />)
                                   ) : (
                                       <div className="p-3 pt-0 text-xs text-gray-400 text-center">No tasks</div>
                                   )}
@@ -178,7 +178,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                       <h4 className="font-bold mb-4 text-[#714B67] text-lg border-b pb-2">{t.tasks_for_date} {format(selectedDate, 'dd/MM/yyyy')}:</h4>
                       {calendarTasks.length === 0 && <p className="text-gray-400 text-sm p-2">No tasks for this date.</p>}
                       <div className="space-y-2">
-                          {calendarTasks.map(task => <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} />)}
+                          {calendarTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
                       </div>
                   </div>
               </div>
@@ -189,14 +189,14 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const renderApprovalView = () => (
       <div className="space-y-4 animate-fade-in max-w-3xl mx-auto">
           {waitingTasks.length === 0 && <div className="text-center py-10 text-gray-400"><p>{t.no_tasks_waiting}</p></div>}
-          {waitingTasks.map(task => <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} />)}
+          {waitingTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
       </div>
   );
 
   const renderCompletedView = () => (
       <div className="space-y-3 animate-fade-in max-w-3xl mx-auto">
           {completedTasks.length === 0 && <p className="text-center text-gray-500 mt-10">{t.no_tasks_completed}</p>}
-          {completedTasks.map(task => <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} />)}
+          {completedTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
       </div>
   );
 
@@ -275,11 +275,12 @@ const ViewBtn = ({ active, onClick, label }) => (
     <button onClick={onClick} className={`px-6 py-2 text-sm rounded-lg transition-all ${active ? 'bg-white shadow text-[#714B67] font-bold transform scale-105' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
 );
 
-const TaskCard = ({ task, onClick, t, compact = false }) => {
+const TaskCard = ({ task, onClick, t, compact = false, lang = 'en' }) => {
   const isOverdue = task.status === 'PENDING' && isBefore(getBkkDateObj(task.due_date), startOfDay(getBkkDateObj(new Date())));
   const urgencyColor = task.urgency === 'High' ? 'bg-red-50 text-red-700 border-red-100' : task.urgency === 'Low' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-600 border-gray-100';
   const hasMedia = task.images && task.images.length > 0;
   const isVideo = hasMedia && (task.images[0].includes('mp4') || task.images[0].includes('video'));
+  const getN = (base) => task[base + '_' + lang] || task[base + '_en'] || task[base] || '';
 
   return (
     <div onClick={onClick} className="bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-all relative overflow-hidden group mb-2.5">
@@ -288,7 +289,7 @@ const TaskCard = ({ task, onClick, t, compact = false }) => {
             <div className="flex justify-between items-start mb-1.5">
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded-md">
                     <Box size={10} />
-                    <span className="uppercase tracking-wide truncate max-w-[120px]">{task.asset_name ? task.asset_name : (task.category_name || t.general_task || "General")}</span>
+                    <span className="uppercase tracking-wide truncate max-w-[120px]">{getN('asset_name') || getN('category_name') || t.general_task || "General"}</span>
                 </div>
                 <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${urgencyColor}`}>{task.urgency === 'High' ? t.urgent_label : t.normal_label}</div>
             </div>
@@ -300,7 +301,7 @@ const TaskCard = ({ task, onClick, t, compact = false }) => {
             </div>
             <div className="flex justify-between items-center text-xs text-gray-500 mt-2 border-t pt-1.5 border-dashed">
                 <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 truncate max-w-[100px]"><MapPin size={12} className="text-[#714B67]"/><span>{task.location_name || "No Loc"}</span></div>
+                    <div className="flex items-center gap-1 truncate max-w-[100px]"><MapPin size={12} className="text-[#714B67]"/><span>{getN('location_name') || "No Loc"}</span></div>
                     {task.worker_name && <div className="flex items-center gap-1 text-[#714B67] font-medium bg-[#fdf4ff] px-1.5 py-0.5 rounded-md text-[10px]"><User size={10}/> {task.worker_name.split(' ')[0]}</div>}
                 </div>
                 <div className={`flex items-center gap-1 font-medium ${isOverdue ? 'text-red-500' : ''}`}><Clock size={12}/><span>{formatBkkDate(task.due_date)}</span></div>

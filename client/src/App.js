@@ -184,12 +184,13 @@ function App() {
             return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
           case 2: 
             if (isEmployee) return null;
-            return <TeamTab 
-                        user={user} 
-                        token={token} 
-                        t={t} 
-                        onAddUser={() => setIsUserFormOpen(true)} 
-                        refreshTrigger={refreshTrigger} 
+            return <TeamTab
+                        user={user}
+                        token={token}
+                        t={t}
+                        lang={lang}
+                        onAddUser={() => setIsUserFormOpen(true)}
+                        refreshTrigger={refreshTrigger}
                     />;
           case 3: 
             if (isEmployee) return null;

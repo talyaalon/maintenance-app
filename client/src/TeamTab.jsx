@@ -5,24 +5,27 @@ import TasksTab from './TasksTab';
 const TeamTab = ({ token, t, user, onRefresh, lang }) => {
     // --- 1. State for Team Management ---
     const [team, setTeam] = useState([]);
-    const [expandedManager, setExpandedManager] = useState(null);
+    const [expandedManagers, setExpandedManagers] = useState(new Set());
     
     // --- 2. State for Editing User ---
     const [editMember, setEditMember] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editForm, setEditForm] = useState({ full_name: '', email: '', phone: '', password: '' });
+    const [editForm, setEditForm] = useState({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', phone: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
 
     // --- משתנים להוספת משתמש חדש (כולל שפה!) ---
     const [showAddModal, setShowAddModal] = useState(false);
-    const [addForm, setAddForm] = useState({ 
-        full_name: '', 
-        email: '', 
-        password: '', 
-        phone: '', 
-        role: 'EMPLOYEE', 
+    const [addForm, setAddForm] = useState({
+        full_name: '',
+        full_name_he: '',
+        full_name_en: '',
+        full_name_th: '',
+        email: '',
+        password: '',
+        phone: '',
+        role: 'EMPLOYEE',
         parent_manager_id: '',
-        preferred_language: 'he' // 🌍 ברירת מחדל בעת היצירה
+        preferred_language: 'he'
     });
 
     // רשימת המנהלים הפעילים לבחירה בטופס
@@ -56,7 +59,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             if (res.ok) {
                 alert(t.alert_created || "User created successfully! Email sent.");
                 setShowAddModal(false);
-                setAddForm({ full_name: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '', preferred_language: 'he' });
+                setAddForm({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '', preferred_language: 'he' });
                 fetchTeam(); // רענון הרשימה מיד אחרי ההוספה
             } else {
                 if (data.error === "Email already exists") {
@@ -86,6 +89,9 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
             if (res.ok) {
                 const data = await res.json();
                 setTeam(data);
+                // Auto-expand all managers by default
+                const managerIds = data.filter(u => u.role === 'MANAGER').map(u => u.id);
+                setExpandedManagers(new Set(managerIds));
             }
         } catch (e) { console.error(e); }
     };
@@ -112,7 +118,12 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
     };
 
     const toggleManager = (managerId) => {
-        setExpandedManager(expandedManager === managerId ? null : managerId);
+        setExpandedManagers(prev => {
+            const next = new Set(prev);
+            if (next.has(managerId)) next.delete(managerId);
+            else next.add(managerId);
+            return next;
+        });
     };
 
     const handleDelete = async (userId) => {
@@ -132,12 +143,15 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
 
     const openEditModal = (member) => {
         setEditMember(member);
-        setEditForm({ 
-            full_name: member.full_name, 
-            email: member.email, 
+        setEditForm({
+            full_name: member.full_name,
+            full_name_he: member.full_name_he || '',
+            full_name_en: member.full_name_en || member.full_name || '',
+            full_name_th: member.full_name_th || '',
+            email: member.email,
             phone: member.phone || '',
             role: member.role,
-            password: '' 
+            password: ''
         });
         setShowEditModal(true);
     };
@@ -169,7 +183,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
 
     const renderMemberRow = (member, isSub = false) => {
         const isManagerRole = member.role === 'MANAGER' || member.role === 'BIG_BOSS';
-        const initial = (member.full_name || '?').charAt(0).toUpperCase();
+        const displayName = member['full_name_' + lang] || member.full_name_en || member.full_name || '?';
+        const initial = displayName.charAt(0).toUpperCase();
 
         return (
             <div key={member.id} className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center ${isSub ? 'ml-6 border-l-4 border-l-[#714B67]/30' : 'mb-3'}`}>
@@ -188,7 +203,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                             onClick={() => handleMemberClick(member)}
                             className={`font-bold text-gray-800 text-base leading-tight ${user.role !== 'EMPLOYEE' ? 'cursor-pointer hover:text-[#714B67] hover:underline' : ''}`}
                         >
-                            {member.full_name}
+                            {displayName}
                         </span>
                         <div className="text-xs text-gray-500">
                             {member.email}{member.phone && ` | ${member.phone}`}
@@ -202,6 +217,11 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                             {member.role}
                         </span>
                     )}
+                    {member.role === 'EMPLOYEE' && (
+                        <span className="text-[10px] bg-[#fdf4ff] text-[#714B67] border border-[#714B67]/20 px-2 py-0.5 rounded-full font-bold">
+                            {t.role_employee || 'Employee'}
+                        </span>
+                    )}
 
                     <button onClick={() => openEditModal(member)} className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-[#fdf4ff] rounded-full transition"><Edit2 size={16}/></button>
                     <button onClick={() => handleDelete(member.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash2 size={16}/></button>
@@ -209,7 +229,7 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                     {/* Only show expand toggle for MANAGERs (to reveal their employees); BIG_BOSS always shows managers nested below */}
                     {member.role === 'MANAGER' && (
                         <button onClick={() => toggleManager(member.id)} className="p-1 text-gray-400 hover:text-[#714B67] transition">
-                            {expandedManager === member.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
+                            {expandedManagers.has(member.id) ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
                         </button>
                     )}
                 </div>
@@ -244,8 +264,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                                 return (
                                     <div key={manager.id} className="space-y-2">
                                         {renderMemberRow(manager, true)}
-                                        {expandedManager === manager.id && (
-                                            <div className="space-y-2 animate-fade-in">
+                                        {expandedManagers.has(manager.id) && (
+                                            <div className="ml-8 pl-4 border-l-2 border-[#714B67]/10 space-y-2 animate-fade-in">
                                                 {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">{t.no_employees_assigned || "No employees assigned"}</p>}
                                                 {subEmployees.map(sub => renderMemberRow(sub, true))}
                                             </div>
@@ -266,8 +286,8 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                     return (
                         <div key={manager.id} className="space-y-2">
                             {renderMemberRow(manager)}
-                            {expandedManager === manager.id && (
-                                <div className="space-y-2 animate-fade-in">
+                            {expandedManagers.has(manager.id) && (
+                                <div className="ml-8 pl-4 border-l-2 border-[#714B67]/10 space-y-2 animate-fade-in">
                                     {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">{t.no_employees_assigned || "No employees assigned"}</p>}
                                     {subEmployees.map(sub => renderMemberRow(sub, true))}
                                 </div>
@@ -325,14 +345,11 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                     <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
                         <h3 className="text-lg font-bold mb-4">{t.edit || "Edit"}</h3>
                         <form onSubmit={handleEditSubmit} className="space-y-3">
-                            <div>
+                            <div className="space-y-1.5">
                                 <label className="text-sm font-bold text-gray-700">{t.full_name_label}</label>
-                                <input 
-                                    className="w-full p-2 border rounded" 
-                                    value={editForm.full_name} 
-                                    onChange={e => setEditForm({...editForm, full_name: e.target.value})} 
-                                    required
-                                />
+                                <input dir="rtl" className="w-full p-2 border rounded text-sm" placeholder="שם בעברית" value={editForm.full_name_he} onChange={e => setEditForm({...editForm, full_name_he: e.target.value})} />
+                                <input dir="ltr" className="w-full p-2 border rounded text-sm" placeholder="Name in English" required value={editForm.full_name_en} onChange={e => setEditForm({...editForm, full_name_en: e.target.value, full_name: e.target.value})} />
+                                <input dir="ltr" className="w-full p-2 border rounded text-sm" placeholder="ชื่อภาษาไทย" value={editForm.full_name_th} onChange={e => setEditForm({...editForm, full_name_th: e.target.value})} />
                             </div>
                             <div>
                                 <label className="text-sm font-bold text-gray-700">{t.email_label}</label>
@@ -384,7 +401,12 @@ const TeamTab = ({ token, t, user, onRefresh, lang }) => {
                             <button onClick={() => setShowAddModal(false)}><X size={20} className="text-gray-400"/></button>
                         </div>
                         <form onSubmit={handleAddUser} className="space-y-3">
-                            <input className="w-full p-3 border rounded-xl" placeholder={t.full_name_label || "Name"} value={addForm.full_name} onChange={e => setAddForm({...addForm, full_name: e.target.value})} required />
+                            <div className="space-y-1.5">
+                                <p className="text-xs font-bold text-gray-500">{t.full_name_label || 'Name'}</p>
+                                <input dir="rtl" className="w-full p-2 border rounded-xl text-sm" placeholder="שם בעברית" value={addForm.full_name_he} onChange={e => setAddForm({...addForm, full_name_he: e.target.value})} />
+                                <input dir="ltr" className="w-full p-2 border rounded-xl text-sm" placeholder="Name in English" required value={addForm.full_name_en} onChange={e => setAddForm({...addForm, full_name_en: e.target.value, full_name: e.target.value})} />
+                                <input dir="ltr" className="w-full p-2 border rounded-xl text-sm" placeholder="ชื่อภาษาไทย" value={addForm.full_name_th} onChange={e => setAddForm({...addForm, full_name_th: e.target.value})} />
+                            </div>
                             <input className="w-full p-3 border rounded-xl" placeholder={t.email_label || "Email"} type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} required dir="ltr" />
                             <input className="w-full p-3 border rounded-xl" placeholder={t.password_placeholder || "Password"} value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} required dir="ltr" />
                             <input className="w-full p-3 border rounded-xl" placeholder={t.phone_label || "Phone (Optional)"} value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} dir="ltr" />

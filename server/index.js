@@ -265,7 +265,26 @@ app.get('/fix-db', async (req, res) => {
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_manage_fields BOOLEAN DEFAULT TRUE');
             // Auto-approve tasks flag — when TRUE, task completion skips WAITING_APPROVAL
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_approve_tasks BOOLEAN DEFAULT FALSE');
-            
+
+            // ── Multilingual name columns ──
+            await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_he TEXT');
+            await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_en TEXT');
+            await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_th TEXT');
+            await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_he TEXT');
+            await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_en TEXT');
+            await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS name_th TEXT');
+            await client.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS name_he TEXT');
+            await client.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS name_en TEXT');
+            await client.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS name_th TEXT');
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_he TEXT');
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_en TEXT');
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_th TEXT');
+            // Migrate existing single-name data into the English column
+            await client.query("UPDATE locations SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
+            await client.query("UPDATE categories SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
+            await client.query("UPDATE assets SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
+            await client.query("UPDATE users SET full_name_en = full_name WHERE full_name_en IS NULL AND full_name IS NOT NULL");
+
             console.log("✅ DB Fix Completed!");
             res.send(`
                 <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
@@ -441,7 +460,8 @@ app.get('/users', authenticateToken, async (req, res) => {
 
 app.post('/users', authenticateToken, async (req, res) => {
   try {
-    const { full_name, password, role, parent_manager_id, preferred_language } = req.body;
+    const { full_name, full_name_he, full_name_en, full_name_th, password, role, parent_manager_id, preferred_language } = req.body;
+    const effectiveFullName = full_name || full_name_en || '';
     let { email, phone } = req.body;
     
     email = email ? email.toLowerCase() : '';
@@ -468,9 +488,9 @@ app.post('/users', authenticateToken, async (req, res) => {
     const lang = preferred_language || 'he';
 
     const newUser = await pool.query(
-      `INSERT INTO users (full_name, email, password, role, phone, parent_manager_id, preferred_language) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, full_name, email, role, phone, preferred_language`,
-      [full_name, email, hashedPassword, role, phone, assignedManager, lang]
+      `INSERT INTO users (full_name, full_name_he, full_name_en, full_name_th, email, password, role, phone, parent_manager_id, preferred_language)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, full_name, email, role, phone, preferred_language`,
+      [effectiveFullName, full_name_he || null, full_name_en || null, full_name_th || null, email, hashedPassword, role, phone, assignedManager, lang]
     );
     
     try {
@@ -493,7 +513,7 @@ app.post('/users', authenticateToken, async (req, res) => {
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks } = req.body;
+    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks } = req.body;
 
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
@@ -518,9 +538,10 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     const canManage   = can_manage_fields    !== undefined ? can_manage_fields    : oldUser.can_manage_fields;
     const autoApprove = auto_approve_tasks   !== undefined ? auto_approve_tasks   : oldUser.auto_approve_tasks;
 
-    let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, role=$4, preferred_language=$5, can_manage_fields=$6, auto_approve_tasks=$7';
-    let params = [full_name, email, phone, role, lang, canManage, autoApprove];
-    let paramCount = 8;
+    const effectiveName = full_name || full_name_en || oldUser.full_name;
+    let query = 'UPDATE users SET full_name=$1, full_name_he=$2, full_name_en=$3, full_name_th=$4, email=$5, phone=$6, role=$7, preferred_language=$8, can_manage_fields=$9, auto_approve_tasks=$10';
+    let params = [effectiveName, full_name_he || null, full_name_en || null, full_name_th || null, email, phone, role, lang, canManage, autoApprove];
+    let paramCount = 11;
 
     if (password && password.trim() !== '') {
         const bcrypt = require('bcrypt');
@@ -645,12 +666,13 @@ app.post('/locations', authenticateToken, (req, res) => {
     upload.any()(req, res, async (uploadErr) => {
         if (uploadErr) return res.status(500).json({ error: "שגיאת קובץ: " + uploadErr.message });
         
-        try { 
-            let { name, map_link, dynamic_fields, created_by, existing_image } = req.body;
-            if (!name) return res.status(400).json({ error: "שם המיקום חובה" });
+        try {
+            let { name, name_he, name_en, name_th, map_link, dynamic_fields, created_by, existing_image } = req.body;
+            const primaryName = name_en || name_he || name || '';
+            if (!primaryName) return res.status(400).json({ error: "שם המיקום חובה" });
 
-            const ownerId = (created_by && created_by !== 'null') ? parseInt(created_by, 10) : req.user.id; 
-            const check = await pool.query('SELECT id FROM locations WHERE name = $1 AND created_by = $2', [name, ownerId]);
+            const ownerId = (created_by && created_by !== 'null') ? parseInt(created_by, 10) : req.user.id;
+            const check = await pool.query('SELECT id FROM locations WHERE name = $1 AND created_by = $2', [primaryName, ownerId]);
             if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: מיקום כבר קיים" });
 
             const locs = await pool.query("SELECT code FROM locations WHERE created_by = $1 AND code LIKE 'LOC-%'", [ownerId]);
@@ -677,9 +699,9 @@ app.post('/locations', authenticateToken, (req, res) => {
             }
 
             const r = await pool.query(
-                `INSERT INTO locations (name, created_by, code, image_url, coordinates, dynamic_fields) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`, 
-                [name, ownerId, generatedCode, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields)]
-            ); 
+                `INSERT INTO locations (name, name_he, name_en, name_th, created_by, code, image_url, coordinates, dynamic_fields) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+                [primaryName, name_he || null, name_en || null, name_th || null, ownerId, generatedCode, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields)]
+            );
             res.json(r.rows[0]); 
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -688,8 +710,9 @@ app.post('/locations', authenticateToken, (req, res) => {
 app.put('/locations/:id', authenticateToken, (req, res) => {
     upload.any()(req, res, async (uploadErr) => {
         if (uploadErr) return res.status(500).json({ error: "שגיאת קובץ: " + uploadErr.message });
-        try { 
-            let { name, map_link, dynamic_fields, existing_image } = req.body;
+        try {
+            let { name, name_he, name_en, name_th, map_link, dynamic_fields, existing_image } = req.body;
+            const primaryName = name_en || name_he || name || '';
             let mainImageUrl = (existing_image && existing_image !== 'null') ? existing_image : null;
             let parsedDynamicFields = [];
             try { if (dynamic_fields && dynamic_fields !== 'null') parsedDynamicFields = JSON.parse(dynamic_fields); } catch(e){}
@@ -709,9 +732,9 @@ app.put('/locations/:id', authenticateToken, (req, res) => {
             }
 
             const r = await pool.query(
-                `UPDATE locations SET name=$1, image_url=$2, coordinates=$3, dynamic_fields=$4 WHERE id=$5 RETURNING *`, 
-                [name, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields), req.params.id]
-            ); 
+                `UPDATE locations SET name=$1, name_he=$2, name_en=$3, name_th=$4, image_url=$5, coordinates=$6, dynamic_fields=$7 WHERE id=$8 RETURNING *`,
+                [primaryName, name_he || null, name_en || null, name_th || null, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields), req.params.id]
+            );
             res.json(r.rows[0]); 
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -740,17 +763,18 @@ app.get('/categories', authenticateToken, async (req, res) => {
 });
 
 app.post('/categories', authenticateToken, async (req, res) => {
-    try { 
-        const { name, code, created_by } = req.body;
+    try {
+        const { name, name_he, name_en, name_th, code, created_by } = req.body;
         const ownerId = created_by || req.user.id;
+        const primaryName = name_en || name_he || name || '';
 
-        const check = await pool.query('SELECT id FROM categories WHERE name = $1 AND created_by = $2', [name, ownerId]);
+        const check = await pool.query('SELECT id FROM categories WHERE name = $1 AND created_by = $2', [primaryName, ownerId]);
         if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: קטגוריה בשם זה כבר קיימת אצלך במערכת!" });
 
         const result = await pool.query(
-            'INSERT INTO categories (name, code, created_by) VALUES ($1, $2, $3) RETURNING *', 
-            [name, code, ownerId]
-        ); 
+            'INSERT INTO categories (name, name_he, name_en, name_th, code, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [primaryName, name_he || null, name_en || null, name_th || null, code, ownerId]
+        );
         res.json(result.rows[0]); 
     } catch (err) { 
         if (err.code === '23505') return res.status(400).json({ error: "כפילות: הערך כבר קיים במערכת." });
@@ -761,8 +785,12 @@ app.post('/categories', authenticateToken, async (req, res) => {
 app.put('/categories/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, code } = req.body;
-        const result = await pool.query('UPDATE categories SET name = $1, code = $2 WHERE id = $3 RETURNING *', [name, code, id]);
+        const { name, name_he, name_en, name_th, code } = req.body;
+        const primaryName = name_en || name_he || name || '';
+        const result = await pool.query(
+            'UPDATE categories SET name = $1, name_he = $2, name_en = $3, name_th = $4, code = $5 WHERE id = $6 RETURNING *',
+            [primaryName, name_he || null, name_en || null, name_th || null, code, id]
+        );
         res.json(result.rows[0]);
     } catch (err) { res.status(500).send('Error updating category'); }
 });
@@ -773,9 +801,14 @@ app.put('/categories/:id', authenticateToken, async (req, res) => {
 app.get('/assets', authenticateToken, async (req, res) => {
     try { 
         let query = `
-            SELECT assets.*, categories.name as category_name, users.full_name as creator_name 
-            FROM assets 
-            LEFT JOIN categories ON assets.category_id = categories.id 
+            SELECT assets.*,
+                   categories.name as category_name,
+                   COALESCE(categories.name_en, categories.name) as category_name_en,
+                   COALESCE(categories.name_he, categories.name) as category_name_he,
+                   COALESCE(categories.name_th, categories.name) as category_name_th,
+                   users.full_name as creator_name
+            FROM assets
+            LEFT JOIN categories ON assets.category_id = categories.id
             LEFT JOIN users ON assets.created_by = users.id
         `;
         let params = [];
@@ -792,18 +825,19 @@ app.get('/assets', authenticateToken, async (req, res) => {
 
 app.post('/assets', authenticateToken, async (req, res) => {
     try {
-        const { name, code, category_id, location_id, created_by } = req.body;
+        const { name, name_he, name_en, name_th, code, category_id, location_id, created_by } = req.body;
         const ownerId = created_by || req.user.id;
-        
+        const primaryName = name_en || name_he || name || '';
+
         if (code) {
             const check = await pool.query('SELECT id FROM assets WHERE code = $1', [code]);
             if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: קוד הנכס כבר קיים במערכת!" });
         }
-        
+
         const result = await pool.query(
-            `INSERT INTO assets (name, code, category_id, location_id, created_by) 
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`, 
-            [name, code, category_id, location_id || null, ownerId]
+            `INSERT INTO assets (name, name_he, name_en, name_th, code, category_id, location_id, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [primaryName, name_he || null, name_en || null, name_th || null, code, category_id, location_id || null, ownerId]
         );
         res.json(result.rows[0]);
     } catch (err) { 
@@ -815,10 +849,11 @@ app.post('/assets', authenticateToken, async (req, res) => {
 app.put('/assets/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, category_id, location_id } = req.body;
+        const { name, name_he, name_en, name_th, category_id, location_id } = req.body;
+        const primaryName = name_en || name_he || name || '';
         const result = await pool.query(
-            'UPDATE assets SET name = $1, category_id = $2, location_id = $3 WHERE id = $4 RETURNING *', 
-            [name, category_id, location_id || null, id]
+            'UPDATE assets SET name = $1, name_he = $2, name_en = $3, name_th = $4, category_id = $5, location_id = $6 WHERE id = $7 RETURNING *',
+            [primaryName, name_he || null, name_en || null, name_th || null, category_id, location_id || null, id]
         );
         res.json(result.rows[0]);
     } catch (err) { res.status(500).send('Error updating asset'); }
@@ -836,12 +871,21 @@ app.get('/tasks', authenticateToken, async (req, res) => {
     try {
         const { role, id } = req.user;
         let query = `
-            SELECT t.*, 
-                   u.full_name as worker_name, 
+            SELECT t.*,
+                   u.full_name as worker_name,
                    l.name as location_name,
-                   a.name as asset_name, 
+                   COALESCE(l.name_en, l.name) as location_name_en,
+                   COALESCE(l.name_he, l.name) as location_name_he,
+                   COALESCE(l.name_th, l.name) as location_name_th,
+                   a.name as asset_name,
+                   COALESCE(a.name_en, a.name) as asset_name_en,
+                   COALESCE(a.name_he, a.name) as asset_name_he,
+                   COALESCE(a.name_th, a.name) as asset_name_th,
                    a.code as asset_code,
-                   c.name as category_name
+                   c.name as category_name,
+                   COALESCE(c.name_en, c.name) as category_name_en,
+                   COALESCE(c.name_he, c.name) as category_name_he,
+                   COALESCE(c.name_th, c.name) as category_name_th
             FROM tasks t
             LEFT JOIN users u ON t.worker_id = u.id
             LEFT JOIN locations l ON t.location_id = l.id

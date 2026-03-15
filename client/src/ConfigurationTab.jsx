@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload } from 'lucide-react';
 
 const ConfigurationTab = ({ token, t, user, lang }) => { 
@@ -27,10 +27,13 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showFieldsSettingsModal, setShowFieldsSettingsModal] = useState(false);
 
-  const [categoryForm, setCategoryForm] = useState({ id: null, name: '', code: '', created_by: null });
-  const [assetForm, setAssetForm] = useState({ id: null, name: '', category_id: '', location_id: '', code: '', created_by: null });
-  
-  const [locationForm, setLocationForm] = useState({ id: null, name: '', map_link: '', existing_image: '', created_by: null });
+  const [categoryForm, setCategoryForm] = useState({ id: null, name_he: '', name_en: '', name_th: '', code: '', created_by: null });
+  const [assetForm, setAssetForm] = useState({ id: null, name_he: '', name_en: '', name_th: '', category_id: '', location_id: '', code: '', created_by: null });
+
+  const [locationForm, setLocationForm] = useState({ id: null, name_he: '', name_en: '', name_th: '', address: '', existing_image: '', created_by: null });
+  const [isGeolocating, setIsGeolocating] = useState(false);
+  const locationAddressRef = useRef(null);
+  const mapsScriptLoaded = useRef(false);
   const [locationImageFile, setLocationImageFile] = useState(null);
   const [locationImagePreview, setLocationImagePreview] = useState(null);
 
@@ -63,6 +66,62 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           const res = await fetch('https://maintenance-app-h84v.onrender.com/managers', { headers: { 'Authorization': `Bearer ${token}` } });
           if (res.ok) setManagers(await res.json());
       } catch (e) {}
+  };
+
+  // ── Google Maps: load script once ────────────────────────────────────────
+  useEffect(() => {
+    const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (mapsScriptLoaded.current || !MAPS_KEY) return;
+    if (window.google?.maps?.places) { mapsScriptLoaded.current = true; return; }
+    const existing = document.getElementById('gmaps-script');
+    if (existing) return;
+    const script = document.createElement('script');
+    script.id = 'gmaps-script';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => { mapsScriptLoaded.current = true; };
+    document.head.appendChild(script);
+  }, []);
+
+  // ── Init autocomplete when location modal opens ───────────────────────────
+  useEffect(() => {
+    if (!showLocationModal) return;
+    const tryInit = () => {
+      if (!window.google?.maps?.places || !locationAddressRef.current) return;
+      const ac = new window.google.maps.places.Autocomplete(locationAddressRef.current, { types: ['geocode'] });
+      ac.addListener('place_changed', () => {
+        const place = ac.getPlace();
+        setLocationForm(prev => ({ ...prev, address: place.formatted_address || locationAddressRef.current.value }));
+      });
+    };
+    const timer = setTimeout(tryInit, 300);
+    return () => clearTimeout(timer);
+  }, [showLocationModal]);
+
+  const handleUseCurrentLocation = async () => {
+    const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+    setIsGeolocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const res = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.latitude},${coords.longitude}&key=${MAPS_KEY}`
+          );
+          const data = await res.json();
+          const address = data.results?.[0]?.formatted_address || `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
+          setLocationForm(prev => ({ ...prev, address }));
+          if (locationAddressRef.current) locationAddressRef.current.value = address;
+        } catch {
+          const address = `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
+          setLocationForm(prev => ({ ...prev, address }));
+          if (locationAddressRef.current) locationAddressRef.current.value = address;
+        }
+        setIsGeolocating(false);
+      },
+      () => { alert('Could not get your location'); setIsGeolocating(false); }
+    );
   };
 
   // Toggle a boolean permission field on a manager via PUT /users/:id
@@ -160,12 +219,12 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       if (treeNodeType === 'category') {
           method = categoryForm.id ? 'PUT' : 'POST';
           url = categoryForm.id ? `https://maintenance-app-h84v.onrender.com/categories/${categoryForm.id}` : 'https://maintenance-app-h84v.onrender.com/categories';
-          payload = { name: categoryForm.name, code: categoryForm.code.toUpperCase().slice(0, 3), created_by: categoryForm.created_by };
+          payload = { name_he: categoryForm.name_he, name_en: categoryForm.name_en, name_th: categoryForm.name_th, code: categoryForm.code.toUpperCase().slice(0, 3), created_by: categoryForm.created_by };
       } else {
           method = assetForm.id ? 'PUT' : 'POST';
           url = assetForm.id ? `https://maintenance-app-h84v.onrender.com/assets/${assetForm.id}` : 'https://maintenance-app-h84v.onrender.com/assets';
           const finalCode = assetForm.id ? assetForm.code : generateAssetCode(assetForm.category_id);
-          payload = { name: assetForm.name, category_id: assetForm.category_id, location_id: assetForm.location_id, code: finalCode, created_by: assetForm.created_by };
+          payload = { name_he: assetForm.name_he, name_en: assetForm.name_en, name_th: assetForm.name_th, category_id: assetForm.category_id, location_id: assetForm.location_id, code: finalCode, created_by: assetForm.created_by };
       }
       try {
           const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
@@ -176,8 +235,12 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
   const openTreeModal = (type, targetManagerId, item = null) => {
       setTreeNodeType(type);
-      if (type === 'category') setCategoryForm(item ? { ...item, created_by: targetManagerId } : { id: null, name: '', code: '', created_by: targetManagerId });
-      else setAssetForm(item ? { ...item, created_by: targetManagerId } : { id: null, name: '', category_id: item?.category_id || '', location_id: '', code: '', created_by: targetManagerId });
+      if (type === 'category') setCategoryForm(item
+        ? { id: item.id, name_he: item.name_he || '', name_en: item.name_en || item.name || '', name_th: item.name_th || '', code: item.code || '', created_by: targetManagerId }
+        : { id: null, name_he: '', name_en: '', name_th: '', code: '', created_by: targetManagerId });
+      else setAssetForm(item
+        ? { id: item.id, name_he: item.name_he || '', name_en: item.name_en || item.name || '', name_th: item.name_th || '', category_id: item.category_id || '', location_id: item.location_id || '', code: item.code || '', created_by: targetManagerId }
+        : { id: null, name_he: '', name_en: '', name_th: '', category_id: item?.category_id || '', location_id: '', code: '', created_by: targetManagerId });
       setShowTreeModal(true);
   };
 
@@ -212,9 +275,11 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       const url = locationForm.id ? `https://maintenance-app-h84v.onrender.com/locations/${locationForm.id}` : 'https://maintenance-app-h84v.onrender.com/locations';
       
       const formData = new FormData();
-      formData.append('name', locationForm.name);
+      formData.append('name_he', locationForm.name_he || '');
+      formData.append('name_en', locationForm.name_en || '');
+      formData.append('name_th', locationForm.name_th || '');
       formData.append('created_by', locationForm.created_by);
-      formData.append('map_link', locationForm.map_link || '');
+      formData.append('map_link', locationForm.address || '');
       
       if (locationImageFile) formData.append('main_image', locationImageFile);
       else if (locationForm.existing_image) formData.append('existing_image', locationForm.existing_image);
@@ -252,7 +317,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
           const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') ? `https://maintenance-app-h84v.onrender.com${loc.image_url}` : loc.image_url;
 
-          setLocationForm({ id: loc.id, name: loc.name, map_link: parsedMap, existing_image: loc.image_url || '', created_by: targetManagerId });
+          setLocationForm({ id: loc.id, name_he: loc.name_he || '', name_en: loc.name_en || loc.name || '', name_th: loc.name_th || '', address: parsedMap, existing_image: loc.image_url || '', created_by: targetManagerId });
           setLocationImagePreview(fullImgUrl);
 
           let vals = {};
@@ -263,7 +328,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           setDynamicValues(vals);
           setDynamicFiles({});
       } else {
-          setLocationForm({ id: null, name: '', map_link: '', existing_image: '', created_by: targetManagerId });
+          setLocationForm({ id: null, name_he: '', name_en: '', name_th: '', address: '', existing_image: '', created_by: targetManagerId });
           setLocationImagePreview(null);
           setDynamicValues({});
           setDynamicFiles({});
@@ -272,7 +337,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   };
 
   const getMapEmbedUrl = () => {
-      const query = locationForm.map_link || locationForm.name;
+      const query = locationForm.address || locationForm.name_en || locationForm.name_he;
       if (!query) return '';
       return `https://maps.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
   };
@@ -308,7 +373,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                       <div className="p-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 cursor-pointer transition" onClick={() => toggleCategory(category.id)}>
                                           <div className="flex items-center gap-3">
                                               <div className="p-1.5 bg-purple-100 text-purple-600 rounded-lg"><Tag size={16}/></div>
-                                              <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2">{category.name} <span className="text-[10px] bg-purple-200 text-purple-800 px-1.5 rounded-full uppercase">{category.code}</span></h4>
+                                              <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2">{category['name_' + lang] || category.name_en || category.name} <span className="text-[10px] bg-purple-200 text-purple-800 px-1.5 rounded-full uppercase">{category.code}</span></h4>
                                           </div>
                                           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                               <button onClick={() => openTreeModal('asset', targetManagerId, { category_id: category.id })} className="p-1.5 text-[#714B67] hover:bg-purple-100 rounded-full"><Plus size={16}/></button>
@@ -326,13 +391,14 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                               ) : (
                                                   <div className="divide-y divide-gray-50">
                                                       {categoryAssets.map(asset => {
-                                                          const locName = wLocations.find(l => l.id === asset.location_id)?.name || 'ללא מיקום';
+                                                          const _locObj = wLocations.find(l => l.id === asset.location_id);
+                                                          const locName = _locObj ? (_locObj['name_' + lang] || _locObj.name_en || _locObj.name) : 'ללא מיקום';
                                                           return (
                                                               <div key={asset.id} className="p-2 pl-6 flex justify-between items-center hover:bg-gray-50 pr-3 ml-4 border-l-2 border-purple-200">
                                                                   <div className="flex items-center gap-2">
                                                                       <Box size={14} className="text-gray-400"/>
                                                                       <div>
-                                                                          <span className="font-bold text-gray-700 text-sm block">{asset.name}</span>
+                                                                          <span className="font-bold text-gray-700 text-sm block">{asset['name_' + lang] || asset.name_en || asset.name}</span>
                                                                           <div className="text-[10px] text-gray-500 flex gap-2">
                                                                               <span className="font-mono bg-gray-100 px-1 rounded text-purple-600">{asset.code}</span>
                                                                               <span className="flex items-center gap-0.5"><MapPin size={10}/> {locName}</span>
@@ -387,7 +453,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                                   <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 border"><MapPin size={16}/></div>
                                               )}
                                               <div>
-                                                  <h4 className="font-bold text-gray-800 text-sm">{loc.name}</h4>
+                                                  <h4 className="font-bold text-gray-800 text-sm">{loc['name_' + lang] || loc.name_en || loc.name}</h4>
                                                   <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase font-mono">{loc.code}</span>
                                               </div>
                                           </div>
@@ -543,14 +609,24 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                   <form onSubmit={handleSaveTreeItem} className="space-y-4">
                       {treeNodeType === 'category' ? (
                           <>
-                              <div><label className="block text-sm font-bold text-gray-700 mb-1">{t.category_name_label || 'שם הקטגוריה'}</label><input type="text" required className="w-full p-3 border rounded-lg bg-gray-50" value={categoryForm.name} onChange={e => setCategoryForm({...categoryForm, name: e.target.value})} /></div>
+                              <div className="space-y-2">
+                                  <label className="block text-sm font-bold text-gray-700">{t.category_name_label || 'שם הקטגוריה'}</label>
+                                  <input type="text" dir="rtl" placeholder="שם בעברית" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={categoryForm.name_he} onChange={e => setCategoryForm({...categoryForm, name_he: e.target.value})} />
+                                  <input type="text" dir="ltr" placeholder="Name in English" required className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={categoryForm.name_en} onChange={e => setCategoryForm({...categoryForm, name_en: e.target.value})} />
+                                  <input type="text" dir="ltr" placeholder="ชื่อภาษาไทย" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={categoryForm.name_th} onChange={e => setCategoryForm({...categoryForm, name_th: e.target.value})} />
+                              </div>
                               <div><label className="block text-sm font-bold text-gray-700 mb-1">{t.category_code_label || 'קוד זיהוי (3 אותיות)'}</label><input type="text" required maxLength="3" className="w-full p-3 border rounded-lg bg-gray-50 uppercase font-mono" value={categoryForm.code} onChange={e => setCategoryForm({...categoryForm, code: e.target.value.toUpperCase()})} /></div>
                           </>
                       ) : (
                           <>
-                              <div><label className="block text-sm font-bold text-gray-700 mb-1">{t.asset_name_label || 'שם הנכס'}</label><input type="text" required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.name} onChange={e => setAssetForm({...assetForm, name: e.target.value})} /></div>
-                              <div><label className="block text-sm font-bold text-gray-700 mb-1">קטגוריה</label><select required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.category_id} onChange={e => setAssetForm({...assetForm, category_id: e.target.value})}><option value="">בחר...</option>{categories.filter(c => c.created_by === assetForm.created_by).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                              <div><label className="block text-sm font-bold text-gray-700 mb-1">מיקום</label><select required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.location_id} onChange={e => setAssetForm({...assetForm, location_id: e.target.value})}><option value="">בחר...</option>{locations.filter(l => l.created_by === assetForm.created_by).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+                              <div className="space-y-2">
+                                  <label className="block text-sm font-bold text-gray-700">{t.asset_name_label || 'שם הנכס'}</label>
+                                  <input type="text" dir="rtl" placeholder="שם בעברית" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={assetForm.name_he} onChange={e => setAssetForm({...assetForm, name_he: e.target.value})} />
+                                  <input type="text" dir="ltr" placeholder="Name in English" required className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={assetForm.name_en} onChange={e => setAssetForm({...assetForm, name_en: e.target.value})} />
+                                  <input type="text" dir="ltr" placeholder="ชื่อภาษาไทย" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={assetForm.name_th} onChange={e => setAssetForm({...assetForm, name_th: e.target.value})} />
+                              </div>
+                              <div><label className="block text-sm font-bold text-gray-700 mb-1">קטגוריה</label><select required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.category_id} onChange={e => setAssetForm({...assetForm, category_id: e.target.value})}><option value="">בחר...</option>{categories.filter(c => c.created_by === assetForm.created_by).map(c => <option key={c.id} value={c.id}>{c['name_' + lang] || c.name_en || c.name}</option>)}</select></div>
+                              <div><label className="block text-sm font-bold text-gray-700 mb-1">מיקום</label><select required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.location_id} onChange={e => setAssetForm({...assetForm, location_id: e.target.value})}><option value="">בחר...</option>{locations.filter(l => l.created_by === assetForm.created_by).map(l => <option key={l.id} value={l.id}>{l['name_' + lang] || l.name_en || l.name}</option>)}</select></div>
                               {assetForm.id && <div><label className="block text-sm font-bold text-gray-700 mb-1">קוד (נוצר אוטומטית)</label><input type="text" disabled className="w-full p-3 border rounded-lg bg-gray-100 font-mono text-gray-500" value={assetForm.code} /></div>}
                           </>
                       )}
@@ -579,28 +655,47 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           <span className="text-xs text-gray-400 mt-2 font-medium">תמונת המיקום (אופציונלי)</span>
                       </div>
 
-                      <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">{t.location_name_label || 'שם המיקום'} <span className="text-red-500">*</span></label>
-                          <input type="text" required placeholder="למשל: סניף תל אביב מרכז" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none" value={locationForm.name} onChange={e => setLocationForm({...locationForm, name: e.target.value})} />
+                      {/* ── Multilingual names ── */}
+                      <div className="space-y-2">
+                          <label className="block text-sm font-bold text-gray-700">{t.location_name_label || 'שם המיקום'} <span className="text-red-500">*</span></label>
+                          <input type="text" dir="rtl" placeholder="שם בעברית" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none text-sm" value={locationForm.name_he} onChange={e => setLocationForm({...locationForm, name_he: e.target.value})} />
+                          <input type="text" dir="ltr" placeholder="Name in English" required className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none text-sm" value={locationForm.name_en} onChange={e => setLocationForm({...locationForm, name_en: e.target.value})} />
+                          <input type="text" dir="ltr" placeholder="ชื่อภาษาไทย" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none text-sm" value={locationForm.name_th} onChange={e => setLocationForm({...locationForm, name_th: e.target.value})} />
                       </div>
-                      
+
+                      {/* ── Address / Google Maps ── */}
                       <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> {t.google_maps_link || 'קישור מגוגל מפות'}</label>
-                          <input 
-                              type="url" 
-                              placeholder="הדבק כאן קישור שיתוף (למשל: https://maps.app.goo.gl/...)" 
-                              className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-200 outline-none mb-3 text-left dir-ltr" 
-                              value={locationForm.map_link} 
-                              onChange={e => setLocationForm({...locationForm, map_link: e.target.value})} 
-                          />
-                          
-                          {(locationForm.map_link || locationForm.name) && (
+                          <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-1"><Map size={16} className="text-blue-500"/> {t.address_label || 'כתובת / מיקום'}</label>
+                          <div className="flex gap-2 mb-3">
+                              <input
+                                  ref={locationAddressRef}
+                                  type="text"
+                                  dir="ltr"
+                                  defaultValue={locationForm.address}
+                                  onChange={e => setLocationForm({...locationForm, address: e.target.value})}
+                                  placeholder={t.address_placeholder || 'Start typing an address…'}
+                                  className="flex-1 p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-200 outline-none text-sm"
+                              />
+                              <button
+                                  type="button"
+                                  onClick={handleUseCurrentLocation}
+                                  disabled={isGeolocating}
+                                  title={t.use_current_location || 'Use current location'}
+                                  className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 disabled:opacity-60 shrink-0"
+                              >
+                                  {isGeolocating
+                                      ? <span className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full inline-block" />
+                                      : <Map size={15} />}
+                                  <span>{t.use_current_location_short || 'GPS'}</span>
+                              </button>
+                          </div>
+                          {(locationForm.address || locationForm.name_en || locationForm.name_he) && (
                               <div className="w-full h-48 rounded-xl overflow-hidden border shadow-sm relative z-10">
-                                  <iframe 
-                                      width="100%" 
-                                      height="100%" 
-                                      frameBorder="0" style={{border:0}} 
-                                      src={getMapEmbedUrl()} 
+                                  <iframe
+                                      width="100%"
+                                      height="100%"
+                                      style={{border:0}}
+                                      src={getMapEmbedUrl()}
                                       allowFullScreen
                                   ></iframe>
                               </div>

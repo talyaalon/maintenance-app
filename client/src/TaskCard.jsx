@@ -9,7 +9,9 @@ const getBkkTime = (dateInput) => {
     return new Date(d.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
 };
 
-const TaskCard = ({ task, onClick, t, compact = false }) => {
+const TaskCard = ({ task, onClick, t, compact = false, lang = 'en' }) => {
+  const getTaskName = (base) => task[base + '_' + lang] || task[base + '_en'] || task[base] || '';
+
   const taskBkkDate = getBkkTime(task.due_date);
   const todayBkk = getBkkTime(new Date());
   
@@ -32,7 +34,7 @@ const TaskCard = ({ task, onClick, t, compact = false }) => {
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded-md">
                     <Box size={10} />
                     <span className="uppercase tracking-wide truncate max-w-[120px]">
-                        {task.asset_name ? task.asset_name : (task.category_name || t.general_task || "General")}
+                        {getTaskName('asset_name') || getTaskName('category_name') || t.general_task || "General"}
                     </span>
                 </div>
                 <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${urgencyColor}`}>
@@ -52,7 +54,7 @@ const TaskCard = ({ task, onClick, t, compact = false }) => {
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 truncate max-w-[100px]">
                         <MapPin size={12} className="text-[#714B67]"/>
-                        <span>{task.location_name || "No Loc"}</span>
+                        <span>{getTaskName('location_name') || "No Loc"}</span>
                     </div>
                     {task.worker_name && (
                         <div className="flex items-center gap-1 text-[#714B67] font-medium bg-[#fdf4ff] px-1.5 py-0.5 rounded-md text-[10px]">
