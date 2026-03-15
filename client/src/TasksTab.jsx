@@ -5,7 +5,6 @@ import { format, isSameDay, parseISO, addDays, startOfDay, isBefore } from 'date
 import { CheckCircle, Clock, AlertCircle, Camera, ArrowRight, X, FileSpreadsheet, Check, Plus, User, MapPin, Tag, AlertTriangle, Box, Hash, Video, Image as ImageIcon } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
-import TaskCard from './TaskCard';
 
 const getLocale = (lang) => {
     if (lang === 'he') return 'he-IL';
@@ -13,14 +12,13 @@ const getLocale = (lang) => {
     return 'en-US';
 };
 
-// 🚀 פונקציית זמן בנגקוק גלובלית
-const getBkkTime = (dateInput) => {
-    if (!dateInput) return new Date();
-    const d = new Date(dateInput);
-    return new Date(d.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+// 🚀 פונקציה חסינה להצגת השעה שנשמרה במסד כפי שהיא, עם כיוון לתצוגת בנגקוק
+const formatBkkDate = (dateString) => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    return d.toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
 };
 
-// 👇 עיצוב מדויק לסגולים
 const calendarStyles = `
   .react-calendar { width: 100%; border: none; font-family: inherit; background: white; border-radius: 1rem; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
   .react-calendar__navigation button { font-size: 1.1rem; font-weight: bold; color: #714B67; }
@@ -45,13 +43,13 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
 
   const pendingTasks = tasks.filter(task => {
       if (task.status !== 'PENDING') return false;
-      const taskDate = getBkkTime(task.due_date);
-      return isSameDay(taskDate, getBkkTime(new Date())) || isBefore(taskDate, startOfDay(getBkkTime(new Date())));
+      const taskDate = new Date(task.due_date);
+      return isSameDay(taskDate, new Date()) || isBefore(taskDate, startOfDay(new Date()));
   });
 
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
-  const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkTime(t.due_date), selectedDate));
+  const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(new Date(t.due_date), selectedDate));
 
   const renderTodoView = () => {
       if (viewMode === 'daily') {
@@ -59,7 +57,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto">
                   <div className="bg-white p-4 rounded-2xl shadow-sm border border-[#714B67]/20 text-center mb-6">
                       <h3 className="text-xl font-bold text-gray-800">{t.tab_todo}</h3>
-                      <p className="text-[#714B67] font-medium">{format(getBkkTime(new Date()), 'dd/MM/yyyy')}</p>
+                      <p className="text-[#714B67] font-medium">{format(new Date(), 'dd/MM/yyyy')}</p>
                   </div>
                   {pendingTasks.length === 0 ? (
                       <div className="text-center py-10 opacity-70">
@@ -69,10 +67,10 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                   ) : (
                       <div className="space-y-3">
                           {pendingTasks.map(task => {
-                              const isOverdue = isBefore(getBkkTime(task.due_date), startOfDay(getBkkTime(new Date())));
+                              const isOverdue = isBefore(new Date(task.due_date), startOfDay(new Date()));
                               return (
                                   <div key={task.id}>
-                                      {isOverdue && <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1"><AlertTriangle size={12}/> {t.overdue} {format(getBkkTime(task.due_date), 'dd/MM HH:mm')}</div>}
+                                      {isOverdue && <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1"><AlertTriangle size={12}/> {t.overdue} {formatBkkDate(task.due_date)}</div>}
                                       <TaskCard task={task} t={t} onClick={() => setSelectedTask(task)} />
                                   </div>
                               )
@@ -84,12 +82,12 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       }
       
       if (viewMode === 'weekly') {
-          const next7Days = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(getBkkTime(new Date())), i));
+          const next7Days = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(new Date()), i));
           return (
               <div className="space-y-4 animate-fade-in h-[65vh] overflow-y-auto max-w-2xl mx-auto pr-1">
                   {next7Days.map(day => {
-                      const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkTime(t.due_date), day));
-                      const isToday = isSameDay(day, getBkkTime(new Date()));
+                      const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(new Date(t.due_date), day));
+                      const isToday = isSameDay(day, new Date());
                       return (
                           <div key={day.toString()} className={`rounded-xl border transition-all ${isToday ? 'border-[#714B67]/40 shadow-md bg-[#fdf4ff]' : 'border-gray-200 bg-white'}`}>
                               <div className={`p-3 font-bold flex justify-between items-center ${isToday ? 'text-[#714B67]' : 'text-gray-600'}`}>
@@ -98,9 +96,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                               </div>
                               <div className="p-2 pt-0 space-y-2">
                                   {dayTasks.length > 0 ? (
-                                      dayTasks.map(task => (
-                                          <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} compact={true} />
-                                      ))
+                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} compact={true} />)
                                   ) : (
                                       <div className="p-3 pt-0 text-xs text-gray-400 text-center">No tasks</div>
                                   )}
@@ -121,16 +117,8 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                     locale={getLocale(lang)} 
                     tileContent={({ date, view }) => {
                         if (view === 'month') {
-                            const count = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkTime(t.due_date), date)).length;
-                            if (count > 0) {
-                                return (
-                                    <div className="flex flex-col items-center">
-                                        <span className="task-count-badge">
-                                            {count} {count === 1 ? (t.task_singular || "Task") : (t.tasks_plural || "Tasks")}
-                                        </span>
-                                    </div>
-                                );
-                            }
+                            const count = tasks.filter(t => t.status === 'PENDING' && isSameDay(new Date(t.due_date), date)).length;
+                            if (count > 0) return <div className="flex flex-col items-center"><span className="task-count-badge">{count} {count === 1 ? (t.task_singular || "Task") : (t.tasks_plural || "Tasks")}</span></div>;
                         }
                     }}
                   />
@@ -138,9 +126,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                       <h4 className="font-bold mb-4 text-[#714B67] text-lg border-b pb-2">{t.tasks_for_date} {format(selectedDate, 'dd/MM/yyyy')}:</h4>
                       {calendarTasks.length === 0 && <p className="text-gray-400 text-sm p-2">No tasks for this date.</p>}
                       <div className="space-y-2">
-                          {calendarTasks.map(task => (
-                              <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} />
-                          ))}
+                          {calendarTasks.map(task => <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} />)}
                       </div>
                   </div>
               </div>
@@ -148,23 +134,19 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       }
   };
 
-  const renderApprovalView = () => {
-      return (
-          <div className="space-y-4 animate-fade-in max-w-3xl mx-auto">
-              {waitingTasks.length === 0 && <div className="text-center py-10 text-gray-400"><p>{t.no_tasks_waiting}</p></div>}
-              {waitingTasks.map(task => <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} />)}
-          </div>
-      );
-  };
+  const renderApprovalView = () => (
+      <div className="space-y-4 animate-fade-in max-w-3xl mx-auto">
+          {waitingTasks.length === 0 && <div className="text-center py-10 text-gray-400"><p>{t.no_tasks_waiting}</p></div>}
+          {waitingTasks.map(task => <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} />)}
+      </div>
+  );
 
-  const renderCompletedView = () => {
-      return (
-          <div className="space-y-3 animate-fade-in max-w-3xl mx-auto">
-              {completedTasks.length === 0 && <p className="text-center text-gray-500 mt-10">{t.no_tasks_completed}</p>}
-              {completedTasks.map(task => <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} />)}
-          </div>
-      );
-  };
+  const renderCompletedView = () => (
+      <div className="space-y-3 animate-fade-in max-w-3xl mx-auto">
+          {completedTasks.length === 0 && <p className="text-center text-gray-500 mt-10">{t.no_tasks_completed}</p>}
+          {completedTasks.map(task => <TaskCard key={task.id} task={task} t={t} onClick={() => setSelectedTask(task)} />)}
+      </div>
+  );
 
   return (
     <div className="p-4 pb-24 min-h-screen bg-gray-50 relative">
@@ -178,7 +160,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                         <FileSpreadsheet size={20} />
                     </button>
                 )}
-                
                 {isTeamView && (
                     <button onClick={() => setShowCreateModal(true)} className="p-2 bg-[#714B67] text-white rounded-full hover:bg-[#5a3b52] transition shadow-sm">
                         <Plus size={20} />
@@ -188,18 +169,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       </div>
       
       {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
-      
-      {showCreateModal && (
-          <CreateTaskForm 
-              token={token} 
-              t={t} 
-              user={user} 
-              subordinates={subordinates}
-              onRefresh={onRefresh} 
-              onClose={() => setShowCreateModal(false)} 
-              lang={lang} 
-          />
-      )}
+      {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} />}
 
       <div className="flex bg-white p-1.5 rounded-2xl shadow-sm mb-8 mx-auto max-w-3xl">
           <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={pendingTasks.length} color="purple" />
@@ -221,12 +191,9 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
 
       {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} token={token} user={user} onRefresh={onRefresh} t={t} />}
 
-      {/* 🚀 פתרון הכפתור הכפול: שימוש ב-left/right חכם לפי שפה */}
+      {/* רק כפתור אחד שממוקם בצד שמאל עבור עברית וימין לשפות אחרות */}
       {!isTeamView && (
-        <button 
-            onClick={() => setShowCreateModal(true)} 
-            className={`fixed bottom-24 ${lang === 'he' ? 'left-6' : 'right-6'} w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:bg-[#5a3b52] transition transform hover:scale-105 active:scale-95`}
-        >
+        <button onClick={() => setShowCreateModal(true)} className={`fixed bottom-24 ${lang === 'he' ? 'left-6' : 'right-6'} w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:bg-[#5a3b52] transition transform hover:scale-105 active:scale-95`}>
             <Plus size={32} />
         </button>
       )}
@@ -236,16 +203,12 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
 };
 
 const TabButton = ({ active, onClick, label, icon, count, color }) => {
-    let activeClass = '';
-    let badgeClass = '';
-
-    if (color === 'purple') {
-        activeClass = active ? 'bg-[#fdf4ff] text-[#714B67] shadow-inner' : 'text-gray-400 hover:bg-gray-50';
-        badgeClass = active ? 'bg-[#714B67]/20 text-[#714B67]' : 'bg-gray-100 text-gray-500';
-    } else {
-        activeClass = active ? `bg-${color}-50 text-${color}-700 shadow-inner` : 'text-gray-400 hover:bg-gray-50';
-        badgeClass = active ? `bg-${color}-200 text-${color}-800` : 'bg-gray-100 text-gray-500';
-    }
+    let activeClass = color === 'purple' 
+        ? (active ? 'bg-[#fdf4ff] text-[#714B67] shadow-inner' : 'text-gray-400 hover:bg-gray-50')
+        : (active ? `bg-${color}-50 text-${color}-700 shadow-inner` : 'text-gray-400 hover:bg-gray-50');
+    let badgeClass = color === 'purple'
+        ? (active ? 'bg-[#714B67]/20 text-[#714B67]' : 'bg-gray-100 text-gray-500')
+        : (active ? `bg-${color}-200 text-${color}-800` : 'bg-gray-100 text-gray-500');
 
     return (
         <button onClick={onClick} className={`flex-1 flex flex-col items-center py-3 rounded-xl transition-all ${activeClass}`}>
@@ -258,6 +221,41 @@ const TabButton = ({ active, onClick, label, icon, count, color }) => {
 const ViewBtn = ({ active, onClick, label }) => (
     <button onClick={onClick} className={`px-6 py-2 text-sm rounded-lg transition-all ${active ? 'bg-white shadow text-[#714B67] font-bold transform scale-105' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
 );
+
+const TaskCard = ({ task, onClick, t, compact = false }) => {
+  const isOverdue = task.status === 'PENDING' && isBefore(new Date(task.due_date), startOfDay(new Date()));
+  const urgencyColor = task.urgency === 'High' ? 'bg-red-50 text-red-700 border-red-100' : task.urgency === 'Low' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-600 border-gray-100';
+  const hasMedia = task.images && task.images.length > 0;
+  const isVideo = hasMedia && (task.images[0].includes('mp4') || task.images[0].includes('video'));
+
+  return (
+    <div onClick={onClick} className="bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-all relative overflow-hidden group mb-2.5">
+        <div className={`absolute left-0 top-0 bottom-0 w-1 ${isOverdue ? 'bg-red-500' : task.status === 'COMPLETED' ? 'bg-green-500' : task.status === 'WAITING_APPROVAL' ? 'bg-orange-400' : 'bg-[#714B67]'}`}></div>
+        <div className="p-3 pl-4">
+            <div className="flex justify-between items-start mb-1.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded-md">
+                    <Box size={10} />
+                    <span className="uppercase tracking-wide truncate max-w-[120px]">{task.asset_name ? task.asset_name : (task.category_name || t.general_task || "General")}</span>
+                </div>
+                <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${urgencyColor}`}>{task.urgency === 'High' ? t.urgent_label : t.normal_label}</div>
+            </div>
+            <div className="flex justify-between items-start gap-2">
+                <h4 className="font-bold text-gray-800 text-sm sm:text-base leading-tight mb-1.5 flex-1">
+                    {task.title} {task.asset_code && <span className="text-gray-400 font-normal ml-1.5 text-xs sm:text-sm">- {task.asset_code}</span>}
+                </h4>
+                {hasMedia && <div className="text-gray-400">{isVideo ? <Video size={14}/> : <ImageIcon size={14}/>}</div>}
+            </div>
+            <div className="flex justify-between items-center text-xs text-gray-500 mt-2 border-t pt-1.5 border-dashed">
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 truncate max-w-[100px]"><MapPin size={12} className="text-[#714B67]"/><span>{task.location_name || "No Loc"}</span></div>
+                    {task.worker_name && <div className="flex items-center gap-1 text-[#714B67] font-medium bg-[#fdf4ff] px-1.5 py-0.5 rounded-md text-[10px]"><User size={10}/> {task.worker_name.split(' ')[0]}</div>}
+                </div>
+                <div className={`flex items-center gap-1 font-medium ${isOverdue ? 'text-red-500' : ''}`}><Clock size={12}/><span>{formatBkkDate(task.due_date)}</span></div>
+            </div>
+        </div>
+    </div>
+  );
+};
 
 const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const [note, setNote] = useState('');
@@ -299,8 +297,8 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
 
     if(showSuccess) return <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]"><div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center"><Check size={40} className="text-green-600 mb-2"/><h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2></div></div>;
 
-    // 🚀 מזהה המנהל המקצועי
-    const displayManagerName = task.manager_name || t.management || 'הנהלה';
+    // 🚀 תיקון שם המנהל: עדיפות למנהל ששמור במשימה (מתוך ה-JOIN), אם לא - למנהל של המשתמש הנוכחי, ואם לא - System.
+    const displayManagerName = task.manager_name || user.manager_name || t.management || 'הנהלה';
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-[100] backdrop-blur-sm p-4">
@@ -337,18 +335,18 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     )}
 
                     <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
-                        {/* 🚀 תצוגת שעה מדויקת - בנגקוק */}
-                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.date_label}</span><span className="font-medium">{format(getBkkTime(task.due_date), 'dd/MM/yyyy HH:mm')}</span></div>
+                        {/* 🚀 תצוגת שעה מדויקת מהמסד לבנגקוק */}
+                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.date_label}</span><span className="font-medium">{formatBkkDate(task.due_date)}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.urgency_label || "Urgency"}</span><span className={`px-2 py-0.5 rounded text-xs font-bold ${task.urgency === 'High' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{task.urgency}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.location}</span><span className="font-medium">{task.location_name || '-'}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.category_label || "Category"}</span><span className="font-medium">{task.category_name || '-'}</span></div>
                         <div className="col-span-2 border-t pt-2 mt-2"></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.assigned_to}</span><span className="font-medium">{task.worker_name}</span></div>
-                        {/* 🚀 מציג את השם של המנהל במקום System */}
+                        {/* 🚀 שם המנהל */}
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.manager_label || "Manager"}</span><span className="font-medium">{displayManagerName}</span></div>
                     </div>
 
-                    {/* 🚀 הורדנו את הרקע הכחול להערות מנהל */}
+                    {/* 🚀 ללא רקע כחול למנהל */}
                     {task.description && (
                         <div className="bg-[#fdf4ff] p-3 rounded-lg border border-[#714B67]/20">
                             <span className="block text-xs text-[#714B67] font-bold mb-1">{t.manager_notes}:</span>
@@ -364,9 +362,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                                     isVideo(url) ? (
                                         <div key={i} className="relative group cursor-pointer" onClick={() => openMedia(url)}>
                                             <video src={url} className="w-full h-32 object-cover rounded-lg border bg-black" />
-                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition">
-                                                <Video className="text-white opacity-80" size={24}/>
-                                            </div>
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition"><Video className="text-white opacity-80" size={24}/></div>
                                         </div>
                                     ) : (
                                         <img key={i} src={url} onClick={() => openMedia(url)} className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition" alt="task media" />
@@ -381,34 +377,34 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     <div className="pt-4">
                         {canComplete && mode === 'view' && (
                             <div className="flex flex-col sm:flex-row gap-3">
-                                {/* 🚀 עיצוב מדהים לכפתורים: ראשי מול משני (Outline) */}
+                                {/* 🚀 עיצוב כפתורים: סגול ראשי מול סגול קו-מתאר (Outline) שקוף למשימת המשך */}
                                 <button onClick={() => setMode('complete')} className="flex-1 bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-md hover:bg-[#5a3b52] transition transform active:scale-95">{t.complete_task_btn}</button>
                                 <button onClick={() => setMode('followup')} className="flex-1 bg-white text-[#714B67] border-2 border-[#714B67] py-3 rounded-xl font-bold shadow-sm hover:bg-[#fdf4ff] transition transform active:scale-95">{t.followup_task_btn}</button>
                             </div>
                         )}
                         {mode === 'complete' && (
-                            <div className="space-y-3 bg-gray-50 p-4 rounded-xl">
-                                <h4 className="font-bold text-gray-700">{t.report_execution}</h4>
+                            <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <h4 className="font-bold text-[#714B67]">{t.report_execution}</h4>
                                 <textarea placeholder={t.what_was_done} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-[#714B67]/30 outline-none" value={note} onChange={e => setNote(e.target.value)} />
                                 <input type="file" onChange={e => setFile(e.target.files[0])} className="text-xs file:bg-[#fdf4ff] file:text-[#714B67] file:border-0 file:px-4 file:py-2 file:rounded-lg file:font-bold hover:file:bg-[#714B67]/10 cursor-pointer w-full"/>
                                 <div className="flex gap-2">
-                                    <button onClick={() => setMode('view')} className="flex-1 py-2 border rounded-lg bg-white">{t.cancel}</button>
+                                    <button onClick={() => setMode('view')} className="flex-1 py-2 border rounded-lg bg-white text-gray-600 hover:bg-gray-100">{t.cancel}</button>
                                     <button onClick={handleComplete} className="flex-1 py-2 bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3b52]">{t.send_for_approval}</button>
                                 </div>
                             </div>
                         )}
                         {mode === 'followup' && (
-                            <div className="space-y-3 bg-gray-50 p-4 rounded-xl">
-                                <h4 className="font-bold text-gray-700">{t.followup_task_btn}</h4>
-                                <input type="date" className="w-full p-2 border rounded focus:ring-2 focus:ring-[#714B67]/30 outline-none" value={followUpDate} onChange={e => setFollowUpDate(e.target.value)} />
-                                <textarea placeholder={t.description_placeholder} className="w-full p-2 border rounded focus:ring-2 focus:ring-[#714B67]/30 outline-none" value={note} onChange={e => setNote(e.target.value)} />
+                            <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <h4 className="font-bold text-[#714B67]">{t.followup_task_btn}</h4>
+                                <input type="datetime-local" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#714B67]/30 outline-none" value={followUpDate} onChange={e => setFollowUpDate(e.target.value)} />
+                                <textarea placeholder={t.description_placeholder} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#714B67]/30 outline-none" value={note} onChange={e => setNote(e.target.value)} />
                                 <div className="flex gap-2">
-                                    <button onClick={() => setMode('view')} className="flex-1 py-2 border rounded bg-white">{t.cancel}</button>
-                                    <button onClick={handleFollowUp} className="flex-1 py-2 bg-[#714B67] text-white rounded font-bold hover:bg-[#5a3b52]">{t.save}</button>
+                                    <button onClick={() => setMode('view')} className="flex-1 py-2 border rounded-lg bg-white text-gray-600 hover:bg-gray-100">{t.cancel}</button>
+                                    <button onClick={handleFollowUp} className="flex-1 py-2 bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3b52]">{t.save}</button>
                                 </div>
                             </div>
                         )}
-                        {canApprove && <button onClick={handleApprove} className="w-full bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-lg hover:bg-[#5a3b52]">{t.approve_close_btn}</button>}
+                        {canApprove && <button onClick={handleApprove} className="w-full bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-lg hover:bg-[#5a3b52] transition">{t.approve_close_btn}</button>}
                     </div>
                 </div>
             </div>

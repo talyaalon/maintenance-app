@@ -9,18 +9,17 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   const isEmployee = userRole === 'EMPLOYEE' || userRole === 'WORKER' || userRole === 'עובד';
   const isManager = currentUser && !isEmployee;
 
-  // 🚀 שעון בנגקוק - תמיד ימשוך את השעה הנכונה בתאילנד!
-  const getCurrentBkkTime = () => {
-      const now = new Date();
-      const bkkTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
-      bkkTime.setMinutes(bkkTime.getMinutes() - bkkTime.getTimezoneOffset());
-      return bkkTime.toISOString().slice(0, 16);
+  // 🚀 שעון בנגקוק חסין תקלות - לוקח את השעה הנוכחית בבנגקוק ומעצב אותה במדויק לשדה התאריך
+  const getCurrentBkkTimeForInput = () => {
+      const bkkDate = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+      const pad = (n) => n.toString().padStart(2, '0');
+      return `${bkkDate.getFullYear()}-${pad(bkkDate.getMonth()+1)}-${pad(bkkDate.getDate())}T${pad(bkkDate.getHours())}:${pad(bkkDate.getMinutes())}`;
   };
 
   const [formData, setFormData] = useState({
     title: '', 
     urgency: 'Normal', 
-    due_date: getCurrentBkkTime(), 
+    due_date: getCurrentBkkTimeForInput(), 
     location_id: '', 
     asset_id: '', 
     assigned_worker_id: isEmployee ? currentUser?.id : '', 
@@ -64,6 +63,12 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         }
     }
   }, [token, isManager, subordinates]);
+
+  // 🚀 הגדרת המנהל הרלוונטי לצורך סינון הקטגוריות
+  const relevantManagerId = isEmployee ? currentUser.parent_manager_id : currentUser.id;
+
+  // 🚀 סינון חכם: מציג רק קטגוריות שייכות למנהל הרלוונטי
+  const filteredCategories = categories.filter(c => c.created_by === relevantManagerId || !c.created_by);
 
   const filteredAssets = selectedCategory 
       ? assets.filter(a => a.category_id === parseInt(selectedCategory))
@@ -288,7 +293,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                     <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]" 
                         value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setFormData({...formData, asset_id: ''}); }}>
                         <option value="">{t.category_label}</option>
-                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {/* 🚀 מציג רק קטגוריות של המנהל הנוכחי */}
+                        {filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                     <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]" 
                         disabled={!selectedCategory} value={formData.asset_id} onChange={e => setFormData({...formData, asset_id: e.target.value})}>

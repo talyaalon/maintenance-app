@@ -16,7 +16,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   const [previewImage, setPreviewImage] = useState(user.profile_picture_url);
   const [fileToUpload, setFileToUpload] = useState(null);
 
-  // 🚀 מוודא שברגע שיש עדכון במשתמש, הטופס שואב את הנתונים העדכניים מיד
+  // 🚀 שאיבת נתונים בטוחה: מוודא שהמייל והתמונה תמיד מוצגים
   useEffect(() => {
       setFormData({
           full_name: user.name || user.full_name || '',
@@ -25,6 +25,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
           password: '', 
           preferred_language: user.preferred_language || 'he'
       });
+      setPreviewImage(user.profile_picture_url);
   }, [user]);
 
   const handleImageChange = (e) => {
@@ -60,11 +61,17 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
       if (res.ok) {
         alert(t.alert_update_success || "Profile updated successfully!");
         
-        // 🚀 התיקון הקריטי: שומרים מיד לזיכרון של הדפדפן כדי שהרענון לא ימחק כלום!
-        const updatedUser = { ...user, ...data.user };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        // 🚀 התיקון הקריטי: מיזוג נתונים מושלם כדי שהרענון לא יאבד את המייל או התמונה!
+        const updatedUser = { 
+            ...user, 
+            ...data.user,
+            email: data.user.email || formData.email, // וידוא כפול
+            profile_picture_url: data.user.profile_picture_url || user.profile_picture_url
+        };
         
+        localStorage.setItem('user', JSON.stringify(updatedUser));
         onUpdateUser(updatedUser); 
+        
         setIsEditing(false);
         setFormData(prev => ({ ...prev, password: '' })); 
         setShowPassword(false); 
@@ -83,8 +90,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
 
       <div className="relative mb-6 group flex flex-col items-center">
         <div className="relative">
-            {/* 🚀 סגול מדויק לרקע האוואטר */}
-            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-[#714B67]/10 flex items-center justify-center">
+            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-[#fdf4ff] flex items-center justify-center">
                 {previewImage ? (
                     <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
