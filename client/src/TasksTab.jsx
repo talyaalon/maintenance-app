@@ -13,19 +13,19 @@ const getLocale = (lang) => {
     return 'en-US';
 };
 
-// 🚀 פונקציית זמן בנגקוק למשימות שמוצגות כאן
+// 🚀 פונקציית זמן בנגקוק גלובלית
 const getBkkTime = (dateInput) => {
     if (!dateInput) return new Date();
     const d = new Date(dateInput);
     return new Date(d.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
 };
 
-// 👇 עיצוב מעודכן: סגול נכון (#714B67)
+// 👇 עיצוב מדויק לסגולים
 const calendarStyles = `
   .react-calendar { width: 100%; border: none; font-family: inherit; background: white; border-radius: 1rem; padding: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
   .react-calendar__navigation button { font-size: 1.1rem; font-weight: bold; color: #714B67; }
   .react-calendar__month-view__weekdays { text-align: center; font-size: 0.8em; color: #6b7280; }
-  .react-calendar__tile { height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 5px; border-radius: 8px; font-size: 0.9rem; }
+  .react-calendar__tile { height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 5px; border-radius: 8px; font-size: 0.9rem; transition: background 0.2s;}
   .react-calendar__tile:hover { background-color: #fdf4ff; }
   .react-calendar__tile--now { background: #fdf4ff !important; color: #714B67; border: 1px solid #714B67; }
   .react-calendar__tile--active { background: #714B67 !important; color: white !important; }
@@ -91,7 +91,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                       const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkTime(t.due_date), day));
                       const isToday = isSameDay(day, getBkkTime(new Date()));
                       return (
-                          <div key={day.toString()} className={`rounded-xl border transition-all ${isToday ? 'border-[#714B67]/30 shadow-md bg-[#fdf4ff]' : 'border-gray-200 bg-white'}`}>
+                          <div key={day.toString()} className={`rounded-xl border transition-all ${isToday ? 'border-[#714B67]/40 shadow-md bg-[#fdf4ff]' : 'border-gray-200 bg-white'}`}>
                               <div className={`p-3 font-bold flex justify-between items-center ${isToday ? 'text-[#714B67]' : 'text-gray-600'}`}>
                                   <span>{format(day, 'EEEE')}</span>
                                   <span className="text-sm opacity-70">{format(day, 'dd/MM')}</span>
@@ -221,10 +221,11 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
 
       {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} token={token} user={user} onRefresh={onRefresh} t={t} />}
 
+      {/* 🚀 פתרון הכפתור הכפול: שימוש ב-left/right חכם לפי שפה */}
       {!isTeamView && (
         <button 
             onClick={() => setShowCreateModal(true)} 
-            className="fixed bottom-24 right-6 w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:bg-[#5a3b52] transition transform hover:scale-105 active:scale-95"
+            className={`fixed bottom-24 ${lang === 'he' ? 'left-6' : 'right-6'} w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:bg-[#5a3b52] transition transform hover:scale-105 active:scale-95`}
         >
             <Plus size={32} />
         </button>
@@ -234,7 +235,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   );
 };
 
-// 🚀 TabButton עודכן לקבל את הצבע הוורוד והסגול
 const TabButton = ({ active, onClick, label, icon, count, color }) => {
     let activeClass = '';
     let badgeClass = '';
@@ -255,7 +255,6 @@ const TabButton = ({ active, onClick, label, icon, count, color }) => {
     );
 };
 
-// 🚀 ViewBtn עודכן לקבל צבע סגול
 const ViewBtn = ({ active, onClick, label }) => (
     <button onClick={onClick} className={`px-6 py-2 text-sm rounded-lg transition-all ${active ? 'bg-white shadow text-[#714B67] font-bold transform scale-105' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
 );
@@ -300,6 +299,9 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
 
     if(showSuccess) return <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]"><div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center"><Check size={40} className="text-green-600 mb-2"/><h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2></div></div>;
 
+    // 🚀 מזהה המנהל המקצועי
+    const displayManagerName = task.manager_name || t.management || 'הנהלה';
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-[100] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
@@ -335,17 +337,18 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     )}
 
                     <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
-                        {/* 🚀 תצוגת שעה עם פונקציית בנגקוק */}
+                        {/* 🚀 תצוגת שעה מדויקת - בנגקוק */}
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.date_label}</span><span className="font-medium">{format(getBkkTime(task.due_date), 'dd/MM/yyyy HH:mm')}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.urgency_label || "Urgency"}</span><span className={`px-2 py-0.5 rounded text-xs font-bold ${task.urgency === 'High' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{task.urgency}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.location}</span><span className="font-medium">{task.location_name || '-'}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.category_label || "Category"}</span><span className="font-medium">{task.category_name || '-'}</span></div>
                         <div className="col-span-2 border-t pt-2 mt-2"></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.assigned_to}</span><span className="font-medium">{task.worker_name}</span></div>
-                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.manager_label || "Manager"}</span><span className="font-medium">{task.manager_name || 'System'}</span></div>
+                        {/* 🚀 מציג את השם של המנהל במקום System */}
+                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.manager_label || "Manager"}</span><span className="font-medium">{displayManagerName}</span></div>
                     </div>
 
-                    {/* 🚀 הסרת הרקע הכחול מהערות המנהל */}
+                    {/* 🚀 הורדנו את הרקע הכחול להערות מנהל */}
                     {task.description && (
                         <div className="bg-[#fdf4ff] p-3 rounded-lg border border-[#714B67]/20">
                             <span className="block text-xs text-[#714B67] font-bold mb-1">{t.manager_notes}:</span>
@@ -377,17 +380,16 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                     
                     <div className="pt-4">
                         {canComplete && mode === 'view' && (
-                            <div className="grid grid-cols-2 gap-3">
-                                {/* 🚀 כפתורים בסגול המדויק */}
-                                <button onClick={() => setMode('complete')} className="bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-md hover:bg-[#5a3b52]">{t.complete_task_btn}</button>
-                                <button onClick={() => setMode('followup')} className="bg-[#714B67]/80 text-white py-3 rounded-xl font-bold shadow-md hover:bg-[#5a3b52]">{t.followup_task_btn}</button>
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                {/* 🚀 עיצוב מדהים לכפתורים: ראשי מול משני (Outline) */}
+                                <button onClick={() => setMode('complete')} className="flex-1 bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-md hover:bg-[#5a3b52] transition transform active:scale-95">{t.complete_task_btn}</button>
+                                <button onClick={() => setMode('followup')} className="flex-1 bg-white text-[#714B67] border-2 border-[#714B67] py-3 rounded-xl font-bold shadow-sm hover:bg-[#fdf4ff] transition transform active:scale-95">{t.followup_task_btn}</button>
                             </div>
                         )}
                         {mode === 'complete' && (
                             <div className="space-y-3 bg-gray-50 p-4 rounded-xl">
                                 <h4 className="font-bold text-gray-700">{t.report_execution}</h4>
                                 <textarea placeholder={t.what_was_done} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-[#714B67]/30 outline-none" value={note} onChange={e => setNote(e.target.value)} />
-                                {/* 🚀 עיצוב כפתור העלאת קובץ צבוע */}
                                 <input type="file" onChange={e => setFile(e.target.files[0])} className="text-xs file:bg-[#fdf4ff] file:text-[#714B67] file:border-0 file:px-4 file:py-2 file:rounded-lg file:font-bold hover:file:bg-[#714B67]/10 cursor-pointer w-full"/>
                                 <div className="flex gap-2">
                                     <button onClick={() => setMode('view')} className="flex-1 py-2 border rounded-lg bg-white">{t.cancel}</button>

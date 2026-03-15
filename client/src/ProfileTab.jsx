@@ -13,7 +13,10 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
     preferred_language: user.preferred_language || 'he' 
   });
 
-  // 🚀 שואב נתונים מחדש אם המשתמש התעדכן כדי שלא ייתקע
+  const [previewImage, setPreviewImage] = useState(user.profile_picture_url);
+  const [fileToUpload, setFileToUpload] = useState(null);
+
+  // 🚀 מוודא שברגע שיש עדכון במשתמש, הטופס שואב את הנתונים העדכניים מיד
   useEffect(() => {
       setFormData({
           full_name: user.name || user.full_name || '',
@@ -23,9 +26,6 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
           preferred_language: user.preferred_language || 'he'
       });
   }, [user]);
-
-  const [previewImage, setPreviewImage] = useState(user.profile_picture_url);
-  const [fileToUpload, setFileToUpload] = useState(null);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -42,9 +42,10 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
     dataToSend.append('full_name', formData.full_name);
     dataToSend.append('email', formData.email);
     dataToSend.append('phone', formData.phone);
-    dataToSend.append('preferred_language', formData.preferred_language);
+    dataToSend.append('preferred_language', formData.preferred_language); 
     
     if (formData.password) dataToSend.append('password', formData.password);
+    
     if (fileToUpload) dataToSend.append('profile_picture', fileToUpload);
     else dataToSend.append('existing_picture', user.profile_picture_url || '');
 
@@ -58,26 +59,32 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
       const data = await res.json();
       if (res.ok) {
         alert(t.alert_update_success || "Profile updated successfully!");
-        onUpdateUser(data.user); 
+        
+        // 🚀 התיקון הקריטי: שומרים מיד לזיכרון של הדפדפן כדי שהרענון לא ימחק כלום!
+        const updatedUser = { ...user, ...data.user };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        
+        onUpdateUser(updatedUser); 
         setIsEditing(false);
         setFormData(prev => ({ ...prev, password: '' })); 
         setShowPassword(false); 
       } else {
-        alert("Error: " + (data.error || "Error updating profile"));
+        alert(data.error || t.alert_update_error || "Error updating profile");
       }
     } catch (err) {
+      console.error(err);
       alert(t.server_error || "Communication error");
     }
   };
 
   return (
-    <div className="p-4 flex flex-col items-center pb-24 max-w-lg mx-auto">
-      {/* שמתי את הכותרת בתוך הערה כדי להעלים את ה-ops manager app אם היה, והשארתי רק את כותרת הטאב */}
+    <div className="p-4 flex flex-col items-center pb-24 max-w-lg mx-auto animate-fade-in">
       <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t.nav_profile}</h2>
 
       <div className="relative mb-6 group flex flex-col items-center">
         <div className="relative">
-            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-[#fdf4ff] flex items-center justify-center">
+            {/* 🚀 סגול מדויק לרקע האוואטר */}
+            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-[#714B67]/10 flex items-center justify-center">
                 {previewImage ? (
                     <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
@@ -107,7 +114,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             <label className="block text-sm font-medium text-gray-500 mb-1">{t.full_name_label || 'Full Name'}</label>
             <input 
                 type="text" 
-                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
                 value={formData.full_name}
                 onChange={e => setFormData({...formData, full_name: e.target.value})}
                 disabled={!isEditing}
@@ -118,7 +125,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             <label className="block text-sm font-medium text-gray-500 mb-1">{t.email_label || 'Email'}</label>
             <input 
                 type="email" 
-                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
                 value={formData.email}
                 onChange={e => setFormData({...formData, email: e.target.value})}
                 disabled={!isEditing}
@@ -132,7 +139,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             </label>
             <input 
                 type="tel" 
-                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
                 value={formData.phone}
                 onChange={e => setFormData({...formData, phone: e.target.value})}
                 disabled={!isEditing}
@@ -141,14 +148,14 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             />
         </div>
 
-        <div className="animate-fade-in relative">
+        <div className="relative">
             <label className="block text-sm font-medium text-gray-500 mb-1">
                 {t.preferred_language || "Preferred Notifications Language"}
             </label>
             <div className="relative">
                 <Globe className={`absolute top-1/2 transform -translate-y-1/2 text-gray-400 ${lang === 'he' ? 'right-3' : 'left-3'}`} size={18} />
                 <select
-                    className={`w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 ${lang === 'he' ? 'pr-10' : 'pl-10'}`}
+                    className={`w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition ${lang === 'he' ? 'pr-10' : 'pl-10'}`}
                     value={formData.preferred_language}
                     onChange={e => setFormData({...formData, preferred_language: e.target.value})}
                     disabled={!isEditing}
@@ -167,7 +174,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
                 <div className="relative">
                     <input 
                         type={showPassword ? "text" : "password"} 
-                        className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none pr-10" 
+                        className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none pr-10 transition" 
                         value={formData.password}
                         onChange={e => setFormData({...formData, password: e.target.value})}
                         placeholder="********"
@@ -176,7 +183,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
                     <button 
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className={`absolute top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-[#714B67] focus:outline-none ${lang === 'he' ? 'left-3' : 'right-3'}`}
+                        className={`absolute top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-[#714B67] focus:outline-none transition ${lang === 'he' ? 'left-3' : 'right-3'}`}
                     >
                         {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
@@ -188,15 +195,15 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         <div className="pt-4 flex gap-3">
             {isEditing ? (
                 <>
-                    <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-3 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 flex justify-center gap-2">
+                    <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-3 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 flex justify-center gap-2 transition">
                         <X size={20} /> {t.cancel}
                     </button>
-                    <button type="submit" className="flex-1 py-3 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] flex justify-center gap-2 shadow-md transition">
+                    <button type="submit" className="flex-1 py-3 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] flex justify-center gap-2 shadow-md transition transform active:scale-95">
                         <Save size={20} /> {t.save}
                     </button>
                 </>
             ) : (
-                <button type="button" onClick={() => setIsEditing(true)} className="w-full py-3 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] transition flex justify-center gap-2 items-center">
+                <button type="button" onClick={() => setIsEditing(true)} className="w-full py-3 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] transition flex justify-center gap-2 items-center shadow-md transform active:scale-95">
                       <Camera size={18} /> {t.edit_profile_btn || "Edit Profile"}
                 </button>
             )}

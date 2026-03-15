@@ -825,7 +825,6 @@ app.get('/tasks', authenticateToken, async (req, res) => {
 
 app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   try {
-    // 🚀 תיקון הענן: משיכת הלינק המאובטח מ-Cloudinary!
     const files = req.files || [];
     const imageUrls = files.map(file => file.secure_url || file.path);
     
@@ -885,7 +884,7 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         createdCount = tasksToInsert.length;
     }
     
-    // 🚀 תיקון ההתראות - מזהה את השפה של העובד!
+    // 🚀 התיקון הקריטי להתראות: מזהה את השפה של העובד מתוך המסד! 🚀
     try {
         const workerRes = await pool.query('SELECT device_token, preferred_language FROM users WHERE id = $1', [worker_id]);
         const workerData = workerRes.rows[0];
@@ -893,6 +892,7 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         if (workerData && workerData.device_token) {
             const workerLang = workerData.preferred_language || 'he';
             
+            // מילון ההתראות החכם
             const pushDict = {
                 he: { title: 'משימה חדשה! 📋', body: `הוקצתה לך משימה חדשה: ${title}` },
                 en: { title: 'New Task! 📋', body: `You have been assigned a new task: ${title}` },
