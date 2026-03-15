@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Trash2, Pencil, MapPin, Plus, X, Save, Navigation } from 'lucide-react';
 
 const API = 'https://maintenance-app-h84v.onrender.com';
@@ -6,7 +6,30 @@ const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const emptyForm = () => ({ name_he: '', name_en: '', name_th: '', address: '' });
 
-const LocationsTab = ({ token, t, user, lang = 'en' }) => {
+// ─── Branded delete-confirm modal ────────────────────────────────────────────
+const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+        <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in">
+            <p className="text-gray-800 font-medium text-center mb-6">{message}</p>
+            <div className="flex gap-3">
+                <button
+                    onClick={onCancel}
+                    className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition"
+                >
+                    {t?.cancel || 'Cancel'}
+                </button>
+                <button
+                    onClick={onConfirm}
+                    className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition"
+                >
+                    {t?.delete_btn || 'Delete'}
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
+const LocationsTab = ({ token, t, lang = 'en' }) => {
     const [locations, setLocations] = useState([]);
     const [isAdding, setIsAdding] = useState(false);
     const [newLoc, setNewLoc] = useState(emptyForm());
@@ -17,18 +40,18 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
     const [isGeolocating, setIsGeolocating] = useState(false);
     const [isGeolocatingEdit, setIsGeolocatingEdit] = useState(false);
 
-    // Refs for Google Places Autocomplete inputs
+    // Branded confirm-delete state
+    const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
     const addAddressRef = useRef(null);
     const editAddressRef = useRef(null);
     const mapsScriptLoaded = useRef(false);
 
     const getLocName = (loc) => loc['name_' + lang] || loc.name_en || loc.name_he || loc.name || '—';
 
-    // ── Load Google Maps script once ──────────────────────────────────────────
     useEffect(() => {
         if (mapsScriptLoaded.current || !MAPS_KEY) return;
         if (window.google?.maps?.places) { mapsScriptLoaded.current = true; return; }
-
         const script = document.createElement('script');
         script.id = 'gmaps-script';
         script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=places`;
@@ -38,7 +61,6 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
         document.head.appendChild(script);
     }, []);
 
-    // ── Init autocomplete for the ADD form ────────────────────────────────────
     useEffect(() => {
         if (!isAdding) return;
         const tryInit = () => {
@@ -49,12 +71,10 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
                 setNewLoc(prev => ({ ...prev, address: place.formatted_address || addAddressRef.current.value }));
             });
         };
-        // Small delay to let the DOM render and script load
         const timer = setTimeout(tryInit, 300);
         return () => clearTimeout(timer);
     }, [isAdding]);
 
-    // ── Init autocomplete for the EDIT inline form ────────────────────────────
     useEffect(() => {
         if (!editingId) return;
         const tryInit = () => {
@@ -69,12 +89,9 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
         return () => clearTimeout(timer);
     }, [editingId]);
 
-    // ── Reverse-geocode lat/lng to a readable address ─────────────────────────
     const reverseGeocode = async (lat, lng) => {
         try {
-            const res = await fetch(
-                `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${MAPS_KEY}`
-            );
+            const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${MAPS_KEY}`);
             const data = await res.json();
             return data.results?.[0]?.formatted_address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
         } catch {
@@ -105,7 +122,6 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
         );
     };
 
-    // ── CRUD ──────────────────────────────────────────────────────────────────
     const fetchLocations = async () => {
         try {
             const res = await fetch(`${API}/locations`, { headers: { Authorization: `Bearer ${token}` } });
@@ -125,12 +141,7 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
             const res = await fetch(`${API}/locations`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    name_he: newLoc.name_he,
-                    name_en: newLoc.name_en,
-                    name_th: newLoc.name_th,
-                    map_link: newLoc.address,
-                }),
+                body: JSON.stringify({ name_he: newLoc.name_he, name_en: newLoc.name_en, name_th: newLoc.name_th, map_link: newLoc.address }),
             });
             if (res.ok) {
                 setNewLoc(emptyForm());
@@ -143,8 +154,9 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
         } catch { alert(t.server_error || 'Server error'); }
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm(t.confirm_delete_location || 'Delete this location?')) return;
+    const confirmDelete = async () => {
+        const id = deleteConfirmId;
+        setDeleteConfirmId(null);
         try {
             await fetch(`${API}/locations/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
             fetchLocations();
@@ -155,12 +167,7 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
         let parsedAddress = '';
         try { parsedAddress = (typeof loc.coordinates === 'string' ? JSON.parse(loc.coordinates) : loc.coordinates)?.link || ''; } catch {}
         setEditingId(loc.id);
-        setEditForm({
-            name_he: loc.name_he || '',
-            name_en: loc.name_en || loc.name || '',
-            name_th: loc.name_th || '',
-            address: parsedAddress,
-        });
+        setEditForm({ name_he: loc.name_he || '', name_en: loc.name_en || loc.name || '', name_th: loc.name_th || '', address: parsedAddress });
     };
 
     const saveEdit = async () => {
@@ -172,19 +179,14 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
             const res = await fetch(`${API}/locations/${editingId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    name_he: editForm.name_he,
-                    name_en: editForm.name_en,
-                    name_th: editForm.name_th,
-                    map_link: editForm.address,
-                }),
+                body: JSON.stringify({ name_he: editForm.name_he, name_en: editForm.name_en, name_th: editForm.name_th, map_link: editForm.address }),
             });
             if (res.ok) { setEditingId(null); fetchLocations(); }
             else { alert(t.error_updating_location || 'Error updating'); }
         } catch { alert(t.server_error || 'Server error'); }
     };
 
-    // ── Shared address field component (inline JSX helper) ────────────────────
+    // Shared address field
     const AddressField = ({ inputRef, value, onChange, isLoading, mode }) => (
         <div className="space-y-1">
             <label className="block text-xs font-bold text-gray-500">
@@ -198,14 +200,14 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
                     defaultValue={value}
                     onChange={e => onChange(e.target.value)}
                     placeholder={t.address_placeholder || 'Start typing an address…'}
-                    className="flex-1 p-2 border rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-blue-200 outline-none"
+                    className="flex-1 p-2 border rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-[#714B67]/30 outline-none"
                 />
                 <button
                     type="button"
                     onClick={() => handleUseCurrentLocation(mode)}
                     disabled={isLoading}
                     title={t.use_current_location || 'Use current location'}
-                    className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 disabled:opacity-60 shrink-0"
+                    className="flex items-center gap-1 px-3 py-2 bg-[#714B67] hover:bg-[#5a3b52] text-white rounded-lg text-xs font-bold disabled:opacity-60 shrink-0 transition"
                 >
                     {isLoading
                         ? <span className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full inline-block" />
@@ -216,15 +218,24 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
         </div>
     );
 
-    // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className="p-4 pb-24">
+            {/* Branded delete confirm */}
+            {deleteConfirmId !== null && (
+                <ConfirmDeleteModal
+                    message={t.confirm_delete_location || 'Delete this location?'}
+                    onConfirm={confirmDelete}
+                    onCancel={() => setDeleteConfirmId(null)}
+                    t={t}
+                />
+            )}
+
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">{t.nav_locations || 'Locations'}</h2>
                 <button
                     onClick={() => { setIsAdding(!isAdding); setNewLoc(emptyForm()); }}
-                    className="bg-[#714B67] text-white px-4 py-2 rounded-full shadow flex items-center gap-2 text-sm hover:opacity-90 transition"
+                    className="bg-[#714B67] hover:bg-[#5a3b52] text-white px-4 py-2 rounded-full shadow flex items-center gap-2 text-sm transition"
                 >
                     {isAdding ? <X size={18} /> : <Plus size={18} />}
                     {isAdding ? (t.cancel || 'Cancel') : (t.add_location_btn || 'Add')}
@@ -233,46 +244,17 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
 
             {/* Add Form */}
             {isAdding && (
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-purple-100 mb-4 space-y-3">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-[#714B67]/20 mb-4 space-y-3">
                     <h3 className="font-bold text-gray-700">{t.add_location_title || 'New Location'}</h3>
-
-                    {/* Multilingual name inputs */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <input
-                            dir="rtl"
-                            value={newLoc.name_he}
-                            onChange={e => setNewLoc({ ...newLoc, name_he: e.target.value })}
-                            placeholder={t.name_he_placeholder || 'שם בעברית'}
-                            className="p-2 border rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-purple-200 outline-none"
-                        />
-                        <input
-                            dir="ltr"
-                            value={newLoc.name_en}
-                            onChange={e => setNewLoc({ ...newLoc, name_en: e.target.value })}
-                            placeholder={t.name_en_placeholder || 'Name in English'}
-                            className="p-2 border rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-purple-200 outline-none"
-                        />
-                        <input
-                            dir="ltr"
-                            value={newLoc.name_th}
-                            onChange={e => setNewLoc({ ...newLoc, name_th: e.target.value })}
-                            placeholder={t.name_th_placeholder || 'ชื่อภาษาไทย'}
-                            className="p-2 border rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-purple-200 outline-none"
-                        />
+                        <input dir="rtl" value={newLoc.name_he} onChange={e => setNewLoc({ ...newLoc, name_he: e.target.value })} placeholder={t.name_he_placeholder || 'שם בעברית'} className="p-2 border rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-[#714B67]/30 outline-none" />
+                        <input dir="ltr" value={newLoc.name_en} onChange={e => setNewLoc({ ...newLoc, name_en: e.target.value })} placeholder={t.name_en_placeholder || 'Name in English'} className="p-2 border rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-[#714B67]/30 outline-none" />
+                        <input dir="ltr" value={newLoc.name_th} onChange={e => setNewLoc({ ...newLoc, name_th: e.target.value })} placeholder={t.name_th_placeholder || 'ชื่อภาษาไทย'} className="p-2 border rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-[#714B67]/30 outline-none" />
                     </div>
-
-                    {/* Google Maps address */}
-                    <AddressField
-                        inputRef={addAddressRef}
-                        value={newLoc.address}
-                        onChange={v => setNewLoc({ ...newLoc, address: v })}
-                        isLoading={isGeolocating}
-                        mode="add"
-                    />
-
+                    <AddressField inputRef={addAddressRef} value={newLoc.address} onChange={v => setNewLoc({ ...newLoc, address: v })} isLoading={isGeolocating} mode="add" />
                     <div className="flex gap-2 pt-1">
                         <button onClick={() => setIsAdding(false)} className="flex-1 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">{t.cancel || 'Cancel'}</button>
-                        <button onClick={handleAddLocation} className="flex-1 py-2 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700">{t.save || 'Save'}</button>
+                        <button onClick={handleAddLocation} className="flex-1 py-2 bg-[#714B67] hover:bg-[#5a3b52] text-white rounded-lg font-bold text-sm transition">{t.save || 'Save'}</button>
                     </div>
                 </div>
             )}
@@ -286,32 +268,25 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
                                 {loc.image_url ? (
                                     <img src={loc.image_url} alt={getLocName(loc)} className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0" />
                                 ) : (
-                                    <div className="bg-blue-50 p-2 rounded-full text-blue-600 shrink-0"><MapPin size={20} /></div>
+                                    <div className="bg-[#fdf4ff] p-2 rounded-full text-[#714B67] shrink-0"><MapPin size={20} /></div>
                                 )}
 
                                 {editingId === loc.id ? (
                                     <div className="flex-1 space-y-2">
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                            <input dir="rtl" value={editForm.name_he} onChange={e => setEditForm({ ...editForm, name_he: e.target.value })} placeholder="שם בעברית" className="p-2 border rounded text-sm bg-gray-50 outline-none" />
-                                            <input dir="ltr" value={editForm.name_en} onChange={e => setEditForm({ ...editForm, name_en: e.target.value })} placeholder="Name in English" className="p-2 border rounded text-sm bg-gray-50 outline-none" />
-                                            <input dir="ltr" value={editForm.name_th} onChange={e => setEditForm({ ...editForm, name_th: e.target.value })} placeholder="ชื่อภาษาไทย" className="p-2 border rounded text-sm bg-gray-50 outline-none" />
+                                            <input dir="rtl" value={editForm.name_he} onChange={e => setEditForm({ ...editForm, name_he: e.target.value })} placeholder="שם בעברית" className="p-2 border rounded text-sm bg-gray-50 focus:ring-2 focus:ring-[#714B67]/30 outline-none" />
+                                            <input dir="ltr" value={editForm.name_en} onChange={e => setEditForm({ ...editForm, name_en: e.target.value })} placeholder="Name in English" className="p-2 border rounded text-sm bg-gray-50 focus:ring-2 focus:ring-[#714B67]/30 outline-none" />
+                                            <input dir="ltr" value={editForm.name_th} onChange={e => setEditForm({ ...editForm, name_th: e.target.value })} placeholder="ชื่อภาษาไทย" className="p-2 border rounded text-sm bg-gray-50 focus:ring-2 focus:ring-[#714B67]/30 outline-none" />
                                         </div>
-                                        <AddressField
-                                            inputRef={editAddressRef}
-                                            value={editForm.address}
-                                            onChange={v => setEditForm({ ...editForm, address: v })}
-                                            isLoading={isGeolocatingEdit}
-                                            mode="edit"
-                                        />
+                                        <AddressField inputRef={editAddressRef} value={editForm.address} onChange={v => setEditForm({ ...editForm, address: v })} isLoading={isGeolocatingEdit} mode="edit" />
                                         <div className="flex gap-2 pt-1">
-                                            <button onClick={saveEdit} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700"><Save size={14}/> {t.save || 'Save'}</button>
+                                            <button onClick={saveEdit} className="flex items-center gap-1 px-3 py-1.5 bg-[#714B67] hover:bg-[#5a3b52] text-white rounded-lg text-sm font-bold transition"><Save size={14}/> {t.save || 'Save'}</button>
                                             <button onClick={() => setEditingId(null)} className="px-3 py-1.5 border rounded-lg text-sm text-gray-500 hover:bg-gray-50">{t.cancel || 'Cancel'}</button>
                                         </div>
                                     </div>
                                 ) : (
                                     <div>
                                         <h3 className="font-bold text-gray-800 text-lg leading-tight">{getLocName(loc)}</h3>
-                                        {/* Show secondary names */}
                                         {(loc.name_he || loc.name_en || loc.name_th) && (
                                             <p className="text-xs text-gray-400 mt-0.5 flex gap-2 flex-wrap">
                                                 {loc.name_he && loc.name_he !== getLocName(loc) && <span dir="rtl">{loc.name_he}</span>}
@@ -328,8 +303,8 @@ const LocationsTab = ({ token, t, user, lang = 'en' }) => {
 
                             {editingId !== loc.id && (
                                 <div className="flex gap-2 shrink-0 ml-2">
-                                    <button onClick={() => startEdit(loc)} className="p-2 text-gray-400 hover:text-blue-600 bg-gray-50 rounded-full"><Pencil size={16} /></button>
-                                    <button onClick={() => handleDelete(loc.id)} className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 rounded-full"><Trash2 size={16} /></button>
+                                    <button onClick={() => startEdit(loc)} className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-[#fdf4ff] bg-gray-50 rounded-full transition"><Pencil size={16} /></button>
+                                    <button onClick={() => setDeleteConfirmId(loc.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 bg-gray-50 rounded-full transition"><Trash2 size={16} /></button>
                                 </div>
                             )}
                         </div>

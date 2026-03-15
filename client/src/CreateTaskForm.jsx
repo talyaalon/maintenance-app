@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Calendar, Camera, Box, Video } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Calendar, Camera, Box } from 'lucide-react';
 
 const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang }) => {
   const [frequency, setFrequency] = useState('Once'); 
@@ -311,13 +311,16 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                     <label className="text-sm font-bold text-gray-700 block mb-1">
                         {t.location} <span className="text-red-500 ml-1">*</span>
                     </label>
-                    <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67] disabled:opacity-50" 
-                        value={formData.location_id} 
+                    <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67] disabled:opacity-50"
+                        value={formData.location_id}
                         onChange={e => setFormData({...formData, location_id: e.target.value})}
                         disabled={isManager && !formData.assigned_worker_id}>
                         <option value="">{t.select_location}</option>
                         {filteredLocations.map(l => <option key={l.id} value={l.id}>{l['name_' + lang] || l.name_en || l.name}</option>)}
                     </select>
+                    {isManager && !formData.assigned_worker_id && (
+                        <p className="text-xs text-gray-400 mt-1">{t.select_worker_first || "Select a worker first"}</p>
+                    )}
                  </div>
                  <div className="flex-1">
                     <label className="text-sm font-bold text-gray-700 block mb-1">{t.urgency_label}</label>
@@ -330,7 +333,10 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             </div>
 
             <div className={`border rounded-xl p-3 bg-gray-50 transition ${isManager && !formData.assigned_worker_id ? 'opacity-50 pointer-events-none' : ''}`}>
-                 <label className="text-xs font-bold text-gray-500 mb-2 block flex items-center gap-1"><Box size={14}/> {t.select_asset_title || "Asset (Optional)"}</label>
+                 <label className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1"><Box size={14}/> {t.select_asset_title || "Asset (Optional)"}</label>
+                 {isManager && !formData.assigned_worker_id && (
+                     <p className="text-xs text-gray-400 mb-2">{t.select_worker_first || "Select a worker first"}</p>
+                 )}
                  <div className="flex gap-2">
                     <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]" 
                         value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setFormData({...formData, asset_id: ''}); }}>

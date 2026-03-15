@@ -1,6 +1,5 @@
-import React from 'react';
 import { Clock, MapPin, Box, Image as ImageIcon, Video, User } from 'lucide-react';
-import { format, parseISO, isBefore, startOfDay } from 'date-fns';
+import { format, isBefore, startOfDay } from 'date-fns';
 
 // 🚀 פונקציה חכמה שממירה כל שעה לשעון בנגקוק
 const getBkkTime = (dateInput) => {
@@ -9,7 +8,7 @@ const getBkkTime = (dateInput) => {
     return new Date(d.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
 };
 
-const TaskCard = ({ task, onClick, t, compact = false, lang = 'en' }) => {
+const TaskCard = ({ task, onClick, t, lang = 'en' }) => {
   const getTaskName = (base) => task[base + '_' + lang] || task[base + '_en'] || task[base] || '';
 
   const taskBkkDate = getBkkTime(task.due_date);
@@ -31,13 +30,13 @@ const TaskCard = ({ task, onClick, t, compact = false, lang = 'en' }) => {
         
         <div className="p-3 pl-4">
             <div className="flex justify-between items-start mb-1.5">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded-md">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded-md">
                     <Box size={10} />
                     <span className="uppercase tracking-wide truncate max-w-[120px]">
                         {getTaskName('asset_name') || getTaskName('category_name') || t.general_task || "General"}
                     </span>
                 </div>
-                <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${urgencyColor}`}>
+                <div className={`text-xs font-bold px-2 py-0.5 rounded-full border ${urgencyColor}`}>
                     {task.urgency === 'High' ? t.urgent_label : t.normal_label}
                 </div>
             </div>
@@ -57,7 +56,7 @@ const TaskCard = ({ task, onClick, t, compact = false, lang = 'en' }) => {
                         <span>{getTaskName('location_name') || "No Loc"}</span>
                     </div>
                     {task.worker_name && (
-                        <div className="flex items-center gap-1 text-[#714B67] font-medium bg-[#fdf4ff] px-1.5 py-0.5 rounded-md text-[10px]">
+                        <div className="flex items-center gap-1 text-[#714B67] font-medium bg-[#fdf4ff] px-1.5 py-0.5 rounded-md text-xs">
                             <User size={10}/> {task.worker_name.split(' ')[0]}
                         </div>
                     )}

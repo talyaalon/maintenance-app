@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import { format, isSameDay, parseISO, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, Camera, ArrowRight, X, FileSpreadsheet, Check, Plus, User, MapPin, Tag, AlertTriangle, Box, Hash, Video, Image as ImageIcon } from 'lucide-react';
+import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
+import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
+import TaskCard from './TaskCard';
 
 const getLocale = (lang) => {
     if (lang === 'he') return 'he-IL';
@@ -13,9 +14,6 @@ const getLocale = (lang) => {
 };
 
 // ─── Bangkok timezone helpers ────────────────────────────────────────────────
-// Uses Intl.DateTimeFormat throughout — no fragile locale-string reparsing.
-
-/** Returns a plain object with Bangkok date/time parts for the given date. */
 const getBkkParts = (dateString) => {
     const parts = {};
     new Intl.DateTimeFormat('en-US', {
@@ -26,10 +24,6 @@ const getBkkParts = (dateString) => {
     return parts;
 };
 
-/**
- * Returns a Date whose LOCAL fields (getFullYear, getMonth…) match Bangkok time.
- * Used for date-fns helpers (isSameDay, isBefore, startOfDay).
- */
 const getBkkDateObj = (dateString) => {
     if (!dateString) return new Date();
     const p = getBkkParts(dateString);
@@ -38,13 +32,12 @@ const getBkkDateObj = (dateString) => {
         parseInt(p.year,   10),
         parseInt(p.month,  10) - 1,
         parseInt(p.day,    10),
-        h === 24 ? 0 : h,        // Intl sometimes returns "24" for midnight
+        h === 24 ? 0 : h,
         parseInt(p.minute, 10),
         parseInt(p.second, 10)
     );
 };
 
-/** Formats a stored UTC date string for display in Bangkok time (DD/MM HH:mm). */
 const formatBkkDate = (dateString) => {
     if (!dateString) return '';
     const p = getBkkParts(dateString);
@@ -52,7 +45,6 @@ const formatBkkDate = (dateString) => {
     return `${p.day}/${p.month} ${h}:${p.minute}`;
 };
 
-/** Returns current Bangkok time as "YYYY-MM-DDTHH:mm" for datetime-local inputs. */
 const getCurrentBkkTimeForInput = () => {
     const parts = {};
     new Intl.DateTimeFormat('en-GB', {
@@ -77,18 +69,17 @@ const calendarStyles = `
 `;
 
 const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
-  const [mainTab, setMainTab] = useState('todo'); 
-  const [viewMode, setViewMode] = useState('daily'); 
+  const [mainTab, setMainTab] = useState('todo');
+  const [viewMode, setViewMode] = useState('daily');
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedTask, setSelectedTask] = useState(null); 
+  const [selectedTask, setSelectedTask] = useState(null);
   const [showExcel, setShowExcel] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const isTeamView = Array.isArray(subordinates);
 
-  // שימוש בבנגקוק לסינון המשימות של היום
   const todayBkk = getBkkDateObj(new Date());
-  
+
   const pendingTasks = tasks.filter(task => {
       if (task.status !== 'PENDING') return false;
       const taskDate = getBkkDateObj(task.due_date);
@@ -96,7 +87,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   });
 
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
-  // Hide Waiting Approval tab when auto-approve is enabled for this user's manager (or themselves)
   const hideWaitingTab = user.role === 'MANAGER'
       ? !!user.auto_approve_tasks
       : !!user.manager_auto_approve_tasks;
@@ -106,7 +96,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const renderTodoView = () => {
       if (viewMode === 'daily') {
           return (
-              <div className="space-y-4 animate-fade-in max-w-2xl mx-auto">
+              <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
                   <div className="bg-white p-4 rounded-2xl shadow-sm border border-[#714B67]/20 text-center mb-6">
                       <h3 className="text-xl font-bold text-gray-800">{t.tab_todo}</h3>
                       <p className="text-[#714B67] font-medium">{format(todayBkk, 'dd/MM/yyyy')}</p>
@@ -125,18 +115,18 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                                       {isOverdue && <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1"><AlertTriangle size={12}/> {t.overdue} {formatBkkDate(task.due_date)}</div>}
                                       <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
                                   </div>
-                              )
+                              );
                           })}
                       </div>
                   )}
               </div>
           );
       }
-      
+
       if (viewMode === 'weekly') {
           const next7Days = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(todayBkk), i));
           return (
-              <div className="space-y-4 animate-fade-in h-[65vh] overflow-y-auto max-w-2xl mx-auto pr-1">
+              <div className="space-y-4 animate-fade-in max-h-[65vh] overflow-y-auto max-w-2xl mx-auto pr-1 pb-28">
                   {next7Days.map(day => {
                       const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), day));
                       const isToday = isSameDay(day, todayBkk);
@@ -148,13 +138,13 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                               </div>
                               <div className="p-2 pt-0 space-y-2">
                                   {dayTasks.length > 0 ? (
-                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} compact={true} />)
+                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)
                                   ) : (
                                       <div className="p-3 pt-0 text-xs text-gray-400 text-center">No tasks</div>
                                   )}
                               </div>
                           </div>
-                      )
+                      );
                   })}
               </div>
           );
@@ -163,18 +153,20 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       if (viewMode === 'calendar') {
           return (
               <div className="animate-fade-in flex flex-col items-center">
-                  <Calendar 
-                    onChange={setSelectedDate} 
-                    value={selectedDate} 
-                    locale={getLocale(lang)} 
-                    tileContent={({ date, view }) => {
-                        if (view === 'month') {
-                            const count = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), date)).length;
-                            if (count > 0) return <div className="flex flex-col items-center"><span className="task-count-badge">{count} {count === 1 ? (t.task_singular || "Task") : (t.tasks_plural || "Tasks")}</span></div>;
-                        }
-                    }}
-                  />
-                  <div className="mt-8 w-full max-w-[800px]">
+                  <div className="w-full overflow-x-auto">
+                      <Calendar
+                        onChange={setSelectedDate}
+                        value={selectedDate}
+                        locale={getLocale(lang)}
+                        tileContent={({ date, view }) => {
+                            if (view === 'month') {
+                                const count = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), date)).length;
+                                if (count > 0) return <div className="flex flex-col items-center"><span className="task-count-badge">{count} {count === 1 ? (t.task_singular || "Task") : (t.tasks_plural || "Tasks")}</span></div>;
+                            }
+                        }}
+                      />
+                  </div>
+                  <div className="mt-8 w-full max-w-[800px] pb-28">
                       <h4 className="font-bold mb-4 text-[#714B67] text-lg border-b pb-2">{t.tasks_for_date} {format(selectedDate, 'dd/MM/yyyy')}:</h4>
                       {calendarTasks.length === 0 && <p className="text-gray-400 text-sm p-2">No tasks for this date.</p>}
                       <div className="space-y-2">
@@ -187,14 +179,14 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   };
 
   const renderApprovalView = () => (
-      <div className="space-y-4 animate-fade-in max-w-3xl mx-auto">
+      <div className="space-y-4 animate-fade-in max-w-3xl mx-auto pb-28">
           {waitingTasks.length === 0 && <div className="text-center py-10 text-gray-400"><p>{t.no_tasks_waiting}</p></div>}
           {waitingTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
       </div>
   );
 
   const renderCompletedView = () => (
-      <div className="space-y-3 animate-fade-in max-w-3xl mx-auto">
+      <div className="space-y-3 animate-fade-in max-w-3xl mx-auto pb-28">
           {completedTasks.length === 0 && <p className="text-center text-gray-500 mt-10">{t.no_tasks_completed}</p>}
           {completedTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
       </div>
@@ -203,7 +195,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   return (
     <div className="p-4 pb-24 min-h-screen bg-gray-50 relative">
       <style>{calendarStyles}</style>
-      
+
       <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-black">{t.task_management_title}</h2>
           <div className="flex gap-2">
@@ -219,7 +211,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                 )}
           </div>
       </div>
-      
+
       {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
       {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} />}
 
@@ -241,12 +233,23 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       {mainTab === 'waiting' && !hideWaitingTab && renderApprovalView()}
       {mainTab === 'completed' && renderCompletedView()}
 
-      {/* העברת רשימת כל המשתמשים (subordinates) לחלון המשימה כדי למצוא את המנהל */}
-      {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} token={token} user={user} onRefresh={onRefresh} t={t} allUsers={subordinates} />}
+      {selectedTask && (
+          <TaskDetailModal
+              task={selectedTask}
+              onClose={() => setSelectedTask(null)}
+              token={token}
+              user={user}
+              onRefresh={onRefresh}
+              t={t}
+              allUsers={subordinates}
+          />
+      )}
 
-      {/* כפתור פלוס אחד בלבד, ממוקם חכם לפי השפה */}
       {!isTeamView && (
-        <button onClick={() => setShowCreateModal(true)} className={`fixed bottom-24 ${lang === 'he' ? 'left-6' : 'right-6'} w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:bg-[#5a3b52] transition transform hover:scale-105 active:scale-95`}>
+        <button
+            onClick={() => setShowCreateModal(true)}
+            className={`fixed bottom-24 ${lang === 'he' ? 'left-6' : 'right-6'} w-14 h-14 bg-[#714B67] text-white rounded-full shadow-2xl flex items-center justify-center z-40 hover:bg-[#5a3b52] transition transform hover:scale-105 active:scale-95`}
+        >
             <Plus size={32} />
         </button>
       )}
@@ -256,7 +259,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
 };
 
 const TabButton = ({ active, onClick, label, icon, count, color }) => {
-    let activeClass = color === 'purple' 
+    let activeClass = color === 'purple'
         ? (active ? 'bg-[#fdf4ff] text-[#714B67] shadow-inner' : 'text-gray-400 hover:bg-gray-50')
         : (active ? `bg-${color}-50 text-${color}-700 shadow-inner` : 'text-gray-400 hover:bg-gray-50');
     let badgeClass = color === 'purple'
@@ -265,7 +268,10 @@ const TabButton = ({ active, onClick, label, icon, count, color }) => {
 
     return (
         <button onClick={onClick} className={`flex-1 flex flex-col items-center py-3 rounded-xl transition-all ${activeClass}`}>
-            <div className={`flex items-center gap-2 mb-1 ${active ? 'font-bold' : ''}`}>{icon}<span className="text-sm">{label}</span></div>
+            <div className={`flex items-center gap-2 mb-1 ${active ? 'font-bold' : ''}`}>
+                {icon}
+                <span className="hidden sm:inline text-sm">{label}</span>
+            </div>
             <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${badgeClass}`}>{count}</span>
         </button>
     );
@@ -275,107 +281,95 @@ const ViewBtn = ({ active, onClick, label }) => (
     <button onClick={onClick} className={`px-6 py-2 text-sm rounded-lg transition-all ${active ? 'bg-white shadow text-[#714B67] font-bold transform scale-105' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
 );
 
-const TaskCard = ({ task, onClick, t, compact = false, lang = 'en' }) => {
-  const isOverdue = task.status === 'PENDING' && isBefore(getBkkDateObj(task.due_date), startOfDay(getBkkDateObj(new Date())));
-  const urgencyColor = task.urgency === 'High' ? 'bg-red-50 text-red-700 border-red-100' : task.urgency === 'Low' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-600 border-gray-100';
-  const hasMedia = task.images && task.images.length > 0;
-  const isVideo = hasMedia && (task.images[0].includes('mp4') || task.images[0].includes('video'));
-  const getN = (base) => task[base + '_' + lang] || task[base + '_en'] || task[base] || '';
-
-  return (
-    <div onClick={onClick} className="bg-white rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-all relative overflow-hidden group mb-2.5">
-        <div className={`absolute left-0 top-0 bottom-0 w-1 ${isOverdue ? 'bg-red-500' : task.status === 'COMPLETED' ? 'bg-green-500' : task.status === 'WAITING_APPROVAL' ? 'bg-orange-400' : 'bg-[#714B67]'}`}></div>
-        <div className="p-3 pl-4">
-            <div className="flex justify-between items-start mb-1.5">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded-md">
-                    <Box size={10} />
-                    <span className="uppercase tracking-wide truncate max-w-[120px]">{getN('asset_name') || getN('category_name') || t.general_task || "General"}</span>
-                </div>
-                <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${urgencyColor}`}>{task.urgency === 'High' ? t.urgent_label : t.normal_label}</div>
-            </div>
-            <div className="flex justify-between items-start gap-2">
-                <h4 className="font-bold text-gray-800 text-sm sm:text-base leading-tight mb-1.5 flex-1">
-                    {task.title} {task.asset_code && <span className="text-gray-400 font-normal ml-1.5 text-xs sm:text-sm">- {task.asset_code}</span>}
-                </h4>
-                {hasMedia && <div className="text-gray-400">{isVideo ? <Video size={14}/> : <ImageIcon size={14}/>}</div>}
-            </div>
-            <div className="flex justify-between items-center text-xs text-gray-500 mt-2 border-t pt-1.5 border-dashed">
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 truncate max-w-[100px]"><MapPin size={12} className="text-[#714B67]"/><span>{getN('location_name') || "No Loc"}</span></div>
-                    {task.worker_name && <div className="flex items-center gap-1 text-[#714B67] font-medium bg-[#fdf4ff] px-1.5 py-0.5 rounded-md text-[10px]"><User size={10}/> {task.worker_name.split(' ')[0]}</div>}
-                </div>
-                <div className={`flex items-center gap-1 font-medium ${isOverdue ? 'text-red-500' : ''}`}><Clock size={12}/><span>{formatBkkDate(task.due_date)}</span></div>
-            </div>
-        </div>
+// ─── Branded inline confirm for task actions ──────────────────────────────────
+const InlineAlert = ({ message, onClose }) => (
+    <div className="bg-red-50 border border-red-100 text-red-700 text-sm p-3 rounded-xl flex items-start justify-between gap-2 animate-fade-in">
+        <span>{message}</span>
+        <button onClick={onClose} className="shrink-0 text-red-400 hover:text-red-600"><X size={14}/></button>
     </div>
-  );
-};
+);
 
 const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
-    // 🚀 FIX: Default follow-up date strictly to Bangkok time, not OS local time
     const [followUpDate, setFollowUpDate] = useState(getCurrentBkkTimeForInput);
     const [mode, setMode] = useState('view');
     const [showSuccess, setShowSuccess] = useState(false);
+    const [modalError, setModalError] = useState('');
 
     const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS') && task.status === 'WAITING_APPROVAL';
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
 
     const handleComplete = async () => {
-        if (!note && !file) return alert(t.alert_required || "Required field");
+        if (!note && !file) {
+            setModalError(t.alert_required || "A note or photo is required.");
+            return;
+        }
+        setModalError('');
         const formData = new FormData();
         formData.append('completion_note', note);
         if (file) formData.append('completion_image', file);
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/complete`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
-            if(res.ok) { setShowSuccess(true); setTimeout(() => { setShowSuccess(false); onRefresh(); onClose(); }, 1500); }
-        } catch(e) { alert("Error"); }
+            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/complete`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+            if (res.ok) { setShowSuccess(true); setTimeout(() => { setShowSuccess(false); onRefresh(); onClose(); }, 1500); }
+        } catch(e) { setModalError("Error completing task."); }
     };
 
     const handleApprove = async () => {
-        await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/approve`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
-        setShowSuccess(true); setTimeout(() => { setShowSuccess(false); onRefresh(); onClose(); }, 1500);
+        await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/approve`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        setShowSuccess(true);
+        setTimeout(() => { setShowSuccess(false); onRefresh(); onClose(); }, 1500);
     };
 
     const handleFollowUp = async () => {
-        if (!followUpDate) return alert(t.alert_required || "Date required");
+        if (!followUpDate) {
+            setModalError(t.alert_required || "A date is required.");
+            return;
+        }
+        setModalError('');
         await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/follow-up`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ due_date: followUpDate, description: note || 'Follow up' })
         });
-        alert(t.alert_created || "Created successfully!"); onRefresh(); onClose();
+        setShowSuccess(true);
+        setTimeout(() => { setShowSuccess(false); onRefresh(); onClose(); }, 1500);
     };
 
     const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.includes('video'));
     const openMedia = (url) => window.open(url, '_blank');
 
-    if(showSuccess) return <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]"><div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center"><Check size={40} className="text-green-600 mb-2"/><h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2></div></div>;
+    if (showSuccess) return (
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]">
+            <div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center">
+                <Check size={40} className="text-green-600 mb-2"/>
+                <h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2>
+            </div>
+        </div>
+    );
 
-    // 🚀 FIX: Resolve manager name with multi-level fallback to prevent "System" / "הנהלה"
     let displayManagerName = task.manager_name;
-
     if (!displayManagerName && allUsers) {
-        // Step 1: find the worker entry to get their parent_manager_id
         const workerInfo = allUsers.find(u => String(u.id) === String(task.worker_id));
         if (workerInfo) {
-            // Step 2: find the manager inside allUsers
             const managerInfo = allUsers.find(u => String(u.id) === String(workerInfo.parent_manager_id));
             if (managerInfo) {
                 displayManagerName = managerInfo.full_name;
             } else if (String(workerInfo.parent_manager_id) === String(user.id)) {
-                // Step 3: the logged-in user IS the manager (not in subordinates list)
                 displayManagerName = user.full_name || user.name;
             }
         }
     }
-
-    // Step 4: fall back to the logged-in manager's name for non-employee views
     if (!displayManagerName && (user.role === 'MANAGER' || user.role === 'BIG_BOSS')) {
         displayManagerName = user.full_name || user.name;
     }
-
-    // Step 5: absolute last resort — use task field or translation key, never raw Hebrew
     if (!displayManagerName) {
         displayManagerName = task.manager_name || t.management || t.manager_label || 'Manager';
     }
@@ -392,12 +386,11 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                     </div>
                     <button onClick={onClose} className="bg-gray-100 p-2 rounded-full hover:bg-gray-200"><X size={20}/></button>
                 </div>
-                
+
                 <div className="p-6 space-y-6 pb-32">
                     {(task.asset_name || task.asset_code) && (
                         <div className="bg-[#fdf4ff] p-3 rounded-xl border border-[#714B67]/20 shadow-sm">
                             <div className="flex items-center gap-2 mb-2">
-                                <Box size={18} className="text-[#714B67]" />
                                 <span className="text-sm font-bold text-[#714B67] uppercase">{t.assets_title || "Asset Info"}</span>
                             </div>
                             <div className="flex justify-between items-center">
@@ -407,7 +400,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                                 </div>
                                 {task.asset_code && (
                                     <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-[#714B67]/30 text-[#714B67] font-mono font-bold text-sm">
-                                        <Hash size={14} /> {task.asset_code}
+                                        {task.asset_code}
                                     </div>
                                 )}
                             </div>
@@ -430,7 +423,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                             <p className="text-sm text-gray-800 whitespace-pre-wrap">{task.description}</p>
                         </div>
                     )}
-                    
+
                     {task.images && task.images.length > 0 && (
                         <div>
                             <span className="block text-xs text-gray-400 uppercase font-bold mb-2">{t.has_image || "Media"}</span>
@@ -439,7 +432,6 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                                     isVideo(url) ? (
                                         <div key={i} className="relative group cursor-pointer" onClick={() => openMedia(url)}>
                                             <video src={url} className="w-full h-32 object-cover rounded-lg border bg-black" />
-                                            <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/10 transition"><Video className="text-white opacity-80" size={24}/></div>
                                         </div>
                                     ) : (
                                         <img key={i} src={url} onClick={() => openMedia(url)} className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition" alt="task media" />
@@ -449,22 +441,31 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                         </div>
                     )}
 
-                    {task.completion_note && <div className="bg-orange-50 p-3 rounded-lg border border-orange-100"><span className="block text-xs text-orange-600 font-bold mb-1">{t.worker_report}:</span><p className="text-sm text-orange-900">{task.completion_note}</p>{task.completion_image_url && <img src={task.completion_image_url} onClick={() => openMedia(task.completion_image_url)} className="w-full h-32 object-cover rounded-lg mt-2 border cursor-pointer" />}</div>}
-                    
-                    <div className="pt-4">
+                    {task.completion_note && (
+                        <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
+                            <span className="block text-xs text-orange-600 font-bold mb-1">{t.worker_report}:</span>
+                            <p className="text-sm text-orange-900">{task.completion_note}</p>
+                            {task.completion_image_url && (
+                                <img src={task.completion_image_url} onClick={() => openMedia(task.completion_image_url)} className="w-full h-32 object-cover rounded-lg mt-2 border cursor-pointer" alt="completion" />
+                            )}
+                        </div>
+                    )}
+
+                    <div className="pt-4 space-y-3">
                         {canComplete && mode === 'view' && (
                             <div className="flex flex-col sm:flex-row gap-3">
-                                <button onClick={() => setMode('complete')} className="flex-1 bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-md hover:bg-[#5a3b52] transition transform active:scale-95">{t.complete_task_btn}</button>
-                                <button onClick={() => setMode('followup')} className="flex-1 bg-white text-[#714B67] border-2 border-[#714B67] py-3 rounded-xl font-bold shadow-sm hover:bg-[#fdf4ff] transition transform active:scale-95">{t.followup_task_btn}</button>
+                                <button onClick={() => { setMode('complete'); setModalError(''); }} className="flex-1 bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-md hover:bg-[#5a3b52] transition transform active:scale-95">{t.complete_task_btn}</button>
+                                <button onClick={() => { setMode('followup'); setModalError(''); }} className="flex-1 bg-white text-[#714B67] border-2 border-[#714B67] py-3 rounded-xl font-bold shadow-sm hover:bg-[#fdf4ff] transition transform active:scale-95">{t.followup_task_btn}</button>
                             </div>
                         )}
                         {mode === 'complete' && (
                             <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <h4 className="font-bold text-[#714B67]">{t.report_execution}</h4>
+                                {modalError && <InlineAlert message={modalError} onClose={() => setModalError('')} />}
                                 <textarea placeholder={t.what_was_done} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-[#714B67]/30 outline-none" value={note} onChange={e => setNote(e.target.value)} />
                                 <input type="file" onChange={e => setFile(e.target.files[0])} className="text-xs file:bg-[#fdf4ff] file:text-[#714B67] file:border-0 file:px-4 file:py-2 file:rounded-lg file:font-bold hover:file:bg-[#714B67]/10 cursor-pointer w-full"/>
                                 <div className="flex gap-2">
-                                    <button onClick={() => setMode('view')} className="flex-1 py-2 border rounded-lg bg-white text-gray-600 hover:bg-gray-100">{t.cancel}</button>
+                                    <button onClick={() => { setMode('view'); setModalError(''); }} className="flex-1 py-2 border rounded-lg bg-white text-gray-600 hover:bg-gray-100">{t.cancel}</button>
                                     <button onClick={handleComplete} className="flex-1 py-2 bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3b52]">{t.send_for_approval}</button>
                                 </div>
                             </div>
@@ -472,15 +473,20 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                         {mode === 'followup' && (
                             <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <h4 className="font-bold text-[#714B67]">{t.followup_task_btn}</h4>
+                                {modalError && <InlineAlert message={modalError} onClose={() => setModalError('')} />}
                                 <input type="datetime-local" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#714B67]/30 outline-none" value={followUpDate} onChange={e => setFollowUpDate(e.target.value)} />
                                 <textarea placeholder={t.description_placeholder} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#714B67]/30 outline-none" value={note} onChange={e => setNote(e.target.value)} />
                                 <div className="flex gap-2">
-                                    <button onClick={() => setMode('view')} className="flex-1 py-2 border rounded-lg bg-white text-gray-600 hover:bg-gray-100">{t.cancel}</button>
+                                    <button onClick={() => { setMode('view'); setModalError(''); }} className="flex-1 py-2 border rounded-lg bg-white text-gray-600 hover:bg-gray-100">{t.cancel}</button>
                                     <button onClick={handleFollowUp} className="flex-1 py-2 bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3b52]">{t.save}</button>
                                 </div>
                             </div>
                         )}
-                        {canApprove && <button onClick={handleApprove} className="w-full bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-lg hover:bg-[#5a3b52] transition">{t.approve_close_btn}</button>}
+                        {canApprove && (
+                            <button onClick={handleApprove} className="w-full bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-lg hover:bg-[#5a3b52] transition">
+                                {t.approve_close_btn}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
