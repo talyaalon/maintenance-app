@@ -615,24 +615,51 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     }
 
     // Preserve existing values for fields the caller doesn't explicitly send
-    const lang        = preferred_language   !== undefined ? preferred_language   : (oldUser.preferred_language || 'he');
-    const canManage   = can_manage_fields    !== undefined ? can_manage_fields    : oldUser.can_manage_fields;
-    const autoApprove = auto_approve_tasks   !== undefined ? auto_approve_tasks   : oldUser.auto_approve_tasks;
+    const lang           = preferred_language !== undefined ? preferred_language : (oldUser.preferred_language || 'he');
+    const effectiveEmail = email !== undefined ? email : oldUser.email;
+    const effectivePhone = phone !== undefined ? phone : (oldUser.phone || null);
+    const effectiveRole  = role  !== undefined ? role  : oldUser.role;
+    const effectiveName  = full_name || full_name_en || oldUser.full_name;
 
-    const effectiveName = full_name || full_name_en || oldUser.full_name;
-    let query = 'UPDATE users SET full_name=$1, full_name_he=$2, full_name_en=$3, full_name_th=$4, email=$5, phone=$6, role=$7, preferred_language=$8, can_manage_fields=$9, auto_approve_tasks=$10';
-    let params = [effectiveName, full_name_he || null, full_name_en || null, full_name_th || null, email, phone, role, lang, canManage, autoApprove];
-    let paramCount = 11;
+    const setClauses = [
+        'full_name=$1', 'full_name_he=$2', 'full_name_en=$3', 'full_name_th=$4',
+        'email=$5', 'phone=$6', 'role=$7', 'preferred_language=$8'
+    ];
+    const params = [
+        effectiveName,
+        full_name_he !== undefined ? full_name_he : (oldUser.full_name_he || null),
+        full_name_en !== undefined ? full_name_en : (oldUser.full_name_en || null),
+        full_name_th !== undefined ? full_name_th : (oldUser.full_name_th || null),
+        effectiveEmail,
+        effectivePhone,
+        effectiveRole,
+        lang
+    ];
+    let paramCount = 9;
+
+    // Only include permission columns if they exist in the DB schema (detected via oldUser keys)
+    if ('can_manage_fields' in oldUser || can_manage_fields !== undefined) {
+        const canManage = can_manage_fields !== undefined ? can_manage_fields : oldUser.can_manage_fields;
+        setClauses.push(`can_manage_fields=$${paramCount}`);
+        params.push(canManage);
+        paramCount++;
+    }
+    if ('auto_approve_tasks' in oldUser || auto_approve_tasks !== undefined) {
+        const autoApprove = auto_approve_tasks !== undefined ? auto_approve_tasks : oldUser.auto_approve_tasks;
+        setClauses.push(`auto_approve_tasks=$${paramCount}`);
+        params.push(autoApprove);
+        paramCount++;
+    }
 
     if (password && password.trim() !== '') {
         const bcrypt = require('bcrypt');
         const hashedPassword = await bcrypt.hash(password, 10);
-        query += `, password=$${paramCount}`; 
+        setClauses.push(`password=$${paramCount}`);
         params.push(hashedPassword);
         paramCount++;
     }
 
-    query += ` WHERE id=$${paramCount} RETURNING *`;
+    const query = `UPDATE users SET ${setClauses.join(', ')} WHERE id=$${paramCount} RETURNING *`;
     params.push(id);
 
     const result = await pool.query(query, params);

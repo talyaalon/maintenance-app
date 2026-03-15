@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload } from 'lucide-react';
+import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload, Send, Loader2 } from 'lucide-react';
 
 const ConfigurationTab = ({ token, t, user, lang }) => { 
   const [activeSubTab, setActiveSubTab] = useState(() => {
@@ -142,6 +142,20 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           if (res.ok) fetchManagers();
           else { const d = await res.json(); alert(d.error || 'Error updating permission'); }
       } catch (e) { alert('Server error'); }
+  };
+
+  const [sendingReportId, setSendingReportId] = useState(null);
+
+  const handleSendReport = async (managerId) => {
+      setSendingReportId(managerId);
+      try {
+          await fetch('https://maintenance-app-h84v.onrender.com/api/trigger-daily-reports', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ manager_id: managerId }),
+          });
+      } catch (e) { console.error(e); }
+      finally { setSendingReportId(null); }
   };
 
   // Reusable inline toggle switch — strict #714B67 palette
@@ -555,10 +569,18 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                               <span className="text-sm font-bold text-[#714B67]">{initial}</span>
                                           )}
                                       </div>
-                                      <div>
+                                      <div className="flex-1">
                                           <p className="font-bold text-gray-800">{manager.full_name}</p>
                                           <p className="text-xs text-gray-400">{manager.email}</p>
                                       </div>
+                                      <button
+                                          onClick={() => handleSendReport(manager.id)}
+                                          disabled={sendingReportId === manager.id}
+                                          title={t.send_report_btn || 'Send Daily Report'}
+                                          className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-white rounded-full transition disabled:opacity-50"
+                                      >
+                                          {sendingReportId === manager.id ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                      </button>
                                   </div>
                                   {/* Toggle rows */}
                                   <div className="px-4 py-2">
