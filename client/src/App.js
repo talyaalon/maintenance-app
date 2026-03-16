@@ -246,18 +246,41 @@ function App() {
               />
           </div>
 
-          {/* מרכז: כותרת האפליקציה (ממורכזת אבסולוטית וצבועה בשחור) */}
+          {/* מרכז: כותרת האפליקציה */}
           <div className="absolute left-1/2 transform -translate-x-1/2">
-              <h1 className="text-xl font-bold text-black hidden sm:block">
+              <span className="text-[10px] font-medium tracking-widest uppercase text-gray-300 hidden sm:block select-none">
                   {t.app_name}
-              </h1>
+              </span>
           </div>
 
           {/* צד ימין: בחירת שפה */}
           <div className="z-10">
               <select
                   value={lang}
-                  onChange={(e) => setLang(e.target.value)}
+                  onChange={async (e) => {
+                      const newLang = e.target.value;
+                      setLang(newLang);
+                      // Keep local user state in sync so the preferred_language
+                      // useEffect never fights against the user's selection
+                      if (user) {
+                          handleUserUpdate({ preferred_language: newLang });
+                          // Persist to backend
+                          try {
+                              const tok = localStorage.getItem('token');
+                              await fetch(`https://maintenance-app-h84v.onrender.com/users/${user.id}`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
+                                  body: JSON.stringify({
+                                      full_name: user.full_name,
+                                      email: user.email,
+                                      phone: user.phone || '',
+                                      role: user.role,
+                                      preferred_language: newLang,
+                                  }),
+                              });
+                          } catch (err) { console.error('Failed to save language preference', err); }
+                      }
+                  }}
                   className="p-1 border rounded text-xs bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
                   dir="ltr"
               >

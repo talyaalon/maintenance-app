@@ -126,7 +126,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
   // Toggle a boolean permission field on a manager via PUT /users/:id
   const handleTogglePermission = async (manager, field) => {
-      const newValue = !manager[field];
+      // Fields that are "true by default when undefined" must use !== false semantics
+      const defaultTrueFields = ['can_manage_fields', 'allowed_lang_he', 'allowed_lang_en', 'allowed_lang_th'];
+      const currentValue = defaultTrueFields.includes(field) ? manager[field] !== false : !!manager[field];
+      const newValue = !currentValue;
       try {
           const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${manager.id}`, {
               method: 'PUT',
@@ -531,8 +534,6 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
   return (
     <div className="p-4 pb-32 max-w-4xl mx-auto">
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">{t.config_title || "הגדרות מערכת"}</h2>
-      
       {user?.role === 'BIG_BOSS' ? (
           <div className="space-y-4">
               {/* ── Top-level tab bar for Big Boss ── */}

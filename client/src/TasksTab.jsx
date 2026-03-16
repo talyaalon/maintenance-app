@@ -144,7 +144,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           return (
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
                   <div className="bg-white p-4 rounded-2xl shadow-sm border border-[#714B67]/20 text-center mb-6">
-                      <h3 className="text-xl font-bold text-gray-800">{t.tab_todo}</h3>
+                      <h3 className="text-xl font-bold text-[#714B67]">{t.tab_todo}</h3>
                       <p className="text-[#714B67] font-medium">{format(todayBkk, 'dd/MM/yyyy')}</p>
                   </div>
                   {filtered.length === 0 ? (
