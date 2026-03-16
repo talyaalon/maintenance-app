@@ -328,6 +328,12 @@ export const translations = {
     perm_can_manage_fields_hint: "Allow this manager to create/edit custom location fields",
     perm_auto_approve: "Auto-Approve Tasks",
     perm_auto_approve_hint: "Skip 'Waiting Approval' — tasks complete instantly when workers submit",
+    perm_lang_he: "Allow Hebrew (HE)",
+    perm_lang_he_hint: "Allow this manager and their employees to use the Hebrew interface",
+    perm_lang_en: "Allow English (EN)",
+    perm_lang_en_hint: "Allow this manager and their employees to use the English interface",
+    perm_lang_th: "Allow Thai (TH)",
+    perm_lang_th_hint: "Allow this manager and their employees to use the Thai interface",
     btn_send_report: "Send Daily Report",
 
     // --- LocationsTab ---
@@ -708,6 +714,12 @@ export const translations = {
     perm_can_manage_fields_hint: "אפשר למנהל זה ליצור ולערוך שדות מיקום מותאמים",
     perm_auto_approve: "אישור אוטומטי",
     perm_auto_approve_hint: "דלג על 'ממתין לאישור' — משימות מסתיימות מיד עם דיווח העובד",
+    perm_lang_he: "אפשר עברית (HE)",
+    perm_lang_he_hint: "אפשר למנהל זה ולעובדיו להשתמש בממשק בעברית",
+    perm_lang_en: "אפשר אנגלית (EN)",
+    perm_lang_en_hint: "אפשר למנהל זה ולעובדיו להשתמש בממשק באנגלית",
+    perm_lang_th: "אפשר תאית (TH)",
+    perm_lang_th_hint: "אפשר למנהל זה ולעובדיו להשתמש בממשק בתאית",
     btn_send_report: "שלח דוח משימות",
 
     // --- LocationsTab ---
@@ -1126,6 +1138,12 @@ export const translations = {
     perm_can_manage_fields_hint: "อนุญาตให้ผู้จัดการนี้สร้าง/แก้ไขฟิลด์สถานที่กำหนดเอง",
     perm_auto_approve: "อนุมัติงานอัตโนมัติ",
     perm_auto_approve_hint: "ข้าม 'รออนุมัติ' — งานเสร็จสิ้นทันทีเมื่อพนักงานรายงาน",
+    perm_lang_he: "อนุญาตภาษาฮิบรู (HE)",
+    perm_lang_he_hint: "อนุญาตให้ผู้จัดการนี้และพนักงานใช้อินเทอร์เฟซภาษาฮิบรู",
+    perm_lang_en: "อนุญาตภาษาอังกฤษ (EN)",
+    perm_lang_en_hint: "อนุญาตให้ผู้จัดการนี้และพนักงานใช้อินเทอร์เฟซภาษาอังกฤษ",
+    perm_lang_th: "อนุญาตภาษาไทย (TH)",
+    perm_lang_th_hint: "อนุญาตให้ผู้จัดการนี้และพนักงานใช้อินเทอร์เฟซภาษาไทย",
     btn_send_report: "ส่งรายงานประจำวัน",
 
     // --- LocationsTab ---
