@@ -742,6 +742,8 @@ app.delete('/users/:id', authenticateToken, async (req, res) => {
       }
 
       await pool.query('UPDATE locations SET created_by = NULL WHERE created_by = $1', [id]);
+      await pool.query('UPDATE categories SET created_by = NULL WHERE created_by = $1', [id]);
+      await pool.query('UPDATE assets SET created_by = NULL WHERE created_by = $1', [id]);
       await pool.query('DELETE FROM tasks WHERE worker_id = $1', [id]);
       await pool.query('DELETE FROM users WHERE id = $1', [id]);
       
