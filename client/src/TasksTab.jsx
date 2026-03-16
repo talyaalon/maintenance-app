@@ -241,12 +241,11 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   };
 
   return (
-    <div className="p-4 pb-24 min-h-screen bg-gray-50 relative">
+    <div className="px-4 pt-2 pb-24 min-h-screen bg-gray-50 relative">
       <style>{calendarStyles}</style>
 
-      <h1 className="text-xl font-semibold text-[#714B67] mb-4">{t.nav_tasks || 'Tasks'}</h1>
-
-      <div className="flex justify-end items-center mb-3">
+      <div className="flex justify-between items-center mb-3">
+          <h1 className="text-xl font-semibold text-[#714B67]">{t.nav_tasks || 'Tasks'}</h1>
           <div className="flex gap-2">
                 <button
                     onClick={() => { setShowSearch(s => !s); setSearchQuery(''); }}
@@ -269,7 +268,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       </div>
 
       {showSearch && (
-          <div className="mb-4 animate-fade-in">
+          <div className="mb-3 animate-fade-in">
               <input
                   type="text"
                   autoFocus
@@ -343,12 +342,12 @@ const TabButton = ({ active, onClick, label, icon, count, color }) => {
     }
 
     return (
-        <button onClick={onClick} className={`flex-1 flex flex-col items-center py-3 rounded-xl transition-all ${activeClass}`}>
-            <div className={`flex items-center gap-2 mb-1 ${active ? 'font-bold' : ''}`}>
+        <button onClick={onClick} className={`flex-1 flex flex-col items-center py-2 rounded-xl transition-all ${activeClass}`}>
+            <div className={`flex flex-col items-center gap-0.5 mb-1 ${active ? 'font-bold' : ''}`}>
                 {icon}
-                <span className="hidden sm:inline text-sm">{label}</span>
+                <span className="text-[10px] leading-tight text-center">{label}</span>
             </div>
-            <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${badgeClass}`}>{count}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${badgeClass}`}>{count}</span>
         </button>
     );
 };
