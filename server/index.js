@@ -744,11 +744,12 @@ app.delete('/users/:id', authenticateToken, async (req, res) => {
       await pool.query('UPDATE locations SET created_by = NULL WHERE created_by = $1', [id]);
       await pool.query('UPDATE categories SET created_by = NULL WHERE created_by = $1', [id]);
       await pool.query('UPDATE assets SET created_by = NULL WHERE created_by = $1', [id]);
+      await pool.query('UPDATE location_fields SET created_by = NULL WHERE created_by = $1', [id]);
       await pool.query('DELETE FROM tasks WHERE worker_id = $1', [id]);
       await pool.query('DELETE FROM users WHERE id = $1', [id]);
-      
+
       res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: "תקלה במחיקה" }); }
+    } catch (err) { console.error("❌ Error deleting user:", err); res.status(500).json({ error: "תקלה במחיקה", detail: err.message }); }
 });
 
 app.get('/managers', authenticateToken, async (req, res) => {
