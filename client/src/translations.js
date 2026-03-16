@@ -328,6 +328,7 @@ export const translations = {
     perm_can_manage_fields_hint: "Allow this manager to create/edit custom location fields",
     perm_auto_approve: "Auto-Approve Tasks",
     perm_auto_approve_hint: "Skip 'Waiting Approval' — tasks complete instantly when workers submit",
+    btn_send_report: "Send Daily Report",
 
     // --- LocationsTab ---
     confirm_delete_location: "Delete this location? This will also delete all tasks associated with it!",
@@ -707,6 +708,7 @@ export const translations = {
     perm_can_manage_fields_hint: "אפשר למנהל זה ליצור ולערוך שדות מיקום מותאמים",
     perm_auto_approve: "אישור אוטומטי",
     perm_auto_approve_hint: "דלג על 'ממתין לאישור' — משימות מסתיימות מיד עם דיווח העובד",
+    btn_send_report: "שלח דוח משימות",
 
     // --- LocationsTab ---
     confirm_delete_location: "למחוק מיקום זה? זה ימחק גם את המשימות שקשורות אליו!",
@@ -1124,6 +1126,7 @@ export const translations = {
     perm_can_manage_fields_hint: "อนุญาตให้ผู้จัดการนี้สร้าง/แก้ไขฟิลด์สถานที่กำหนดเอง",
     perm_auto_approve: "อนุมัติงานอัตโนมัติ",
     perm_auto_approve_hint: "ข้าม 'รออนุมัติ' — งานเสร็จสิ้นทันทีเมื่อพนักงานรายงาน",
+    btn_send_report: "ส่งรายงานประจำวัน",
 
     // --- LocationsTab ---
     confirm_delete_location: "ลบสถานที่นี้? การดำเนินการนี้จะลบงานที่เกี่ยวข้องทั้งหมดด้วย!",

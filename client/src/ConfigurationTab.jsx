@@ -595,10 +595,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                       <button
                                           onClick={() => handleSendReport(manager.id)}
                                           disabled={sendingReportId === manager.id}
-                                          title={t.send_report_btn || 'Send Daily Report'}
-                                          className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-white rounded-full transition disabled:opacity-50"
+                                          className="bg-[#714B67] text-white text-xs px-3 py-1.5 rounded flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
                                       >
-                                          {sendingReportId === manager.id ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                          {sendingReportId === manager.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                                          {t.btn_send_report || 'Send Daily Report'}
                                       </button>
                                   </div>
                                   {/* Toggle rows */}
