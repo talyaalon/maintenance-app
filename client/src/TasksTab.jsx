@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
 import TaskCard from './TaskCard';
@@ -69,22 +69,42 @@ const calendarStyles = `
 `;
 
 const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
-  const [mainTab, setMainTab] = useState('todo');
+  const [mainTab, setMainTab] = useState('overdue');
   const [viewMode, setViewMode] = useState('daily');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTask, setSelectedTask] = useState(null);
   const [showExcel, setShowExcel] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const isTeamView = Array.isArray(subordinates);
 
   const todayBkk = getBkkDateObj(new Date());
 
-  const pendingTasks = tasks.filter(task => {
+  // Today-only: tasks due exactly today
+  const todayTasks = tasks.filter(task => {
       if (task.status !== 'PENDING') return false;
       const taskDate = getBkkDateObj(task.due_date);
-      return isSameDay(taskDate, todayBkk) || isBefore(taskDate, startOfDay(todayBkk));
+      return isSameDay(taskDate, todayBkk);
   });
+
+  // Overdue: PENDING tasks with due_date strictly before today
+  const overdueTasks = tasks.filter(task => {
+      if (task.status !== 'PENDING') return false;
+      const taskDate = getBkkDateObj(task.due_date);
+      return isBefore(taskDate, startOfDay(todayBkk));
+  });
+
+  // Search filter helper
+  const applySearch = (list) => {
+      if (!searchQuery.trim()) return list;
+      const q = searchQuery.toLowerCase();
+      return list.filter(task =>
+          (task.title || '').toLowerCase().includes(q) ||
+          (task.description || '').toLowerCase().includes(q)
+      );
+  };
 
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
   const hideWaitingTab = user.role === 'MANAGER'
@@ -93,30 +113,52 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
   const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), selectedDate));
 
+  const renderOverdueView = () => {
+      const filtered = applySearch(overdueTasks);
+      return (
+          <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
+              {filtered.length === 0 ? (
+                  <div className="text-center py-10 opacity-70">
+                      <CheckCircle size={60} className="mx-auto text-green-300 mb-3"/>
+                      <p className="text-gray-500 text-lg">{overdueTasks.length === 0 ? (t.no_overdue_tasks || 'No overdue tasks!') : (t.no_search_results || 'No matching tasks.')}</p>
+                  </div>
+              ) : (
+                  <div className="space-y-3">
+                      {filtered.map(task => (
+                          <div key={task.id}>
+                              <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1">
+                                  <AlertTriangle size={12}/> {t.overdue} — {formatBkkDate(task.due_date)}
+                              </div>
+                              <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+                          </div>
+                      ))}
+                  </div>
+              )}
+          </div>
+      );
+  };
+
   const renderTodoView = () => {
       if (viewMode === 'daily') {
+          const filtered = applySearch(todayTasks);
           return (
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
                   <div className="bg-white p-4 rounded-2xl shadow-sm border border-[#714B67]/20 text-center mb-6">
                       <h3 className="text-xl font-bold text-gray-800">{t.tab_todo}</h3>
                       <p className="text-[#714B67] font-medium">{format(todayBkk, 'dd/MM/yyyy')}</p>
                   </div>
-                  {pendingTasks.length === 0 ? (
+                  {filtered.length === 0 ? (
                       <div className="text-center py-10 opacity-70">
                           <CheckCircle size={60} className="mx-auto text-green-300 mb-3"/>
-                          <p className="text-gray-500 text-lg">{t.no_tasks_today}</p>
+                          <p className="text-gray-500 text-lg">{todayTasks.length === 0 ? t.no_tasks_today : (t.no_search_results || 'No matching tasks.')}</p>
                       </div>
                   ) : (
                       <div className="space-y-3">
-                          {pendingTasks.map(task => {
-                              const isOverdue = isBefore(getBkkDateObj(task.due_date), startOfDay(todayBkk));
-                              return (
-                                  <div key={task.id}>
-                                      {isOverdue && <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1"><AlertTriangle size={12}/> {t.overdue} {formatBkkDate(task.due_date)}</div>}
-                                      <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
-                                  </div>
-                              );
-                          })}
+                          {filtered.map(task => (
+                              <div key={task.id}>
+                                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+                              </div>
+                          ))}
                       </div>
                   )}
               </div>
@@ -178,27 +220,40 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       }
   };
 
-  const renderApprovalView = () => (
-      <div className="space-y-4 animate-fade-in max-w-3xl mx-auto pb-28">
-          {waitingTasks.length === 0 && <div className="text-center py-10 text-gray-400"><p>{t.no_tasks_waiting}</p></div>}
-          {waitingTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
-      </div>
-  );
+  const renderApprovalView = () => {
+      const filtered = applySearch(waitingTasks);
+      return (
+          <div className="space-y-4 animate-fade-in max-w-3xl mx-auto pb-28">
+              {filtered.length === 0 && <div className="text-center py-10 text-gray-400"><p>{waitingTasks.length === 0 ? t.no_tasks_waiting : (t.no_search_results || 'No matching tasks.')}</p></div>}
+              {filtered.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
+          </div>
+      );
+  };
 
-  const renderCompletedView = () => (
-      <div className="space-y-3 animate-fade-in max-w-3xl mx-auto pb-28">
-          {completedTasks.length === 0 && <p className="text-center text-gray-500 mt-10">{t.no_tasks_completed}</p>}
-          {completedTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
-      </div>
-  );
+  const renderCompletedView = () => {
+      const filtered = applySearch(completedTasks);
+      return (
+          <div className="space-y-3 animate-fade-in max-w-3xl mx-auto pb-28">
+              {filtered.length === 0 && <p className="text-center text-gray-500 mt-10">{completedTasks.length === 0 ? t.no_tasks_completed : (t.no_search_results || 'No matching tasks.')}</p>}
+              {filtered.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
+          </div>
+      );
+  };
 
   return (
     <div className="p-4 pb-24 min-h-screen bg-gray-50 relative">
       <style>{calendarStyles}</style>
 
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-3">
           <h2 className="text-2xl font-bold text-black">{t.task_management_title}</h2>
           <div className="flex gap-2">
+                <button
+                    onClick={() => { setShowSearch(s => !s); setSearchQuery(''); }}
+                    className={`p-2 rounded-full transition shadow-sm ${showSearch ? 'bg-[#714B67] text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                    title={t.search_placeholder || 'Search tasks'}
+                >
+                    <Search size={20} />
+                </button>
                 {(user.role === 'MANAGER' || user.role === 'BIG_BOSS') && (
                     <button onClick={() => setShowExcel(!showExcel)} className="p-2 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition shadow-sm">
                         <FileSpreadsheet size={20} />
@@ -212,11 +267,25 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           </div>
       </div>
 
+      {showSearch && (
+          <div className="mb-4 animate-fade-in">
+              <input
+                  type="text"
+                  autoFocus
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder={t.search_tasks_placeholder || 'Search by title or description...'}
+                  className="w-full p-3 rounded-xl border border-[#714B67]/30 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 text-gray-800"
+              />
+          </div>
+      )}
+
       {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
       {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} />}
 
       <div className="flex bg-white p-1.5 rounded-2xl shadow-sm mb-8 mx-auto max-w-3xl">
-          <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={pendingTasks.length} color="purple" />
+          <TabButton active={mainTab === 'overdue'} onClick={() => setMainTab('overdue')} label={t.tab_overdue || 'Overdue'} icon={<AlertTriangle size={18}/>} count={overdueTasks.length} color="red" />
+          <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={todayTasks.length} color="purple" />
           {!hideWaitingTab && <TabButton active={mainTab === 'waiting'} onClick={() => setMainTab('waiting')} label={t.tab_waiting} icon={<AlertCircle size={18}/>} count={waitingTasks.length} color="orange" />}
           <TabButton active={mainTab === 'completed'} onClick={() => setMainTab('completed')} label={t.tab_completed} icon={<CheckCircle size={18}/>} count={completedTasks.length} color="green" />
       </div>
@@ -229,6 +298,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           </div></div>
       )}
 
+      {mainTab === 'overdue' && renderOverdueView()}
       {mainTab === 'todo' && renderTodoView()}
       {mainTab === 'waiting' && !hideWaitingTab && renderApprovalView()}
       {mainTab === 'completed' && renderCompletedView()}
@@ -259,12 +329,17 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
 };
 
 const TabButton = ({ active, onClick, label, icon, count, color }) => {
-    let activeClass = color === 'purple'
-        ? (active ? 'bg-[#fdf4ff] text-[#714B67] shadow-inner' : 'text-gray-400 hover:bg-gray-50')
-        : (active ? `bg-${color}-50 text-${color}-700 shadow-inner` : 'text-gray-400 hover:bg-gray-50');
-    let badgeClass = color === 'purple'
-        ? (active ? 'bg-[#714B67]/20 text-[#714B67]' : 'bg-gray-100 text-gray-500')
-        : (active ? `bg-${color}-200 text-${color}-800` : 'bg-gray-100 text-gray-500');
+    let activeClass, badgeClass;
+    if (color === 'purple') {
+        activeClass = active ? 'bg-[#fdf4ff] text-[#714B67] shadow-inner' : 'text-gray-400 hover:bg-gray-50';
+        badgeClass  = active ? 'bg-[#714B67]/20 text-[#714B67]' : 'bg-gray-100 text-gray-500';
+    } else if (color === 'red') {
+        activeClass = active ? 'bg-red-50 text-red-700 shadow-inner' : 'text-gray-400 hover:bg-gray-50';
+        badgeClass  = active ? 'bg-red-200 text-red-800' : 'bg-gray-100 text-gray-500';
+    } else {
+        activeClass = active ? `bg-${color}-50 text-${color}-700 shadow-inner` : 'text-gray-400 hover:bg-gray-50';
+        badgeClass  = active ? `bg-${color}-200 text-${color}-800` : 'bg-gray-100 text-gray-500';
+    }
 
     return (
         <button onClick={onClick} className={`flex-1 flex flex-col items-center py-3 rounded-xl transition-all ${activeClass}`}>

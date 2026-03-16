@@ -25,14 +25,11 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
         { id: 'asset_code', label: t.col_asset_code || 'Asset Code' },
         { id: 'asset_name', label: t.asset_name_label || 'Asset Name' },
         { id: 'category_name', label: t.category_label || 'Category' },
-        { id: 'notes', label: t.col_notes || 'Notes' },
-        { id: 'image_url', label: t.col_image_url || 'Image URL' },
-        { id: 'completion_note', label: t.col_completion_note || 'Completion Note' },
         { id: 'images', label: t.col_images || 'Images (URLs)' }
     ];
 
-    const [availableFields, setAvailableFields] = useState(allFields);
-    const [selectedFields, setSelectedFields] = useState([]);
+    const [availableFields, setAvailableFields] = useState([]);
+    const [selectedFields, setSelectedFields] = useState(allFields);
     const [filterWorker, setFilterWorker] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');

@@ -45,9 +45,13 @@ export const translations = {
     
     // --- Tasks Tab ---
     task_management_title: "Task Management",
+    tab_overdue: "Overdue",
     tab_todo: "To Do",
     tab_waiting: "Waiting Approval",
     tab_completed: "History",
+    no_overdue_tasks: "No overdue tasks! All caught up.",
+    search_tasks_placeholder: "Search by title or description...",
+    no_search_results: "No matching tasks.",
     view_daily: "Daily",
     view_weekly: "Weekly",
     view_calendar: "Calendar",
@@ -420,9 +424,13 @@ export const translations = {
     
     // --- Tasks Tab ---
     task_management_title: "ניהול משימות",
+    tab_overdue: "משימות באיחור",
     tab_todo: "לביצוע",
     tab_waiting: "ממתין לאישור",
     tab_completed: "היסטוריה",
+    no_overdue_tasks: "אין משימות באיחור! כל הכבוד.",
+    search_tasks_placeholder: "חיפוש לפי כותרת או תיאור...",
+    no_search_results: "לא נמצאו משימות.",
     view_daily: "יומי",
     view_weekly: "שבועי",
     view_calendar: "יומן",
@@ -795,9 +803,13 @@ export const translations = {
     
     // --- Tasks Tab ---
     task_management_title: "การจัดการงาน",
+    tab_overdue: "งานเกินกำหนด",
     tab_todo: "ต้องทำ",
     tab_waiting: "รออนุมัติ",
     tab_completed: "ประวัติ",
+    no_overdue_tasks: "ไม่มีงานค้างค่ะ! ดีมาก",
+    search_tasks_placeholder: "ค้นหาตามชื่อหรือรายละเอียด...",
+    no_search_results: "ไม่พบงานที่ตรงกัน",
     view_daily: "รายวัน",
     view_weekly: "รายสัปดาห์",
     view_calendar: "ปฏิทิน",

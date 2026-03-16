@@ -436,6 +436,10 @@ app.post('/login', async (req, res) => {
         user: {
             id: user.id,
             name: user.full_name,
+            full_name: user.full_name,
+            full_name_he: user.full_name_he || null,
+            full_name_en: user.full_name_en || null,
+            full_name_th: user.full_name_th || null,
             role: user.role,
             email: user.email,
             phone: user.phone,
