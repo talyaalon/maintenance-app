@@ -551,6 +551,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
   return (
     <div className="p-4 pb-32 max-w-4xl mx-auto">
+      <h1 className="text-xl font-semibold text-[#714B67] mb-4">{t.config_title || 'Configuration'}</h1>
       {user?.role === 'BIG_BOSS' ? (
           <div className="space-y-4">
               {/* ── Top-level tab bar for Big Boss ── */}

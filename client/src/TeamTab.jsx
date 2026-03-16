@@ -252,6 +252,8 @@ const TeamTab = ({ token, t, user, lang }) => {
                 />
             )}
 
+            <h1 className="text-xl font-semibold text-[#714B67] mb-4">{t.my_team_title || t.nav_team || 'Team'}</h1>
+
             {/* Header */}
             <div className="flex justify-end items-center mb-6">
                 <button className="bg-[#714B67] text-white px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2" onClick={() => setShowAddModal(true)}>

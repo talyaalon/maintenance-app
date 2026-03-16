@@ -230,6 +230,8 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
                 />
             )}
 
+            <h1 className="text-xl font-semibold text-[#714B67] mb-4">{t.manage_locations_title || 'Locations'}</h1>
+
             {/* Header */}
             <div className="flex justify-end items-center mb-6">
                 <button

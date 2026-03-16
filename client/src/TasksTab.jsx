@@ -244,6 +244,8 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
     <div className="p-4 pb-24 min-h-screen bg-gray-50 relative">
       <style>{calendarStyles}</style>
 
+      <h1 className="text-xl font-semibold text-[#714B67] mb-4">{t.nav_tasks || 'Tasks'}</h1>
+
       <div className="flex justify-end items-center mb-3">
           <div className="flex gap-2">
                 <button

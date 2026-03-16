@@ -132,6 +132,8 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   return (
     <div className="p-4 flex flex-col items-center pb-24 max-w-lg mx-auto animate-fade-in">
 
+      <h1 className="text-xl font-semibold text-[#714B67] mb-4 self-start">{t.nav_profile || 'Profile'}</h1>
+
       <div className="relative mb-6 group flex flex-col items-center">
         <div className="relative">
             {/* 🚀 תוקן צבע הרקע כאן לסגול המדויק */}

@@ -751,7 +751,7 @@ app.delete('/users/:id', authenticateToken, async (req, res) => {
 
 app.get('/managers', authenticateToken, async (req, res) => {
   try {
-    const managers = await pool.query("SELECT id, full_name, email, phone, role, profile_picture_url, can_manage_fields, auto_approve_tasks FROM users WHERE role = 'MANAGER' OR role = 'BIG_BOSS' ORDER BY full_name");
+    const managers = await pool.query("SELECT id, full_name, email, phone, role, profile_picture_url, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th FROM users WHERE role = 'MANAGER' OR role = 'BIG_BOSS' ORDER BY full_name");
     res.json(managers.rows);
   } catch (err) { res.status(500).send('Server Error'); }
 });
