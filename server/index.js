@@ -347,6 +347,11 @@ app.get('/fix-db', async (req, res) => {
             // Auto-approve tasks flag — when TRUE, task completion skips WAITING_APPROVAL
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_approve_tasks BOOLEAN DEFAULT FALSE');
 
+            // Language permissions — Big Boss controls which languages each Manager (and their employees) may use
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_lang_he BOOLEAN DEFAULT TRUE');
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_lang_en BOOLEAN DEFAULT TRUE');
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_lang_th BOOLEAN DEFAULT TRUE');
+
             // ── Multilingual name columns ──
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_he TEXT');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_en TEXT');
@@ -422,13 +427,19 @@ app.post('/login', async (req, res) => {
 
     const token = jwt.sign({ id: user.id, role: user.role, name: user.full_name }, SECRET_KEY, { expiresIn: '24h' });
 
-    // For employees, fetch the manager's auto_approve_tasks so the UI can hide the waiting tab
+    // For employees, fetch the manager's settings so the UI can apply them
     let managerAutoApprove = false;
+    let managerAllowedLangHe = true;
+    let managerAllowedLangEn = true;
+    let managerAllowedLangTh = true;
     if (user.role === 'EMPLOYEE' && user.parent_manager_id) {
         try {
-            const mgr = await pool.query('SELECT auto_approve_tasks FROM users WHERE id = $1', [user.parent_manager_id]);
-            managerAutoApprove = mgr.rows[0]?.auto_approve_tasks || false;
-        } catch (e) { /* non-critical, leave false */ }
+            const mgr = await pool.query('SELECT auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th FROM users WHERE id = $1', [user.parent_manager_id]);
+            managerAutoApprove    = mgr.rows[0]?.auto_approve_tasks  || false;
+            managerAllowedLangHe  = mgr.rows[0]?.allowed_lang_he  !== false;
+            managerAllowedLangEn  = mgr.rows[0]?.allowed_lang_en  !== false;
+            managerAllowedLangTh  = mgr.rows[0]?.allowed_lang_th  !== false;
+        } catch (e) { /* non-critical, leave defaults */ }
     }
 
     res.json({
@@ -447,8 +458,15 @@ app.post('/login', async (req, res) => {
             preferred_language: user.preferred_language,
             can_manage_fields: user.can_manage_fields,
             auto_approve_tasks: user.auto_approve_tasks,
-            // Employee sees their manager's setting to conditionally hide Waiting tab
+            // Own language permissions (managers/bigboss use their own; employees use manager's below)
+            allowed_lang_he: user.allowed_lang_he !== false,
+            allowed_lang_en: user.allowed_lang_en !== false,
+            allowed_lang_th: user.allowed_lang_th !== false,
+            // Employee sees their manager's settings to apply restrictions
             manager_auto_approve_tasks: managerAutoApprove,
+            manager_allowed_lang_he: managerAllowedLangHe,
+            manager_allowed_lang_en: managerAllowedLangEn,
+            manager_allowed_lang_th: managerAllowedLangTh,
             parent_manager_id: user.parent_manager_id
         }
     });
@@ -598,13 +616,20 @@ app.post('/users', authenticateToken, async (req, res) => {
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks } = req.body;
+    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th } = req.body;
 
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
     const oldUser = oldUserRes.rows[0];
 
-    const firebaseUpdateData = { displayName: full_name, email: email };
+    // Compute effective values BEFORE the Firebase call so displayName/email are never undefined
+    const effectiveName  = full_name || full_name_en || oldUser.full_name;
+    const effectiveEmail = email !== undefined ? email : oldUser.email;
+    const effectivePhone = phone !== undefined ? phone : (oldUser.phone || null);
+    const effectiveRole  = role  !== undefined ? role  : oldUser.role;
+    const lang           = preferred_language !== undefined ? preferred_language : (oldUser.preferred_language || 'he');
+
+    const firebaseUpdateData = { displayName: effectiveName, email: effectiveEmail };
     if (password && password.trim() !== '') {
         if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
         firebaseUpdateData.password = password;
@@ -617,13 +642,6 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         if (firebaseErr.code === 'auth/email-already-exists') return res.status(400).json({ error: "האימייל הזה כבר תפוס על ידי משתמש אחר." });
         // For non-Firebase users (bcrypt/DB auth), user-not-found is expected — continue to DB update
     }
-
-    // Preserve existing values for fields the caller doesn't explicitly send
-    const lang           = preferred_language !== undefined ? preferred_language : (oldUser.preferred_language || 'he');
-    const effectiveEmail = email !== undefined ? email : oldUser.email;
-    const effectivePhone = phone !== undefined ? phone : (oldUser.phone || null);
-    const effectiveRole  = role  !== undefined ? role  : oldUser.role;
-    const effectiveName  = full_name || full_name_en || oldUser.full_name;
 
     const setClauses = [
         'full_name=$1', 'full_name_he=$2', 'full_name_en=$3', 'full_name_th=$4',
@@ -652,6 +670,21 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         const autoApprove = auto_approve_tasks !== undefined ? auto_approve_tasks : oldUser.auto_approve_tasks;
         setClauses.push(`auto_approve_tasks=$${paramCount}`);
         params.push(autoApprove);
+        paramCount++;
+    }
+    if ('allowed_lang_he' in oldUser || allowed_lang_he !== undefined) {
+        setClauses.push(`allowed_lang_he=$${paramCount}`);
+        params.push(allowed_lang_he !== undefined ? allowed_lang_he : oldUser.allowed_lang_he);
+        paramCount++;
+    }
+    if ('allowed_lang_en' in oldUser || allowed_lang_en !== undefined) {
+        setClauses.push(`allowed_lang_en=$${paramCount}`);
+        params.push(allowed_lang_en !== undefined ? allowed_lang_en : oldUser.allowed_lang_en);
+        paramCount++;
+    }
+    if ('allowed_lang_th' in oldUser || allowed_lang_th !== undefined) {
+        setClauses.push(`allowed_lang_th=$${paramCount}`);
+        params.push(allowed_lang_th !== undefined ? allowed_lang_th : oldUser.allowed_lang_th);
         paramCount++;
     }
 

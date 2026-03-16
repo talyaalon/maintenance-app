@@ -596,6 +596,24 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                           value={!!manager.auto_approve_tasks}
                                           onToggle={() => handleTogglePermission(manager, 'auto_approve_tasks')}
                                       />
+                                      <PermissionToggle
+                                          label={t.perm_lang_he || 'Allow Hebrew (HE)'}
+                                          hint={t.perm_lang_he_hint || 'Allow this manager and their employees to use the Hebrew interface'}
+                                          value={manager.allowed_lang_he !== false}
+                                          onToggle={() => handleTogglePermission(manager, 'allowed_lang_he')}
+                                      />
+                                      <PermissionToggle
+                                          label={t.perm_lang_en || 'Allow English (EN)'}
+                                          hint={t.perm_lang_en_hint || 'Allow this manager and their employees to use the English interface'}
+                                          value={manager.allowed_lang_en !== false}
+                                          onToggle={() => handleTogglePermission(manager, 'allowed_lang_en')}
+                                      />
+                                      <PermissionToggle
+                                          label={t.perm_lang_th || 'Allow Thai (TH)'}
+                                          hint={t.perm_lang_th_hint || 'Allow this manager and their employees to use the Thai interface'}
+                                          value={manager.allowed_lang_th !== false}
+                                          onToggle={() => handleTogglePermission(manager, 'allowed_lang_th')}
+                                      />
                                   </div>
                               </div>
                           );

@@ -77,6 +77,29 @@ function App() {
           setLang(user.preferred_language);
       }
   }, [user]);
+
+  // Derive allowed languages for the current user
+  // Manager/BIG_BOSS: their own allowed_lang_* flags
+  // EMPLOYEE: their manager's allowed_lang_* flags
+  const allowedLangs = React.useMemo(() => {
+      if (!user) return ['he', 'en', 'th'];
+      const isEmployee = user.role === 'EMPLOYEE';
+      const he = isEmployee ? user.manager_allowed_lang_he !== false : user.allowed_lang_he !== false;
+      const en = isEmployee ? user.manager_allowed_lang_en !== false : user.allowed_lang_en !== false;
+      const th = isEmployee ? user.manager_allowed_lang_th !== false : user.allowed_lang_th !== false;
+      const list = [];
+      if (he) list.push('he');
+      if (en) list.push('en');
+      if (th) list.push('th');
+      return list.length > 0 ? list : ['he']; // always keep at least one
+  }, [user]);
+
+  // Auto-switch language if the current one is no longer allowed
+  useEffect(() => {
+      if (!allowedLangs.includes(lang)) {
+          setLang(allowedLangs[0]);
+      }
+  }, [allowedLangs, lang]);
   
   const t = translations[lang]; // המילון הנוכחי
 
@@ -238,9 +261,9 @@ function App() {
                   className="p-1 border rounded text-xs bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
                   dir="ltr"
               >
-                  <option value="en">🇺🇸 EN</option>
-                  <option value="he">🇮🇱 HE</option>
-                  <option value="th">🇹🇭 TH</option>
+                  {allowedLangs.includes('en') && <option value="en">🇺🇸 EN</option>}
+                  {allowedLangs.includes('he') && <option value="he">🇮🇱 HE</option>}
+                  {allowedLangs.includes('th') && <option value="th">🇹🇭 TH</option>}
               </select>
           </div>
       </header>

@@ -28,8 +28,8 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
         { id: 'images', label: t.col_images || 'Images (URLs)' }
     ];
 
-    const [availableFields, setAvailableFields] = useState([]);
-    const [selectedFields, setSelectedFields] = useState(allFields);
+    const [availableFields, setAvailableFields] = useState(allFields.filter(f => f.id !== 'title' && f.id !== 'worker_name'));
+    const [selectedFields, setSelectedFields] = useState(allFields.filter(f => f.id === 'title' || f.id === 'worker_name'));
     const [filterWorker, setFilterWorker] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');

@@ -69,7 +69,7 @@ const calendarStyles = `
 `;
 
 const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
-  const [mainTab, setMainTab] = useState('overdue');
+  const [mainTab, setMainTab] = useState('todo');
   const [viewMode, setViewMode] = useState('daily');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTask, setSelectedTask] = useState(null);

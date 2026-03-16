@@ -152,11 +152,11 @@ const TeamTab = ({ token, t, user, lang }) => {
     const openEditModal = (member) => {
         setEditMember(member);
         setEditForm({
-            full_name: member.full_name,
+            full_name: member.full_name || '',
             full_name_he: member.full_name_he || '',
             full_name_en: member.full_name_en || member.full_name || '',
             full_name_th: member.full_name_th || '',
-            email: member.email,
+            email: member.email || '',
             phone: member.phone || '',
             role: member.role,
             password: ''
