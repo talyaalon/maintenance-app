@@ -539,9 +539,11 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
 app.get('/users', authenticateToken, async (req, res) => {
     try {
         let query = `
-            SELECT u.id, u.full_name, u.email, u.phone, u.role, u.parent_manager_id,
+            SELECT u.id, u.full_name, u.full_name_he, u.full_name_en, u.full_name_th,
+                   u.email, u.phone, u.role, u.parent_manager_id,
                    u.profile_picture_url, u.preferred_language,
                    u.can_manage_fields, u.auto_approve_tasks,
+                   u.allowed_lang_he, u.allowed_lang_en, u.allowed_lang_th,
                    m.full_name AS manager_name,
                    m.auto_approve_tasks AS manager_auto_approve_tasks
             FROM users u
@@ -672,17 +674,17 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         params.push(autoApprove);
         paramCount++;
     }
-    if ('allowed_lang_he' in oldUser || allowed_lang_he !== undefined) {
+    if ('allowed_lang_he' in oldUser) {
         setClauses.push(`allowed_lang_he=$${paramCount}`);
         params.push(allowed_lang_he !== undefined ? allowed_lang_he : oldUser.allowed_lang_he);
         paramCount++;
     }
-    if ('allowed_lang_en' in oldUser || allowed_lang_en !== undefined) {
+    if ('allowed_lang_en' in oldUser) {
         setClauses.push(`allowed_lang_en=$${paramCount}`);
         params.push(allowed_lang_en !== undefined ? allowed_lang_en : oldUser.allowed_lang_en);
         paramCount++;
     }
-    if ('allowed_lang_th' in oldUser || allowed_lang_th !== undefined) {
+    if ('allowed_lang_th' in oldUser) {
         setClauses.push(`allowed_lang_th=$${paramCount}`);
         params.push(allowed_lang_th !== undefined ? allowed_lang_th : oldUser.allowed_lang_th);
         paramCount++;
@@ -2014,6 +2016,11 @@ app.listen(port, async () => {
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_en VARCHAR(255)');
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_th VARCHAR(255)');
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(10) DEFAULT \'he\'');
+
+        // Language permission columns — required by PUT /users/:id permission toggles
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_lang_he BOOLEAN DEFAULT TRUE');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_lang_en BOOLEAN DEFAULT TRUE');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_lang_th BOOLEAN DEFAULT TRUE');
 
         // Seed English name from legacy single-name column (idempotent)
         await pool.query("UPDATE locations  SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
