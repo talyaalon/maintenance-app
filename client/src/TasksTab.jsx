@@ -244,8 +244,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
     <div className="p-4 pb-24 min-h-screen bg-gray-50 relative">
       <style>{calendarStyles}</style>
 
-      <div className="flex justify-between items-center mb-3">
-          <h2 className="text-2xl font-bold text-black">{t.task_management_title}</h2>
+      <div className="flex justify-end items-center mb-3">
           <div className="flex gap-2">
                 <button
                     onClick={() => { setShowSearch(s => !s); setSearchQuery(''); }}

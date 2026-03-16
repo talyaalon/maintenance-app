@@ -259,12 +259,12 @@ function App() {
                   value={lang}
                   onChange={async (e) => {
                       const newLang = e.target.value;
+                      // setLang is the single source of truth for UI language —
+                      // do NOT call handleUserUpdate here or the useEffect([user])
+                      // will fire and fight back against this setLang call.
                       setLang(newLang);
-                      // Keep local user state in sync so the preferred_language
-                      // useEffect never fights against the user's selection
+                      // Persist to backend only (no local user-state mutation)
                       if (user) {
-                          handleUserUpdate({ preferred_language: newLang });
-                          // Persist to backend
                           try {
                               const tok = localStorage.getItem('token');
                               await fetch(`https://maintenance-app-h84v.onrender.com/users/${user.id}`, {

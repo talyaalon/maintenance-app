@@ -130,6 +130,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       const defaultTrueFields = ['can_manage_fields', 'allowed_lang_he', 'allowed_lang_en', 'allowed_lang_th'];
       const currentValue = defaultTrueFields.includes(field) ? manager[field] !== false : !!manager[field];
       const newValue = !currentValue;
+
+      // Optimistic update: flip the toggle immediately so the UI reacts on click
+      setManagers(prev => prev.map(m => m.id === manager.id ? { ...m, [field]: newValue } : m));
+
       try {
           const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${manager.id}`, {
               method: 'PUT',
@@ -139,12 +143,25 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                   email: manager.email,
                   phone: manager.phone || '',
                   role: manager.role,
-                  [field]: newValue          // only toggle the target field
+                  preferred_language: manager.preferred_language || 'he',
+                  [field]: newValue
               })
           });
-          if (res.ok) fetchManagers();
-          else { const d = await res.json(); alert(d.error || 'Error updating permission'); }
-      } catch (e) { alert('Server error'); }
+          if (res.ok) {
+              fetchManagers(); // confirm from server
+          } else {
+              // Revert optimistic update on failure
+              setManagers(prev => prev.map(m => m.id === manager.id ? { ...m, [field]: currentValue } : m));
+              try {
+                  const d = await res.json();
+                  alert(d.error || 'Error updating permission');
+              } catch { alert('Error updating permission'); }
+          }
+      } catch (e) {
+          // Revert on network error
+          setManagers(prev => prev.map(m => m.id === manager.id ? { ...m, [field]: currentValue } : m));
+          alert('Server error');
+      }
   };
 
   const [sendingReportId, setSendingReportId] = useState(null);

@@ -131,7 +131,6 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
 
   return (
     <div className="p-4 flex flex-col items-center pb-24 max-w-lg mx-auto animate-fade-in">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t.nav_profile}</h2>
 
       <div className="relative mb-6 group flex flex-col items-center">
         <div className="relative">

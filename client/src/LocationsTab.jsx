@@ -231,8 +231,7 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
             )}
 
             {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">{t.nav_locations || 'Locations'}</h2>
+            <div className="flex justify-end items-center mb-6">
                 <button
                     onClick={() => { setIsAdding(!isAdding); setNewLoc(emptyForm()); }}
                     className="bg-[#714B67] hover:bg-[#5a3b52] text-white px-4 py-2 rounded-full shadow flex items-center gap-2 text-sm transition"

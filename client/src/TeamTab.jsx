@@ -253,8 +253,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             )}
 
             {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-black">{t.my_team_title || "My Team"}</h2>
+            <div className="flex justify-end items-center mb-6">
                 <button className="bg-[#714B67] text-white px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2" onClick={() => setShowAddModal(true)}>
                     <Plus size={18}/> {t.add_team_member || "Add User"}
                 </button>
