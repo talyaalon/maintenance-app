@@ -2113,11 +2113,51 @@ app.get('/api/rescue-boss', async (req, res) => {
 app.post('/webhook/line', (req, res) => {
     // LINE platform sends a POST to verify the webhook URL.
     // We must respond 200 OK immediately — for both verification pings and real events.
+    res.sendStatus(200);
+
     const events = req.body?.events || [];
     events.forEach(event => {
         console.log('📲 LINE webhook event:', JSON.stringify(event));
+
+        if (event.type === 'message' && event.message?.type === 'text') {
+            const replyToken = event.replyToken;
+            const userId = event.source?.userId;
+
+            console.log('Attempting to reply to:', userId);
+
+            if (!replyToken || !process.env.LINE_CHANNEL_ACCESS_TOKEN) return;
+
+            const https = require('https');
+            const body = JSON.stringify({
+                replyToken,
+                messages: [{ type: 'text', text: `Your LINE User ID is: ${userId}` }]
+            });
+
+            const reqLine = https.request({
+                hostname: 'api.line.me',
+                path: '/v2/bot/message/reply',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+                    'Content-Length': Buffer.byteLength(body)
+                }
+            }, (lineRes) => {
+                let data = '';
+                lineRes.on('data', chunk => data += chunk);
+                lineRes.on('end', () => {
+                    if (lineRes.statusCode >= 200 && lineRes.statusCode < 300) {
+                        console.log(`✅ LINE reply sent to ${userId}`);
+                    } else {
+                        console.error(`⚠️ LINE reply API error (${lineRes.statusCode}):`, data);
+                    }
+                });
+            });
+            reqLine.on('error', err => console.error('⚠️ LINE reply request failed:', err.message));
+            reqLine.write(body);
+            reqLine.end();
+        }
     });
-    res.sendStatus(200);
 });
 
 app.listen(port, async () => {
