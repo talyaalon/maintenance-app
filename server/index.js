@@ -2107,6 +2107,19 @@ app.get('/api/rescue-boss', async (req, res) => {
     }
 });
 
+// ==========================================
+// 📲 LINE Webhook Verification & Events
+// ==========================================
+app.post('/webhook/line', (req, res) => {
+    // LINE platform sends a POST to verify the webhook URL.
+    // We must respond 200 OK immediately — for both verification pings and real events.
+    const events = req.body?.events || [];
+    events.forEach(event => {
+        console.log('📲 LINE webhook event:', JSON.stringify(event));
+    });
+    res.sendStatus(200);
+});
+
 app.listen(port, async () => {
     // Ensure all required columns exist without requiring a manual /fix-db call
     try {
