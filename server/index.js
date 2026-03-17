@@ -38,6 +38,7 @@ const crypto = require('crypto');
 const app = express();
 const port = process.env.PORT || 3001;
 const SECRET_KEY = 'my_super_secret_key';
+const APP_LINK = "https://air-manage-app.netlify.app/";
 
 cloudinary.config({
   cloud_name: 'dojnc3j0r',
@@ -90,9 +91,10 @@ transporter.verify((error, success) => {
 const sendLineMessage = async (lineUserId, text) => {
     if (!lineUserId || !process.env.LINE_CHANNEL_ACCESS_TOKEN) return;
     const https = require('https');
+    const textWithLink = `${text}\n\nView in App: ${APP_LINK}`;
     const body = JSON.stringify({
         to: lineUserId,
-        messages: [{ type: 'text', text }]
+        messages: [{ type: 'text', text: textWithLink }]
     });
     try {
         await new Promise((resolve, reject) => {
@@ -126,44 +128,6 @@ const sendLineMessage = async (lineUserId, text) => {
     }
 };
 
-const sendUpdateEmail = async (email, fullName, changes, lang = 'en') => {
-    const appLink = "https://air-manage-app.netlify.app/";
-
-    const dict = {
-        en: { dir: 'ltr', subject: 'Account Update - OpsManager App', title: 'Account Profile Updated', hello: 'Hello', body: 'The following changes were made to your profile:', note: 'If you did not request these changes, please contact your manager.', btn: 'Login to System' },
-        he: { dir: 'rtl', subject: 'עדכון חשבון - אפליקציית OpsManager', title: 'פרופיל החשבון עודכן', hello: 'שלום', body: 'השינויים הבאים בוצעו בפרופיל שלך:', note: 'אם לא ביקשת שינויים אלו, פנה למנהל שלך.', btn: 'כניסה למערכת' },
-        th: { dir: 'ltr', subject: 'อัปเดตบัญชี - แอป OpsManager', title: 'อัปเดตโปรไฟล์บัญชีแล้ว', hello: 'สวัสดี', body: 'มีการเปลี่ยนแปลงต่อไปนี้ในโปรไฟล์ของคุณ:', note: 'หากคุณไม่ได้ขอการเปลี่ยนแปลงเหล่านี้ โปรดติดต่อผู้จัดการของคุณ', btn: 'เข้าสู่ระบบ' }
-    };
-    const l = dict[lang] || dict['en'];
-
-    let changesHtml = '<ul style="padding-left: 20px; color: #333;">';
-    changes.forEach(change => { changesHtml += `<li style="margin-bottom: 5px;">${change}</li>`; });
-    changesHtml += '</ul>';
-
-    const mailOptions = {
-      from: '"OpsManager App" <maintenance.app.tkp@gmail.com>',
-      to: email,
-      subject: l.subject,
-      html: `
-        <div dir="${l.dir}" style="font-family:sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:20px;border-radius:10px;border:1px solid #e0e0e0;">
-          <h2 style="color:#714B67;text-align:center;">${l.title}</h2>
-          <div style="background:white;padding:20px;border-radius:8px;">
-            <p style="font-size:16px;">${l.hello} <strong>${fullName}</strong>,</p>
-            <p>${l.body}</p>
-            <div style="background-color:#f0f9ff; border-left: 4px solid #0ea5e9; padding: 10px; margin: 15px 0;">
-                ${changesHtml}
-            </div>
-            <p style="font-size:14px; color:#666;">${l.note}</p>
-            <div style="text-align:center;margin-top:30px;">
-              <a href="${appLink}" style="background:#714B67;color:white;padding:10px 25px;text-decoration:none;border-radius:25px;font-weight:bold;">${l.btn}</a>
-            </div>
-          </div>
-        </div>
-      `
-    };
-    try { await transporter.sendMail(mailOptions); }
-    catch (error) { console.error('Error sending update email:', error); }
-};
 
 // ==========================================
 // 📧 שליחת מייל למשתמש חדש (מותאם לשפות ולתפקידים)
@@ -523,6 +487,10 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         const id = req.user.id;
         const { full_name, full_name_he, full_name_en, full_name_th, email, phone, password, preferred_language, line_user_id } = req.body;
 
+        // Capture old lineUserId BEFORE the update to detect first-time connection
+        const oldProfileRes = await pool.query('SELECT line_user_id FROM users WHERE id = $1', [id]);
+        const oldLineUserId = oldProfileRes.rows[0]?.line_user_id || null;
+
         let profile_picture_url = req.body.existing_picture || null;
         if (req.file) {
             // Use the Cloudinary URL (req.file.path) — NOT a local /uploads/ path
@@ -569,10 +537,15 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
 
         const updatedUser = result.rows[0];
 
-        if (updatedUser.line_user_id) {
-            const messages = { en: "Your profile has been updated.", he: "הפרופיל שלך עודכן.", th: "อัปเดตโปรไฟล์ของคุณแล้ว" };
+        // Send welcome LINE message when lineUserId is connected for the first time
+        if (updatedUser.line_user_id && !oldLineUserId) {
             const userLang = updatedUser.preferred_language || 'en';
-            sendLineMessage(updatedUser.line_user_id, messages[userLang] || messages['en']).catch(err => console.error("❌ LINE profile update error:", err));
+            const welcomeDict = {
+                he: `שלום ${updatedUser.full_name}! 👋 ברוך הבא למערכת OpsManager. חשבונך מחובר בהצלחה.`,
+                en: `Hello ${updatedUser.full_name}! 👋 Welcome to the team! Your LINE account is now connected to OpsManager.`,
+                th: `สวัสดี ${updatedUser.full_name}! 👋 ยินดีต้อนรับสู่ทีม! LINE ของคุณเชื่อมต่อกับ OpsManager แล้ว`
+            };
+            sendLineMessage(updatedUser.line_user_id, welcomeDict[userLang] || welcomeDict['en']).catch(err => console.error("❌ LINE welcome error:", err));
         }
 
         res.json({ message: "Profile updated successfully", user: updatedUser });
@@ -776,14 +749,17 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     if (oldUser.can_manage_fields !== updatedUser.can_manage_fields) changes.push(`Field Settings Permission updated`);
     if (oldUser.auto_approve_tasks !== updatedUser.auto_approve_tasks) changes.push(`Auto-Approve Tasks updated to: <strong>${updatedUser.auto_approve_tasks}</strong>`);
 
-    if (changes.length > 0) {
-        sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes).catch(err => console.error("Email send error:", err));
-    }
-
-    if (updatedUser.line_user_id) {
-        const messages = { en: "Your profile has been updated.", he: "הפרופיל שלך עודכן.", th: "อัปเดตโปรไฟล์ของคุณแล้ว" };
-        const userLang = updatedUser.preferred_language || 'en';
-        sendLineMessage(updatedUser.line_user_id, messages[userLang] || messages['en']).catch(err => console.error("❌ LINE profile update error:", err));
+    // Welcome LINE message when lineUserId is set for the first time
+    const oldLineId = oldUser.line_user_id;
+    const newLineId = updatedUser.line_user_id;
+    if (newLineId && !oldLineId) {
+        const lang2 = updatedUser.preferred_language || 'he';
+        const welcomeDict = {
+            he: `שלום ${updatedUser.full_name}! 👋 ברוך הבא למערכת OpsManager. חשבונך מחובר בהצלחה.`,
+            en: `Hello ${updatedUser.full_name}! 👋 Welcome to the team! Your account is now connected to OpsManager.`,
+            th: `สวัสดี ${updatedUser.full_name}! 👋 ยินดีต้อนรับสู่ทีม! บัญชีของคุณเชื่อมต่อกับ OpsManager แล้ว`
+        };
+        sendLineMessage(newLineId, welcomeDict[lang2] || welcomeDict['en']).catch(err => console.error("❌ LINE welcome error:", err));
     }
 
     res.json({ message: "User updated successfully", user: updatedUser });
@@ -1967,7 +1943,17 @@ const runDailyReport = async (manager_id = null) => {
             `);
 
             if (emp.line_user_id) {
-                try { await sendLineMessage(emp.line_user_id, `${pushTitle}\n${pushBody}`); }
+                // Build detailed task list for LINE message
+                let lineMsg = `${pushTitle}\n${pushBody}`;
+                if (!isNone) {
+                    lineMsg += `\n\n--- ${l.th_task} ---`;
+                    wTasks.forEach(t => {
+                        const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                        lineMsg += `\n• ${t.title}: ${isDone ? l.status_done : l.status_not}`;
+                    });
+                    lineMsg += `\n\n${completed.length} ${l.out_of} ${wTasks.length}`;
+                }
+                try { await sendLineMessage(emp.line_user_id, lineMsg); }
                 catch (e) { console.error(`❌ LINE send failed for employee ${emp.email}:`, e.message); }
             } else if (emp.email) {
                 try { await transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: emp.email, subject: emailSubj, html: htmlBody }); }
@@ -2049,10 +2035,30 @@ const runDailyReport = async (manager_id = null) => {
             let lPushTitle = allTeamNone ? l.push_m_none_title : (allTeamPerfect ? l.push_m_perf_title : l.push_m_pend_title);
             let lPushBody = allTeamNone ? l.push_m_none_body : (allTeamPerfect ? l.push_m_perf_body : l.push_m_pend_body);
 
+            // Build detailed plain-text report for LINE (HTML not supported in LINE)
+            let lineReport = `${lPushTitle}\n${lPushBody}\n`;
+            relevantEmps.forEach(emp => {
+                const empTasks = todayTasks.filter(t => t.worker_id === emp.id);
+                const empDone = empTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+                const empIcon = empTasks.length === 0 ? '🏖️' : (empDone.length === empTasks.length ? '🌟' : '⚠️');
+                lineReport += `\n${empIcon} ${emp.full_name} (${empDone.length}/${empTasks.length})`;
+                if (empTasks.length === 0) {
+                    lineReport += `\n  ${l.status_none}`;
+                } else {
+                    empTasks.forEach(t => {
+                        const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                        lineReport += `\n  • ${t.title}: ${isDone ? l.status_done : l.status_not}`;
+                    });
+                }
+            });
+
+            // Send via LINE if available
             if (leader.line_user_id) {
-                try { await sendLineMessage(leader.line_user_id, `${lPushTitle}\n${lPushBody}`); }
+                try { await sendLineMessage(leader.line_user_id, lineReport); }
                 catch (e) { console.error(`❌ LINE send failed for leader ${leader.email}:`, e.message); }
-            } else if (leader.email) {
+            }
+            // Always send full detailed email to manager/admin
+            if (leader.email) {
                 try { await transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: leader.email, subject: lSubj, html: leaderHtml }); }
                 catch (e) { console.error(`❌ Email send failed for leader ${leader.email}:`, e.message); }
             }
