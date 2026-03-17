@@ -102,7 +102,7 @@ const sendLineMessage = async (lineUserId, text) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+                    'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN.trim()}`,
                     'Content-Length': Buffer.byteLength(body)
                 }
             }, (res) => {
@@ -2139,7 +2139,7 @@ app.post('/webhook/line', (req, res) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+                    'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN.trim()}`,
                     'Content-Length': Buffer.byteLength(body)
                 }
             }, (lineRes) => {
