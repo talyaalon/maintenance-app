@@ -43,7 +43,7 @@ const TeamTab = ({ token, t, user, lang }) => {
 
     const [editMember, setEditMember] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editForm, setEditForm] = useState({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', phone: '', password: '' });
+    const [editForm, setEditForm] = useState({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', phone: '', password: '', line_user_id: '' });
     const [showPassword, setShowPassword] = useState(false);
 
     const [showAddModal, setShowAddModal] = useState(false);
@@ -51,7 +51,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const [addForm, setAddForm] = useState({
         full_name: '', full_name_he: '', full_name_en: '', full_name_th: '',
         email: '', password: '', phone: '', role: 'EMPLOYEE',
-        parent_manager_id: '', preferred_language: 'he'
+        parent_manager_id: '', preferred_language: 'he', line_user_id: ''
     });
 
     // Branded confirm-delete state
@@ -77,7 +77,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             const data = await res.json();
             if (res.ok) {
                 setShowAddModal(false);
-                setAddForm({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '', preferred_language: 'he' });
+                setAddForm({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '', preferred_language: 'he', line_user_id: '' });
                 fetchTeam();
             } else {
                 alert(data.error === "Email already exists"
@@ -159,7 +159,8 @@ const TeamTab = ({ token, t, user, lang }) => {
             email: member.email || '',
             phone: member.phone || '',
             role: member.role,
-            password: ''
+            password: '',
+            line_user_id: member.line_user_id || ''
         });
         setShowEditModal(true);
     };
@@ -382,6 +383,10 @@ const TeamTab = ({ token, t, user, lang }) => {
                                 <label className="text-sm font-bold text-gray-700">{t.phone_label}</label>
                                 <input className="w-full p-2 border rounded" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} placeholder="050-0000000" />
                             </div>
+                            <div>
+                                <label className="text-sm font-bold text-gray-700">{t.line_user_id || "LINE User ID"}</label>
+                                <input className="w-full p-2 border rounded" dir="ltr" placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value={editForm.line_user_id} onChange={e => setEditForm({...editForm, line_user_id: e.target.value})} />
+                            </div>
                             <div className="relative">
                                 <label className="text-sm font-bold text-gray-700">{t.new_password || "New Password"}</label>
                                 <input
@@ -422,6 +427,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                             <input className="w-full p-3 border rounded-xl" placeholder={t.email_label || "Email"} type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} required dir="ltr" />
                             <input className="w-full p-3 border rounded-xl" placeholder={t.password_placeholder || "Password"} value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} required dir="ltr" />
                             <input className="w-full p-3 border rounded-xl" placeholder={t.phone_label || "Phone (Optional)"} value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} dir="ltr" />
+                            <input className="w-full p-3 border rounded-xl" placeholder={t.line_user_id || "LINE User ID (Optional)"} value={addForm.line_user_id} onChange={e => setAddForm({...addForm, line_user_id: e.target.value})} dir="ltr" />
 
                             <select
                                 className="w-full p-3 border rounded-xl bg-white focus:ring-2 focus:ring-[#714B67]/30 outline-none"

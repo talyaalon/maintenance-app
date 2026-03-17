@@ -202,6 +202,7 @@ export const translations = {
     // --- New Additions ---
     phone: "Phone",
     phone_label: "Phone Number",
+    line_user_id: "LINE User ID",
     excel_center: "Excel Center",
     export_data: "Export Data",
     import_data: "Import / Update",
@@ -588,6 +589,7 @@ export const translations = {
     // --- תוספות חדשות ---
     phone: "טלפון",
     phone_label: "מספר טלפון",
+    line_user_id: "LINE User ID",
     excel_center: "מרכז אקסל",
     export_data: "ייצוא נתונים",
     import_data: "ייבוא / עדכון",
@@ -974,6 +976,7 @@ export const translations = {
     // --- เพิ่มใหม่ ---
     phone: "โทรศัพท์",
     phone_label: "เบอร์โทรศัพท์",
+    line_user_id: "LINE User ID",
     excel_center: "ศูนย์ Excel",
     export_data: "ส่งออกข้อมูล",
     import_data: "นำเข้า / อัปเดต",

@@ -13,7 +13,8 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
     email: user.email || '',
     phone: user.phone || '',
     password: '',
-    preferred_language: user.preferred_language || 'he'
+    preferred_language: user.preferred_language || 'he',
+    line_user_id: user.line_user_id || ''
   });
 
   const [previewImage, setPreviewImage] = useState(user.profile_picture_url);
@@ -40,6 +41,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
           phone:              src.phone         || '',
           password:           '',
           preferred_language: src.preferred_language || localUser.preferred_language || 'he',
+          line_user_id:       src.line_user_id  || '',
       });
       setPreviewImage(src.profile_picture_url || null);
   }, [user]);
@@ -62,8 +64,9 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
     dataToSend.append('full_name_th', formData.full_name_th);
     dataToSend.append('email', formData.email);
     dataToSend.append('phone', formData.phone);
-    dataToSend.append('preferred_language', formData.preferred_language); 
-    
+    dataToSend.append('preferred_language', formData.preferred_language);
+    dataToSend.append('line_user_id', formData.line_user_id || '');
+
     if (formData.password) {
         dataToSend.append('password', formData.password);
     }
@@ -115,6 +118,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             phone:              dbUser.phone              || formData.phone,
             password:           '',
             preferred_language: dbUser.preferred_language || formData.preferred_language,
+            line_user_id:       dbUser.line_user_id       ?? formData.line_user_id,
         });
         setPreviewImage(dbUser.profile_picture_url || previewImage);
         setFileToUpload(null);   // clear the staged file — picture is now saved
@@ -220,6 +224,21 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
                 disabled={!isEditing}
                 dir="ltr"
                 placeholder="050-0000000"
+            />
+        </div>
+
+        <div>
+            <label className="block text-sm font-medium text-gray-500 mb-1">
+                {t.line_user_id || "LINE User ID"}
+            </label>
+            <input
+                type="text"
+                dir="ltr"
+                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                value={formData.line_user_id}
+                onChange={e => setFormData({...formData, line_user_id: e.target.value})}
+                disabled={!isEditing}
+                placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             />
         </div>
 

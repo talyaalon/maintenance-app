@@ -8,7 +8,8 @@ const AddUserForm = ({ currentUser, onClose, t }) => {
     password: '',
     role: 'EMPLOYEE',
     parent_manager_id: currentUser.role === 'MANAGER' ? currentUser.id : '',
-    preferred_language: 'he'
+    preferred_language: 'he',
+    line_user_id: ''
   });
 
   const [managers, setManagers] = useState([]);
@@ -120,6 +121,18 @@ const AddUserForm = ({ currentUser, onClose, t }) => {
               className={inputClass}
               placeholder="••••••••"
               onChange={e => setFormData({...formData, password: e.target.value})}
+              dir="ltr"
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>{t.line_user_id || "LINE User ID"}</label>
+            <input
+              type="text"
+              className={inputClass}
+              placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              value={formData.line_user_id}
+              onChange={e => setFormData({...formData, line_user_id: e.target.value})}
               dir="ltr"
             />
           </div>

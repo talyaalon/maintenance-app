@@ -84,6 +84,48 @@ transporter.verify((error, success) => {
   }
 });
 
+// ==========================================
+// 📱 LINE Messaging API Helper
+// ==========================================
+const sendLineMessage = async (lineUserId, text) => {
+    if (!lineUserId || !process.env.LINE_CHANNEL_ACCESS_TOKEN) return;
+    const https = require('https');
+    const body = JSON.stringify({
+        to: lineUserId,
+        messages: [{ type: 'text', text }]
+    });
+    try {
+        await new Promise((resolve, reject) => {
+            const req = https.request({
+                hostname: 'api.line.me',
+                path: '/v2/bot/message/push',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+                    'Content-Length': Buffer.byteLength(body)
+                }
+            }, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    if (res.statusCode >= 200 && res.statusCode < 300) {
+                        console.log(`📱 LINE message sent to ${lineUserId}`);
+                    } else {
+                        console.error(`⚠️ LINE API error (${res.statusCode}):`, data);
+                    }
+                    resolve();
+                });
+            });
+            req.on('error', reject);
+            req.write(body);
+            req.end();
+        });
+    } catch (err) {
+        console.error('⚠️ LINE sendMessage failed:', err.message);
+    }
+};
+
 const sendUpdateEmail = async (email, fullName, changes, lang = 'en') => {
     const appLink = "https://air-manage-app.netlify.app/";
 
@@ -479,7 +521,7 @@ app.post('/login', async (req, res) => {
 app.put('/users/profile', authenticateToken, upload.single('profile_picture'), async (req, res) => {
     try {
         const id = req.user.id;
-        const { full_name, full_name_he, full_name_en, full_name_th, email, phone, password, preferred_language } = req.body;
+        const { full_name, full_name_he, full_name_en, full_name_th, email, phone, password, preferred_language, line_user_id } = req.body;
 
         let profile_picture_url = req.body.existing_picture || null;
         if (req.file) {
@@ -504,9 +546,9 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
             }
         }
 
-        let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, profile_picture_url=$4, preferred_language=$5, full_name_he=$6, full_name_en=$7, full_name_th=$8';
-        let params = [full_name, email, phone, profile_picture_url, lang, full_name_he || null, full_name_en || null, full_name_th || null];
-        let paramCount = 9;
+        let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, profile_picture_url=$4, preferred_language=$5, full_name_he=$6, full_name_en=$7, full_name_th=$8, line_user_id=$9';
+        let params = [full_name, email, phone, profile_picture_url, lang, full_name_he || null, full_name_en || null, full_name_th || null, line_user_id || null];
+        let paramCount = 10;
 
         if (password && password.trim() !== '') {
             const bcrypt = require('bcrypt');
@@ -544,6 +586,7 @@ app.get('/users', authenticateToken, async (req, res) => {
                    u.profile_picture_url, u.preferred_language,
                    u.can_manage_fields, u.auto_approve_tasks,
                    u.allowed_lang_he, u.allowed_lang_en, u.allowed_lang_th,
+                   u.line_user_id,
                    m.full_name AS manager_name,
                    m.auto_approve_tasks AS manager_auto_approve_tasks
             FROM users u
@@ -565,7 +608,7 @@ app.get('/users', authenticateToken, async (req, res) => {
 
 app.post('/users', authenticateToken, async (req, res) => {
   try {
-    const { full_name, full_name_he, full_name_en, full_name_th, password, role, parent_manager_id, preferred_language } = req.body;
+    const { full_name, full_name_he, full_name_en, full_name_th, password, role, parent_manager_id, preferred_language, line_user_id } = req.body;
     const effectiveFullName = full_name || full_name_en || '';
     let { email, phone } = req.body;
     
@@ -593,15 +636,24 @@ app.post('/users', authenticateToken, async (req, res) => {
     const lang = preferred_language || 'he';
 
     const newUser = await pool.query(
-      `INSERT INTO users (full_name, full_name_he, full_name_en, full_name_th, email, password, role, phone, parent_manager_id, preferred_language)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, full_name, email, role, phone, preferred_language`,
-      [effectiveFullName, full_name_he || null, full_name_en || null, full_name_th || null, email, hashedPassword, role, phone, assignedManager, lang]
+      `INSERT INTO users (full_name, full_name_he, full_name_en, full_name_th, email, password, role, phone, parent_manager_id, preferred_language, line_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, full_name, email, role, phone, preferred_language, line_user_id`,
+      [effectiveFullName, full_name_he || null, full_name_en || null, full_name_th || null, email, hashedPassword, role, phone, assignedManager, lang, line_user_id || null]
     );
-    
+
     try {
         await sendWelcomeEmail(email, full_name, password, role, lang);
     } catch (emailError) {
         console.error("Error sending welcome email:", emailError);
+    }
+
+    if (line_user_id) {
+        const welcomeLineDict = {
+            he: `שלום ${effectiveFullName}! 👋 ברוך הבא למערכת OpsManager. חשבונך נוצר בהצלחה.`,
+            en: `Hello ${effectiveFullName}! 👋 Welcome to OpsManager. Your account has been created successfully.`,
+            th: `สวัสดี ${effectiveFullName}! 👋 ยินดีต้อนรับสู่ OpsManager บัญชีของคุณถูกสร้างเรียบร้อยแล้ว`
+        };
+        sendLineMessage(line_user_id, welcomeLineDict[lang] || welcomeLineDict['en']).catch(err => console.error("LINE welcome error:", err));
     }
 
     res.json(newUser.rows[0]);
@@ -618,7 +670,7 @@ app.post('/users', authenticateToken, async (req, res) => {
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th } = req.body;
+    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th, line_user_id } = req.body;
 
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
@@ -647,7 +699,7 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
 
     const setClauses = [
         'full_name=$1', 'full_name_he=$2', 'full_name_en=$3', 'full_name_th=$4',
-        'email=$5', 'phone=$6', 'role=$7', 'preferred_language=$8'
+        'email=$5', 'phone=$6', 'role=$7', 'preferred_language=$8', 'line_user_id=$9'
     ];
     const params = [
         effectiveName,
@@ -657,9 +709,10 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         effectiveEmail,
         effectivePhone,
         effectiveRole,
-        lang
+        lang,
+        line_user_id !== undefined ? (line_user_id || null) : (oldUser.line_user_id || null)
     ];
-    let paramCount = 9;
+    let paramCount = 10;
 
     // Only include permission columns if they exist in the DB schema (detected via oldUser keys)
     if ('can_manage_fields' in oldUser || can_manage_fields !== undefined) {
@@ -1147,27 +1200,47 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         createdCount = tasksToInsert.length;
     }
     
-    // 🚀 התיקון הקריטי להתראות: מזהה את השפה של העובד מתוך המסד! 🚀
+    // 🚀 Worker & manager notifications (LINE preferred, push fallback)
     try {
-        const workerRes = await pool.query('SELECT device_token, preferred_language FROM users WHERE id = $1', [worker_id]);
+        const workerRes = await pool.query('SELECT device_token, preferred_language, line_user_id, parent_manager_id FROM users WHERE id = $1', [worker_id]);
         const workerData = workerRes.rows[0];
+        const workerLang = workerData?.preferred_language || 'he';
 
-        if (workerData && workerData.device_token) {
-            const workerLang = workerData.preferred_language || 'he';
-            
-            // מילון ההתראות החכם
+        const lineTaskDict = {
+            he: `📋 משימה חדשה הוקצתה לך: "${title}"`,
+            en: `📋 New task assigned to you: "${title}"`,
+            th: `📋 คุณได้รับมอบหมายงานใหม่: "${title}"`
+        };
+
+        if (workerData?.line_user_id) {
+            await sendLineMessage(workerData.line_user_id, lineTaskDict[workerLang] || lineTaskDict['en']);
+        } else if (workerData?.device_token) {
             const pushDict = {
                 he: { title: 'משימה חדשה! 📋', body: `הוקצתה לך משימה חדשה: ${title}` },
                 en: { title: 'New Task! 📋', body: `You have been assigned a new task: ${title}` },
                 th: { title: 'งานใหม่! 📋', body: `คุณได้รับมอบหมายงานใหม่: ${title}` }
             };
-
             await admin.messaging().send({
                 token: workerData.device_token,
                 notification: pushDict[workerLang],
                 webpush: { fcmOptions: { link: '/' } }
             });
             console.log(`🔔 Notification sent to worker in ${workerLang}!`);
+        }
+
+        // Also notify the worker's manager via LINE
+        if (workerData?.parent_manager_id) {
+            const mgrRes = await pool.query('SELECT line_user_id, preferred_language FROM users WHERE id = $1', [workerData.parent_manager_id]);
+            const mgrData = mgrRes.rows[0];
+            if (mgrData?.line_user_id) {
+                const mgrLang = mgrData.preferred_language || 'he';
+                const mgrLineDict = {
+                    he: `📋 משימה חדשה נוצרה לעובד שלך: "${title}"`,
+                    en: `📋 New task created for your employee: "${title}"`,
+                    th: `📋 สร้างงานใหม่ให้พนักงานของคุณ: "${title}"`
+                };
+                await sendLineMessage(mgrData.line_user_id, mgrLineDict[mgrLang] || mgrLineDict['en']);
+            }
         }
     } catch (err) {
         console.error("⚠️ Failed to send notification:", err.message);
@@ -1275,7 +1348,7 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
 
         // Check if the task's direct manager has auto_approve_tasks enabled
         const managerCheckQuery = `
-            SELECT m.auto_approve_tasks, m.device_token
+            SELECT m.auto_approve_tasks, m.device_token, m.line_user_id, m.preferred_language
             FROM tasks t
             JOIN users w ON t.worker_id = w.id
             JOIN users m ON w.parent_manager_id = m.id
@@ -1291,20 +1364,28 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
             [newStatus, completion_note, completionImageUrl, id]
         );
 
-        // Only notify manager when task still needs manual approval
+        // Only notify manager when task still needs manual approval (LINE preferred, push fallback)
         try {
-            const managerToken = newStatus === 'WAITING_APPROVAL' ? managerRow?.device_token : null;
-
-            if (managerToken) {
-                await admin.messaging().send({
-                    token: managerToken,
-                    notification: {
-                        title: 'משימה ממתינה לאישור ✅',
-                        body: 'עובד סיים משימה. היכנס לאשר.'
-                    },
-                    webpush: { fcmOptions: { link: '/' } }
-                });
-                console.log("🔔 Notification sent to manager!");
+            if (newStatus === 'WAITING_APPROVAL' && managerRow) {
+                const mgrLang = managerRow.preferred_language || 'he';
+                const completeLineDict = {
+                    he: `✅ עובד סיים משימה וממתין לאישורך.`,
+                    en: `✅ A worker completed a task and is awaiting your approval.`,
+                    th: `✅ พนักงานทำงานเสร็จแล้วและรอการอนุมัติจากคุณ`
+                };
+                if (managerRow.line_user_id) {
+                    await sendLineMessage(managerRow.line_user_id, completeLineDict[mgrLang] || completeLineDict['en']);
+                } else if (managerRow.device_token) {
+                    await admin.messaging().send({
+                        token: managerRow.device_token,
+                        notification: {
+                            title: 'משימה ממתינה לאישור ✅',
+                            body: 'עובד סיים משימה. היכנס לאשר.'
+                        },
+                        webpush: { fcmOptions: { link: '/' } }
+                    });
+                    console.log("🔔 Notification sent to manager!");
+                }
             }
         } catch (err) {
             console.error("⚠️ Failed to send notification:", err.message);
@@ -1795,7 +1876,7 @@ const runDailyReport = async (manager_id = null) => {
     };
 
     try {
-        const usersRes = await pool.query("SELECT id, full_name, email, role, parent_manager_id, device_token, preferred_language FROM users");
+        const usersRes = await pool.query("SELECT id, full_name, email, role, parent_manager_id, device_token, preferred_language, line_user_id FROM users");
         const allUsers = usersRes.rows;
         const tasksRes = await pool.query("SELECT * FROM tasks WHERE DATE(due_date) = CURRENT_DATE");
         const todayTasks = tasksRes.rows;
@@ -1871,7 +1952,11 @@ const runDailyReport = async (manager_id = null) => {
                 </div>
             `);
 
-            if (emp.email) transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: emp.email, subject: emailSubj, html: htmlBody }).catch(e => console.log(e));
+            if (emp.line_user_id) {
+                sendLineMessage(emp.line_user_id, `${pushTitle}\n${pushBody}`).catch(e => console.log(e));
+            } else if (emp.email) {
+                transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: emp.email, subject: emailSubj, html: htmlBody }).catch(e => console.log(e));
+            }
             if (emp.device_token) admin.messaging().send({ token: emp.device_token, notification: { title: pushTitle, body: pushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.log(e));
         }
 
@@ -1948,7 +2033,11 @@ const runDailyReport = async (manager_id = null) => {
             let lPushTitle = allTeamNone ? l.push_m_none_title : (allTeamPerfect ? l.push_m_perf_title : l.push_m_pend_title);
             let lPushBody = allTeamNone ? l.push_m_none_body : (allTeamPerfect ? l.push_m_perf_body : l.push_m_pend_body);
 
-            if (leader.email) transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: leader.email, subject: lSubj, html: leaderHtml }).catch(e => console.log(e));
+            if (leader.line_user_id) {
+                sendLineMessage(leader.line_user_id, `${lPushTitle}\n${lPushBody}`).catch(e => console.log(e));
+            } else if (leader.email) {
+                transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: leader.email, subject: lSubj, html: leaderHtml }).catch(e => console.log(e));
+            }
             if (leader.device_token) admin.messaging().send({ token: leader.device_token, notification: { title: lPushTitle, body: lPushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.log(e));
         }
         console.log("✅ [CRON] Daily Check completed for everyone.");
@@ -2000,6 +2089,7 @@ app.listen(port, async () => {
     try {
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS can_manage_fields BOOLEAN DEFAULT TRUE');
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_approve_tasks BOOLEAN DEFAULT FALSE');
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS line_user_id VARCHAR(255)');
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT');
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ');
 
