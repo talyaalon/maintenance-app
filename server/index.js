@@ -562,12 +562,20 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         params.push(id);
 
         const result = await pool.query(query, params);
-        
+
         if (result.rows.length === 0) {
             return res.status(404).json({ error: "User not found in database" });
         }
 
-        res.json({ message: "Profile updated successfully", user: result.rows[0] });
+        const updatedUser = result.rows[0];
+
+        if (updatedUser.line_user_id) {
+            const messages = { en: "Your profile has been updated.", he: "הפרופיל שלך עודכן.", th: "อัปเดตโปรไฟล์ของคุณแล้ว" };
+            const userLang = updatedUser.preferred_language || 'en';
+            sendLineMessage(updatedUser.line_user_id, messages[userLang] || messages['en']).catch(err => console.error("❌ LINE profile update error:", err));
+        }
+
+        res.json({ message: "Profile updated successfully", user: updatedUser });
 
     } catch (err) {
         console.error("❌ Error updating profile:", err);
@@ -771,7 +779,13 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     if (changes.length > 0) {
         sendUpdateEmail(updatedUser.email, updatedUser.full_name, changes).catch(err => console.error("Email send error:", err));
     }
-    
+
+    if (updatedUser.line_user_id) {
+        const messages = { en: "Your profile has been updated.", he: "הפרופיל שלך עודכן.", th: "อัปเดตโปรไฟล์ของคุณแล้ว" };
+        const userLang = updatedUser.preferred_language || 'en';
+        sendLineMessage(updatedUser.line_user_id, messages[userLang] || messages['en']).catch(err => console.error("❌ LINE profile update error:", err));
+    }
+
     res.json({ message: "User updated successfully", user: updatedUser });
 
   } catch (err) {
@@ -1953,11 +1967,13 @@ const runDailyReport = async (manager_id = null) => {
             `);
 
             if (emp.line_user_id) {
-                sendLineMessage(emp.line_user_id, `${pushTitle}\n${pushBody}`).catch(e => console.log(e));
+                try { await sendLineMessage(emp.line_user_id, `${pushTitle}\n${pushBody}`); }
+                catch (e) { console.error(`❌ LINE send failed for employee ${emp.email}:`, e.message); }
             } else if (emp.email) {
-                transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: emp.email, subject: emailSubj, html: htmlBody }).catch(e => console.log(e));
+                try { await transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: emp.email, subject: emailSubj, html: htmlBody }); }
+                catch (e) { console.error(`❌ Email send failed for employee ${emp.email}:`, e.message); }
             }
-            if (emp.device_token) admin.messaging().send({ token: emp.device_token, notification: { title: pushTitle, body: pushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.log(e));
+            if (emp.device_token) admin.messaging().send({ token: emp.device_token, notification: { title: pushTitle, body: pushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.error("FCM push error:", e.message));
         }
 
         // ==========================================
@@ -2034,11 +2050,13 @@ const runDailyReport = async (manager_id = null) => {
             let lPushBody = allTeamNone ? l.push_m_none_body : (allTeamPerfect ? l.push_m_perf_body : l.push_m_pend_body);
 
             if (leader.line_user_id) {
-                sendLineMessage(leader.line_user_id, `${lPushTitle}\n${lPushBody}`).catch(e => console.log(e));
+                try { await sendLineMessage(leader.line_user_id, `${lPushTitle}\n${lPushBody}`); }
+                catch (e) { console.error(`❌ LINE send failed for leader ${leader.email}:`, e.message); }
             } else if (leader.email) {
-                transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: leader.email, subject: lSubj, html: leaderHtml }).catch(e => console.log(e));
+                try { await transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: leader.email, subject: lSubj, html: leaderHtml }); }
+                catch (e) { console.error(`❌ Email send failed for leader ${leader.email}:`, e.message); }
             }
-            if (leader.device_token) admin.messaging().send({ token: leader.device_token, notification: { title: lPushTitle, body: lPushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.log(e));
+            if (leader.device_token) admin.messaging().send({ token: leader.device_token, notification: { title: lPushTitle, body: lPushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.error("FCM push error:", e.message));
         }
         console.log("✅ [CRON] Daily Check completed for everyone.");
     } catch (error) { console.error("❌ [CRON] Failed:", error); }
@@ -2049,9 +2067,14 @@ cron.schedule('0 15 * * *', runDailyReport, { scheduled: true, timezone: "Asia/B
 
 // 2. POST /api/trigger-daily-reports — manual trigger with optional manager_id filter
 app.post('/api/trigger-daily-reports', async (req, res) => {
-    const manager_id = req.body?.manager_id ? parseInt(req.body.manager_id, 10) : null;
-    await runDailyReport(manager_id);
-    res.json({ success: true, message: manager_id ? `Reports sent for manager ${manager_id}'s team.` : 'Reports sent for everyone.' });
+    try {
+        const manager_id = req.body?.manager_id ? parseInt(req.body.manager_id, 10) : null;
+        await runDailyReport(manager_id);
+        res.json({ success: true, message: manager_id ? `Reports sent for manager ${manager_id}'s team.` : 'Reports sent for everyone.' });
+    } catch (err) {
+        console.error("❌ trigger-daily-reports failed:", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 app.get('/api/rescue-boss', async (req, res) => {
