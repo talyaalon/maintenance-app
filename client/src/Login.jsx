@@ -112,7 +112,7 @@ const ForgotPasswordModal = ({ t, lang, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border-t-4 border-[#714B67] relative p-6" dir={dir}>
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-sm relative p-6" dir={dir}>
         {/* Close */}
         <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-[#714B67] transition" aria-label="close">
           <X size={20} />
@@ -135,7 +135,7 @@ const ForgotPasswordModal = ({ t, lang, onClose }) => {
           <div className="w-12 h-12 rounded-full bg-[#714B67]/10 flex items-center justify-center mb-3">
             <KeyRound size={24} className="text-[#714B67]" />
           </div>
-          <h3 className="text-xl font-bold text-[#714B67]">{stepTitles[step]}</h3>
+          <h3 className="text-xl font-bold text-slate-800">{stepTitles[step]}</h3>
           {step === 'email' && <p className="text-sm text-gray-400 text-center mt-1">{t.forgot_password_desc}</p>}
           {step === 'otp' && (
             <p className="text-sm text-gray-400 text-center mt-1">
@@ -330,8 +330,8 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
         <ForgotPasswordModal t={t} lang={lang} onClose={() => setShowForgot(false)} />
       )}
 
-      <div className="min-h-screen flex items-center justify-center bg-[#fdf4ff] font-sans" dir={dir}>
-        <div className="bg-white p-5 sm:p-8 rounded-xl shadow-2xl w-full max-w-md relative border-t-4 border-[#714B67]">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans px-4" dir={dir}>
+        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-200 w-full max-w-md relative">
 
           {/* Language selector */}
           <div className={`absolute top-4 ${lang === 'he' ? 'left-4' : 'right-4'} flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full border border-gray-200`}>
@@ -350,10 +350,10 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
 
           {/* Title */}
           <div className="text-center mb-8 mt-8">
-            <h2 className="text-3xl font-bold text-[#714B67] tracking-wide mb-1">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight mb-1">
               {t.app_name || 'Maintenance App'}
             </h2>
-            <p className="text-gray-400 text-sm font-medium">{t.login_title}</p>
+            <p className="text-slate-400 text-sm font-medium">{t.login_title}</p>
           </div>
 
           {error && (
@@ -408,7 +408,7 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3.5 bg-[#714B67] hover:bg-[#5a3b52] text-white font-bold rounded-xl transition-all duration-200 shadow-lg mt-2 flex justify-center items-center gap-2 disabled:opacity-70"
+              className="w-full py-3 bg-[#714B67] hover:bg-[#5a3b52] text-white font-bold rounded-xl transition-all duration-200 shadow-sm mt-2 flex justify-center items-center gap-2 disabled:opacity-70"
             >
               {isLoading ? <Loader2 size={20} className="animate-spin" /> : t.login_btn}
             </button>

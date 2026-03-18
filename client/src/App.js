@@ -232,10 +232,10 @@ function App() {
   };
 
   return (
-    <div className={`min-h-screen bg-gray-50 font-sans`} dir={dir}>
-      
+    <div className={`min-h-screen bg-slate-50 font-sans`} dir={dir}>
+
       {/* כותרת עליונה - מעודכנת */}
-      <header className="bg-white shadow-sm p-4 flex items-center justify-between sticky top-0 z-30 relative">
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-30 relative">
           
           {/* צד שמאל: לוגו בלבד */}
           <div className="flex-shrink-0 z-10">
@@ -281,7 +281,7 @@ function App() {
                           } catch (err) { console.error('Failed to save language preference', err); }
                       }
                   }}
-                  className="p-1 border rounded text-xs bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                  className="p-1 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 cursor-pointer text-gray-700"
                   dir="ltr"
               >
                   {allowedLangs.includes('en') && <option value="en">🇺🇸 EN</option>}
@@ -297,14 +297,14 @@ function App() {
 
       {/* כפתור צף לפעולה מהירה */}
       {activeTab === 1 && (
-        <button onClick={() => setIsTaskFormOpen(true)} 
-            className={`fixed bottom-24 w-14 h-14 bg-[#714B67] text-white rounded-full shadow-lg flex items-center justify-center z-40 transition transform hover:scale-110 ${isRTL ? 'left-6' : 'right-6'}`}>
-            <Plus size={30} />
+        <button onClick={() => setIsTaskFormOpen(true)}
+            className={`fixed bottom-24 w-12 h-12 sm:w-14 sm:h-14 bg-[#714B67] text-white rounded-full shadow-md flex items-center justify-center z-40 transition hover:bg-[#5a3b52] hover:shadow-lg active:scale-95 ${isRTL ? 'left-5' : 'right-5'}`}>
+            <Plus size={26} />
         </button>
       )}
 
       {/* תפריט ניווט תחתון */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-5px_10px_rgba(0,0,0,0.05)] z-50 pb-safe">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
         <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
             
             <button onClick={() => setActiveTab(1)} className={`flex flex-col items-center w-full ${activeTab === 1 ? 'text-[#714B67]' : 'text-gray-400'}`}>

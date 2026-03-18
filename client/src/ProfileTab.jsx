@@ -134,14 +134,14 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   };
 
   return (
-    <div className="px-4 pt-2 pb-24 flex flex-col items-center max-w-lg mx-auto animate-fade-in">
+    <div className="px-3 sm:px-4 pt-3 pb-24 flex flex-col items-center max-w-lg mx-auto animate-fade-in">
 
-      <h1 className="text-xl font-semibold text-[#714B67] mb-3 self-start">{t.nav_profile || 'Profile'}</h1>
+      <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 self-start">{t.nav_profile || 'Profile'}</h1>
 
       <div className="relative mb-4 group flex flex-col items-center">
         <div className="relative">
             {/* 🚀 תוקן צבע הרקע כאן לסגול המדויק */}
-            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-[#714B67] bg-opacity-10 flex items-center justify-center">
+            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 border-white shadow-sm ring-1 ring-gray-200 bg-slate-50 flex items-center justify-center">
                 {previewImage ? (
                     <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
@@ -160,15 +160,15 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         </div>
         
         <div className="mt-3 text-center">
-            <h3 className="text-xl font-bold text-gray-900">{formData.full_name}</h3>
-            <p className="text-sm text-gray-500">{user?.role || 'User'}</p>
+            <h3 className="text-lg sm:text-xl font-bold text-slate-900">{formData.full_name}</h3>
+            <p className="text-xs sm:text-sm text-slate-400 uppercase tracking-wide font-medium">{user?.role || 'User'}</p>
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="w-full bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
+      <form onSubmit={handleSave} className="w-full bg-white p-4 sm:p-6 rounded-xl border border-gray-200 space-y-4">
         
         <div>
-            <label className="block text-sm font-medium text-gray-500 mb-1">{t.full_name_label || 'Full Name'}</label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{t.full_name_label || 'Full Name'}</label>
             <div className="space-y-2">
                 <input
                     type="text"
@@ -201,7 +201,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         </div>
 
         <div>
-            <label className="block text-sm font-medium text-gray-500 mb-1">{t.email_label || 'Email'}</label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{t.email_label || 'Email'}</label>
             <input 
                 type="email" 
                 className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
@@ -213,7 +213,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         </div>
 
         <div>
-            <label className="block text-sm font-medium text-gray-500 mb-1">
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                 {t.phone_label || "Phone Number"}
             </label>
             <input 
@@ -228,7 +228,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         </div>
 
         <div>
-            <label className="block text-sm font-medium text-gray-500 mb-1">
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                 {t.line_user_id || "LINE User ID"}
             </label>
             <input
@@ -243,7 +243,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         </div>
 
         <div className="relative">
-            <label className="block text-sm font-medium text-gray-500 mb-1">
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                 {t.preferred_language || "Preferred Notifications Language"}
             </label>
             <div className="relative">
@@ -264,7 +264,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
 
         {isEditing && (
             <div className="animate-fade-in relative">
-                <label className="block text-sm font-medium text-gray-500 mb-1">{t.password_placeholder || "New Password"}</label>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{t.password_placeholder || "New Password"}</label>
                 <div className="relative">
                     <input 
                         type={showPassword ? "text" : "password"} 
@@ -289,16 +289,16 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         <div className="pt-4 flex gap-3">
             {isEditing ? (
                 <>
-                    <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-3 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 flex justify-center gap-2 transition">
-                        <X size={20} /> {t.cancel}
+                    <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-2.5 border border-gray-200 rounded-lg text-slate-600 hover:bg-gray-50 flex justify-center gap-2 transition text-sm font-medium">
+                        <X size={18} /> {t.cancel}
                     </button>
-                    <button type="submit" className="flex-1 py-3 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] flex justify-center gap-2 shadow-md transition transform active:scale-95">
-                        <Save size={20} /> {t.save}
+                    <button type="submit" className="flex-1 py-2.5 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] flex justify-center gap-2 shadow-sm transition active:scale-95 text-sm font-bold">
+                        <Save size={18} /> {t.save}
                     </button>
                 </>
             ) : (
-                <button type="button" onClick={() => setIsEditing(true)} className="w-full py-3 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] transition flex justify-center gap-2 items-center shadow-md transform active:scale-95">
-                      <Camera size={18} /> {t.edit_profile_btn || "Edit Profile"}
+                <button type="button" onClick={() => setIsEditing(true)} className="w-full py-2.5 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] transition flex justify-center gap-2 items-center shadow-sm active:scale-95 text-sm font-bold">
+                      <Camera size={16} /> {t.edit_profile_btn || "Edit Profile"}
                 </button>
             )}
         </div>

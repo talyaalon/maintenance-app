@@ -267,18 +267,18 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-60 p-4 backdrop-blur-sm">
-      <div className="bg-white w-[95%] max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[80vh] animate-scale-in overflow-hidden">
+      <div className="bg-white w-[95%] max-w-md rounded-2xl shadow-xl border border-gray-200 flex flex-col max-h-[90vh] animate-scale-in overflow-hidden">
 
-        <div className="flex justify-between items-center p-4 border-b bg-gray-50 shrink-0">
-            <h2 className="text-xl font-bold text-[#714B67]">{t.create_new_task || "Create Task"}</h2>
-            <button type="button" onClick={handleClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={20}/></button>
+        <div className="flex justify-between items-center px-4 py-3.5 border-b border-gray-200 bg-white shrink-0">
+            <h2 className="text-base sm:text-lg font-bold text-slate-800">{t.create_new_task || "Create Task"}</h2>
+            <button type="button" onClick={handleClose} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition"><X size={18}/></button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
             {isManager && (
-                <div className="bg-[#fdf4ff] p-3 rounded-xl border border-[#714B67]/20 shadow-sm">
-                    <label className="text-sm font-bold text-[#714B67] block mb-1">
+                <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
                         {t.assign_to_label || "Assign To"} <span className="text-red-500 ml-1">*</span>
                     </label>
                     <select required className="w-full p-3 border rounded-lg bg-white outline-none focus:ring-2 focus:ring-[#714B67]/30 font-bold"
@@ -293,8 +293,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 </div>
             )}
 
-            <div className="bg-white p-4 rounded-xl border border-[#714B67]/30 shadow-sm">
-                <label className="block text-sm font-bold text-[#714B67] mb-2 flex items-center gap-2">
+            <div className="bg-white p-4 rounded-xl border border-gray-200">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-2">
                     <Calendar size={18}/> {t.frequency_label || "Frequency / Date"}
                     <span className="text-red-500 ml-1">*</span>
                 </label>
@@ -389,8 +389,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             </div>
 
             <div>
-                <label className="text-sm font-bold text-gray-700 block mb-1">
-                    {t.task_title_label} <span className="text-red-500 ml-1">*</span>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+                    {t.task_title_label} <span className="text-red-400 ml-1">*</span>
                 </label>
                 <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
                     value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
@@ -400,8 +400,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
             <div className="flex gap-3">
                  <div className="flex-1">
-                    <label className="text-sm font-bold text-gray-700 block mb-1">
-                        {t.location} <span className="text-red-500 ml-1">*</span>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+                        {t.location} <span className="text-red-400 ml-1">*</span>
                     </label>
                     <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67] disabled:opacity-50"
                         value={formData.location_id}
@@ -415,7 +415,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                     )}
                  </div>
                  <div className="flex-1">
-                    <label className="text-sm font-bold text-gray-700 block mb-1">{t.urgency_label}</label>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">{t.urgency_label}</label>
                     <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]"
                         value={formData.urgency} onChange={e => setFormData({...formData, urgency: e.target.value})}>
                         <option value="Normal">{t.normal_label}</option>
@@ -424,7 +424,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                  </div>
             </div>
 
-            <div className={`border rounded-xl p-3 bg-gray-50 transition ${isManager && !formData.assigned_worker_id ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`border border-gray-200 rounded-xl p-3 bg-slate-50 transition ${isManager && !formData.assigned_worker_id ? 'opacity-50 pointer-events-none' : ''}`}>
                  <label className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1"><Box size={14}/> {t.select_asset_title || "Asset (Optional)"}</label>
                  {isManager && !formData.assigned_worker_id && (
                      <p className="text-xs text-gray-400 mb-2">{t.select_worker_first || "Select a worker first"}</p>
@@ -445,7 +445,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             </div>
 
             <div>
-                <label className="text-sm font-bold text-gray-700 block mb-1">{t.description_label}</label>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">{t.description_label}</label>
                 <textarea className="w-full p-3 border rounded-lg bg-gray-50 h-20 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-[#714B67]"
                     value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
                 />
@@ -478,8 +478,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
         </div>
 
-        <div className="p-4 border-t bg-gray-50 shrink-0">
-            <button onClick={handleSubmit} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:bg-[#5a3b52] transition transform active:scale-95 text-lg">
+        <div className="p-4 border-t border-gray-200 bg-white shrink-0">
+            <button onClick={handleSubmit} className="w-full py-3 bg-[#714B67] text-white rounded-xl font-bold shadow-sm hover:bg-[#5a3b52] transition active:scale-95 text-base">
                 {t.save_task_btn || "Create Task"}
             </button>
         </div>

@@ -386,7 +386,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
       return (
           <div className="space-y-6 mt-4 border-t pt-4">
-              <div className="flex gap-2 mb-4 bg-gray-100 p-1.5 rounded-xl shadow-inner border">
+              <div className="flex gap-1.5 mb-4 bg-gray-100 p-1 rounded-xl border border-gray-200">
                   <button onClick={() => setActiveSubTab('tree')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'tree' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><FolderTree size={16}/> {t.tab_categories_assets || 'קטגוריות ונכסים'}</button>
                   <button onClick={() => setActiveSubTab('locations')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'locations' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><MapPin size={16}/> {t.nav_locations || 'מיקומים'}</button>
               </div>
@@ -403,7 +403,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               const categoryAssets = wAssets.filter(a => a.category_id === category.id);
                               const isExpanded = expandedCategories.includes(category.id);
                               return (
-                                  <div key={category.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                  <div key={category.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                                       <div className="p-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 cursor-pointer transition" onClick={() => toggleCategory(category.id)}>
                                           <div className="flex items-center gap-3">
                                               <div className="p-1.5 bg-purple-100 text-purple-600 rounded-lg"><Tag size={16}/></div>
@@ -478,7 +478,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') ? `https://maintenance-app-h84v.onrender.com${loc.image_url}` : loc.image_url;
 
                               return (
-                                  <div key={loc.id} className="bg-white p-3 rounded-xl border shadow-sm group">
+                                  <div key={loc.id} className="bg-white p-3 rounded-xl border border-gray-200 group">
                                       <div className="flex justify-between items-start mb-2">
                                           <div className="flex gap-2 items-center">
                                               {fullImgUrl ? (
@@ -506,8 +506,8 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
                       {showFieldsSettingsModal && (
                           <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-                              <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
-                                  <div className="flex justify-between items-center mb-4 border-b pb-3">
+                              <div className="bg-white rounded-2xl w-full max-w-md shadow-xl border border-gray-200 p-5 animate-scale-in">
+                                  <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-3">
                                       <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> {t.custom_fields_title || 'שדות מיקום מותאמים'}</h3>
                                       <button onClick={() => setShowFieldsSettingsModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={20}/></button>
                                   </div>
@@ -526,8 +526,8 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                       ))}
                                   </div>
 
-                                  <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 space-y-3">
-                                      <h4 className="text-xs font-bold text-purple-800">{t.add_field_title || 'הוספת שדה חדש (הזן שפות):'}</h4>
+                                  <div className="bg-slate-50 p-3 rounded-xl border border-gray-200 space-y-3">
+                                      <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">{t.add_field_title || 'הוספת שדה חדש (הזן שפות):'}</h4>
                                       <div className="grid grid-cols-2 gap-2">
                                           <input type="text" placeholder={t.field_name_he_placeholder || 'שם בעברית (חובה)'} className="w-full p-2 border rounded-lg text-xs outline-none" value={newField.name_he} onChange={e => setNewField({...newField, name_he: e.target.value})} />
                                           <input type="text" placeholder="Name in English" className="w-full p-2 border rounded-lg text-xs outline-none" value={newField.name_en} onChange={e => setNewField({...newField, name_en: e.target.value})} />
@@ -538,7 +538,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                               <option value="file">קובץ / מסמך / תמונה</option>
                                           </select>
                                       </div>
-                                      <button onClick={() => handleAddGlobalField(targetManagerId)} className="w-full bg-purple-600 text-white p-2 rounded-lg hover:bg-purple-700 shadow-sm text-sm font-bold mt-2">{t.add_field_btn || 'הוסף שדה למערכת'}</button>
+                                      <button onClick={() => handleAddGlobalField(targetManagerId)} className="w-full bg-[#714B67] text-white p-2 rounded-lg hover:bg-[#5a3b52] shadow-sm text-sm font-bold mt-2">{t.add_field_btn || 'הוסף שדה למערכת'}</button>
                                   </div>
                               </div>
                           </div>
@@ -550,12 +550,12 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   };
 
   return (
-    <div className="p-4 pb-32 max-w-4xl mx-auto">
-      <h1 className="text-xl font-semibold text-[#714B67] mb-4">{t.config_title || 'Configuration'}</h1>
+    <div className="px-3 sm:px-4 pt-3 pb-32 max-w-4xl mx-auto">
+      <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4">{t.config_title || 'Configuration'}</h1>
       {user?.role === 'BIG_BOSS' ? (
           <div className="space-y-4">
               {/* ── Top-level tab bar for Big Boss ── */}
-              <div className="flex gap-2 bg-gray-100 p-1.5 rounded-xl shadow-inner border mb-6">
+              <div className="flex gap-1.5 bg-gray-100 p-1 rounded-xl border border-gray-200 mb-5">
                   <button
                       onClick={() => setBossMainTab('workspaces')}
                       className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${bossMainTab === 'workspaces' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
@@ -578,10 +578,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                       {managers.map(manager => {
                           const initial = (manager.full_name || '?').charAt(0).toUpperCase();
                           return (
-                              <div key={manager.id} className="bg-white rounded-2xl border border-[#714B67]/15 shadow-sm overflow-hidden">
+                              <div key={manager.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
                                   {/* Manager header */}
-                                  <div className="flex items-center gap-3 p-4 bg-[#fdf4ff] border-b border-[#714B67]/10">
-                                      <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-[#714B67]/20 bg-[#714B67]/10 flex items-center justify-center">
+                                  <div className="flex items-center gap-3 p-4 bg-slate-50 border-b border-gray-200">
+                                      <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-200 bg-slate-50 flex items-center justify-center">
                                           {manager.profile_picture_url ? (
                                               <img src={manager.profile_picture_url} alt={manager.full_name} className="w-full h-full object-cover" />
                                           ) : (
@@ -650,10 +650,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
               {bossMainTab === 'workspaces' && managers.map(manager => {
                   const isExpanded = expandedBossManager === manager.id;
                   return (
-                      <div key={manager.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${isExpanded ? 'ring-2 ring-[#714B67]/40' : ''}`}>
-                          <div className={`p-4 flex justify-between items-center cursor-pointer transition ${isExpanded ? 'bg-[#fdf4ff]' : 'hover:bg-gray-50'}`} onClick={() => setExpandedBossManager(isExpanded ? null : manager.id)}>
+                      <div key={manager.id} className={`bg-white rounded-2xl border border-gray-200 overflow-hidden transition-all ${isExpanded ? 'ring-1 ring-[#714B67]/30' : ''}`}>
+                          <div className={`px-4 py-3 flex justify-between items-center cursor-pointer transition ${isExpanded ? 'bg-slate-50' : 'hover:bg-gray-50'}`} onClick={() => setExpandedBossManager(isExpanded ? null : manager.id)}>
                               <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-[#714B67]/20 bg-[#714B67]/10 flex items-center justify-center">
+                                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-200 bg-slate-50 flex items-center justify-center">
                                       {manager.profile_picture_url ? (
                                           <img src={manager.profile_picture_url} alt={manager.full_name} className="w-full h-full object-cover" />
                                       ) : (
@@ -670,13 +670,13 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
               })}
           </div>
       ) : (
-          <div className="bg-white p-6 rounded-2xl shadow-sm border">{renderWorkspace(user.id)}</div>
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-200">{renderWorkspace(user.id)}</div>
       )}
 
       {showTreeModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-5 animate-scale-in">
-                  <div className="flex justify-between mb-4 border-b pb-2"><h3 className="font-bold text-lg">{treeNodeType === 'category' ? (categoryForm.id ? (t.category_modal_title_edit || 'עריכת קטגוריה') : (t.category_modal_title_add || 'הגדרת קטגוריה')) : (assetForm.id ? (t.asset_modal_title_edit || 'עריכת נכס') : (t.asset_modal_title_add || 'הגדרת נכס'))}</h3><button onClick={() => setShowTreeModal(false)} className="hover:bg-gray-100 p-1 rounded-full"><X/></button></div>
+              <div className="bg-white rounded-2xl w-full max-w-md shadow-xl border border-gray-200 p-5 animate-scale-in">
+                  <div className="flex justify-between mb-4 border-b border-gray-200 pb-2"><h3 className="font-bold text-base text-slate-800">{treeNodeType === 'category' ? (categoryForm.id ? (t.category_modal_title_edit || 'עריכת קטגוריה') : (t.category_modal_title_add || 'הגדרת קטגוריה')) : (assetForm.id ? (t.asset_modal_title_edit || 'עריכת נכס') : (t.asset_modal_title_add || 'הגדרת נכס'))}</h3><button onClick={() => setShowTreeModal(false)} className="hover:bg-gray-100 p-1 rounded-full"><X/></button></div>
                   <form onSubmit={handleSaveTreeItem} className="space-y-4">
                       {treeNodeType === 'category' ? (
                           <>
@@ -701,7 +701,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               {assetForm.id && <div><label className="block text-sm font-bold text-gray-700 mb-1">קוד (נוצר אוטומטית)</label><input type="text" disabled className="w-full p-3 border rounded-lg bg-gray-100 font-mono text-gray-500" value={assetForm.code} /></div>}
                           </>
                       )}
-                      <button type="submit" className="w-full py-3 bg-[#714B67] text-white rounded-xl font-bold mt-2 shadow">{t.save || 'שמור'}</button>
+                      <button type="submit" className="w-full py-2.5 bg-[#714B67] text-white rounded-xl font-bold mt-2 shadow-sm hover:bg-[#5a3b52] transition">{t.save || 'שמור'}</button>
                   </form>
               </div>
           </div>
@@ -709,8 +709,8 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
       {showLocationModal && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] animate-scale-in">
-                  <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl"><h3 className="font-bold text-lg text-gray-800">{t.location_modal_title || 'כרטיסיית מיקום'}</h3><button onClick={() => setShowLocationModal(false)} className="hover:bg-gray-200 p-1 rounded-full"><X/></button></div>
+              <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl border border-gray-200 flex flex-col max-h-[90vh] animate-scale-in">
+                  <div className="px-4 py-3.5 border-b border-gray-200 flex justify-between items-center bg-white rounded-t-2xl"><h3 className="font-bold text-base text-slate-800">{t.location_modal_title || 'כרטיסיית מיקום'}</h3><button onClick={() => setShowLocationModal(false)} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition"><X size={18}/></button></div>
                   <div className="p-6 overflow-y-auto space-y-5">
                       
                       <div className="flex flex-col items-center">
@@ -807,8 +807,8 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           </div>
                       )}
                   </div>
-                  <div className="p-4 border-t bg-white rounded-b-2xl">
-                      <button type="button" onClick={handleSaveLocation} className="w-full py-3.5 bg-[#714B67] text-white rounded-xl font-bold shadow-lg hover:opacity-90 transition transform hover:scale-[1.01]">{t.save_location_btn || 'שמור כרטיסיית מיקום'}</button>
+                  <div className="p-4 border-t border-gray-200 bg-white rounded-b-2xl">
+                      <button type="button" onClick={handleSaveLocation} className="w-full py-3 bg-[#714B67] text-white rounded-xl font-bold shadow-sm hover:bg-[#5a3b52] transition">{t.save_location_btn || 'שמור כרטיסיית מיקום'}</button>
                   </div>
               </div>
           </div>

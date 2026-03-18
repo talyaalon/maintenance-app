@@ -5,7 +5,7 @@ import TasksTab from './TasksTab';
 // ─── Branded delete-confirm modal ────────────────────────────────────────────
 const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
-        <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in">
+        <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
             <p className="text-gray-800 font-medium text-center mb-6">{message}</p>
             <div className="flex gap-3">
                 <button
@@ -27,7 +27,7 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
 
 // ─── Skeleton loader row ──────────────────────────────────────────────────────
 const SkeletonRow = ({ indent = false }) => (
-    <div className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-3 animate-pulse mb-3 ${indent ? 'ml-3 sm:ml-6' : ''}`}>
+    <div className={`bg-white p-4 rounded-xl border border-gray-200 flex items-center gap-3 animate-pulse mb-3 ${indent ? 'ml-3 sm:ml-6' : ''}`}>
         <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" />
         <div className="flex-1 space-y-2">
             <div className="h-3 bg-gray-200 rounded w-2/5" />
@@ -191,9 +191,9 @@ const TeamTab = ({ token, t, user, lang }) => {
         const initial = displayName.charAt(0).toUpperCase();
 
         return (
-            <div key={member.id} className={`bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center ${isSub ? 'ml-3 sm:ml-6 border-l-4 border-l-[#714B67]/30' : 'mb-3'}`}>
+            <div key={member.id} className={`bg-white p-3 sm:p-4 rounded-xl border border-gray-200 flex justify-between items-center ${isSub ? 'ml-3 sm:ml-6 border-l-4 border-l-[#714B67]/20' : 'mb-2'}`}>
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-[#714B67]/20 bg-[#fdf4ff] flex items-center justify-center">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-200 bg-slate-50 flex items-center justify-center">
                         {member.profile_picture_url ? (
                             <img src={member.profile_picture_url} alt={member.full_name} className="w-full h-full object-cover" />
                         ) : (
@@ -204,7 +204,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                     <div className="flex flex-col min-w-0">
                         <span
                             onClick={() => handleMemberClick(member)}
-                            className={`font-bold text-gray-800 text-base leading-tight ${user.role !== 'EMPLOYEE' ? 'cursor-pointer hover:text-[#714B67] hover:underline' : ''}`}
+                            className={`font-semibold text-slate-800 text-sm sm:text-base leading-tight ${user.role !== 'EMPLOYEE' ? 'cursor-pointer hover:text-[#714B67]' : ''}`}
                         >
                             {displayName}
                         </span>
@@ -216,12 +216,12 @@ const TeamTab = ({ token, t, user, lang }) => {
 
                 <div className="flex items-center gap-2 shrink-0">
                     {isManagerRole && (
-                        <span className="text-[10px] bg-[#fdf4ff] text-[#714B67] border border-[#714B67]/20 px-2 py-0.5 rounded-full font-bold">
+                        <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-semibold">
                             {member.role}
                         </span>
                     )}
                     {member.role === 'EMPLOYEE' && (
-                        <span className="text-[10px] bg-[#fdf4ff] text-[#714B67] border border-[#714B67]/20 px-2 py-0.5 rounded-full font-bold">
+                        <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-semibold">
                             {t.role_employee || 'Employee'}
                         </span>
                     )}
@@ -242,7 +242,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const directEmployees = team.filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === user.id);
 
     return (
-        <div className="p-4 pb-24 min-h-screen bg-gray-50">
+        <div className="px-3 sm:px-4 pt-3 pb-24 min-h-screen bg-slate-50">
             {/* Branded delete confirm */}
             {deleteConfirmId !== null && (
                 <ConfirmDeleteModal
@@ -253,11 +253,11 @@ const TeamTab = ({ token, t, user, lang }) => {
                 />
             )}
 
-            <h1 className="text-xl font-semibold text-[#714B67] mb-4">{t.my_team_title || t.nav_team || 'Team'}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4">{t.my_team_title || t.nav_team || 'Team'}</h1>
 
             {/* Header */}
-            <div className="flex justify-end items-center mb-6">
-                <button className="bg-[#714B67] text-white px-4 py-2 rounded-full font-bold shadow-lg flex items-center gap-2" onClick={() => setShowAddModal(true)}>
+            <div className="flex justify-end items-center mb-5">
+                <button className="bg-[#714B67] text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#5a3b52] transition flex items-center gap-1.5" onClick={() => setShowAddModal(true)}>
                     <Plus size={18}/> {t.add_team_member || "Add User"}
                 </button>
             </div>
@@ -363,7 +363,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             {/* Edit User Modal */}
             {showEditModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-                    <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl">
+                    <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl border border-gray-200">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold">{t.edit || "Edit"}</h3>
                             <button onClick={() => setShowEditModal(false)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400"><X size={18}/></button>
@@ -412,9 +412,9 @@ const TeamTab = ({ token, t, user, lang }) => {
             {/* Add User Modal */}
             {showAddModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scale-in">
+                    <div className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl border border-gray-200 animate-scale-in">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-bold text-gray-800">{t.add_team_member || "Add User"}</h3>
+                            <h3 className="text-lg font-bold text-slate-800">{t.add_team_member || "Add User"}</h3>
                             <button onClick={() => setShowAddModal(false)}><X size={20} className="text-gray-400"/></button>
                         </div>
                         <form onSubmit={handleAddUser} className="space-y-3">
@@ -495,7 +495,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                 </div>
                             )}
 
-                            <button type="submit" className="w-full py-3 bg-[#714B67] hover:bg-[#5a3b52] text-white rounded-xl font-bold shadow-lg mt-2 flex justify-center items-center gap-2 transition">
+                            <button type="submit" className="w-full py-2.5 bg-[#714B67] hover:bg-[#5a3b52] text-white rounded-xl font-bold shadow-sm mt-2 flex justify-center items-center gap-2 transition text-sm">
                                 <Save size={18}/> {t.save || "Create User"}
                             </button>
                         </form>
