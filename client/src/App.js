@@ -1,9 +1,8 @@
 import { requestForToken, onMessageListener } from './firebase';
 import { Toaster, toast } from 'react-hot-toast'; // אם אין לך react-hot-toast, תוכלי להשתמש ב-alert רגיל
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, UserCircle, Plus, Settings } from 'lucide-react'; 
+import { LayoutDashboard, Users, UserCircle, Settings } from 'lucide-react';
 import Login from './Login';
-import CreateTaskForm from './CreateTaskForm';
 import AddUserForm from './AddUserForm';
 import { translations } from './translations'; 
 import logoImg from './app-logo.png';
@@ -115,7 +114,6 @@ function App() {
   }, [activeTab]);
 
   // מודאלים
-  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -295,15 +293,7 @@ function App() {
         {renderContent()}
       </main>
 
-      {/* כפתור צף לפעולה מהירה */}
-      {activeTab === 1 && (
-        <button onClick={() => setIsTaskFormOpen(true)}
-            className={`fixed bottom-24 w-12 h-12 sm:w-14 sm:h-14 bg-[#714B67] text-white rounded-full shadow-md flex items-center justify-center z-40 transition-colors transition-transform hover:bg-[#5a3b52] hover:shadow-lg active:scale-95 ${isRTL ? 'left-5' : 'right-5'}`}>
-            <Plus size={26} strokeWidth={2} />
-        </button>
-      )}
-
-      {/* תפריט ניווט תחתון */}
+{/* תפריט ניווט תחתון */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
         <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
             
@@ -337,16 +327,7 @@ function App() {
 
       {/* --- החלונות הקופצים --- */}
       
-      {isTaskFormOpen && <CreateTaskForm 
-          onTaskCreated={() => { setIsTaskFormOpen(false); fetchTasks(); }} 
-          onClose={() => setIsTaskFormOpen(false)} // שיניתי מ-onCancel ל-onClose שיתאים לטופס
-          user={user} // ✅ הנה התיקון! עכשיו זה פשוט user
-          token={localStorage.getItem('token')}
-          t={t} 
-          lang={lang} // כדאי להעביר גם שפה
-      />}
-      
-      {isUserFormOpen && <AddUserForm 
+{isUserFormOpen && <AddUserForm 
           currentUser={user} 
           onClose={() => { 
               setIsUserFormOpen(false); 
