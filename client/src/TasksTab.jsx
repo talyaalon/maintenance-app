@@ -77,16 +77,9 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [stuckTask, setStuckTask] = useState(null);
-
   const isTeamView = Array.isArray(subordinates);
 
   const todayBkk = getBkkDateObj(new Date());
-
-  const canActOnTask = (task) =>
-      task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
-
-  const stuckProps = (task) => canActOnTask(task) ? { onStuck: setStuckTask } : {};
 
   // Today-only: tasks due exactly today
   const todayTasks = tasks.filter(task => {
@@ -135,7 +128,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                               <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1">
                                   <AlertTriangle size={12}/> {t.overdue} — {formatBkkDate(task.due_date)}
                               </div>
-                              <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} {...stuckProps(task)} />
+                              <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
                           </div>
                       ))}
                   </div>
@@ -162,7 +155,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                       <div className="space-y-3">
                           {filtered.map(task => (
                               <div key={task.id}>
-                                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} {...stuckProps(task)} />
+                                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
                               </div>
                           ))}
                       </div>
@@ -186,7 +179,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                               </div>
                               <div className="p-2 pt-0 space-y-2">
                                   {dayTasks.length > 0 ? (
-                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} {...stuckProps(task)} />)
+                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)
                                   ) : (
                                       <div className="p-3 pt-0 text-xs text-gray-400 text-center">No tasks</div>
                                   )}
@@ -218,7 +211,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                       <h4 className="font-bold mb-4 text-[#714B67] text-lg border-b pb-2">{t.tasks_for_date} {format(selectedDate, 'dd/MM/yyyy')}:</h4>
                       {calendarTasks.length === 0 && <p className="text-gray-400 text-sm p-2">No tasks for this date.</p>}
                       <div className="space-y-2">
-                          {calendarTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} {...stuckProps(task)} />)}
+                          {calendarTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
                       </div>
                   </div>
               </div>
@@ -321,17 +314,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           />
       )}
 
-      {stuckTask && (
-          <StuckModal
-              task={stuckTask}
-              onClose={() => setStuckTask(null)}
-              token={token}
-              user={user}
-              onRefresh={onRefresh}
-              t={t}
-          />
-      )}
-
       {!isTeamView && (
         <button
             onClick={() => setShowCreateModal(true)}
@@ -388,9 +370,11 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
     const [mode, setMode] = useState('view');
     const [showSuccess, setShowSuccess] = useState(false);
     const [modalError, setModalError] = useState('');
+    const [showStuck, setShowStuck] = useState(false);
 
     const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS') && task.status === 'WAITING_APPROVAL';
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
+    const canShowStuck = task.status === 'PENDING' && !task.is_stuck && canComplete;
 
     const handleComplete = async () => {
         if (!note && !file) {
@@ -467,6 +451,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
     }
 
     return (
+        <>
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-[100] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
                 <div className="bg-gray-50 p-4 border-b flex justify-between items-start sticky top-0 bg-white z-10">
@@ -560,6 +545,9 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                             <div className="flex flex-col sm:flex-row gap-3">
                                 <button onClick={() => { setMode('complete'); setModalError(''); }} className="flex-1 bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-md hover:bg-[#5a3b52] transition transform active:scale-95">{t.complete_task_btn}</button>
                                 <button onClick={() => { setMode('followup'); setModalError(''); }} className="flex-1 bg-white text-[#714B67] border-2 border-[#714B67] py-3 rounded-xl font-bold shadow-sm hover:bg-[#fdf4ff] transition transform active:scale-95">{t.followup_task_btn}</button>
+                                {canShowStuck && (
+                                    <button onClick={() => setShowStuck(true)} className="flex-1 bg-white text-[#714B67] border-2 border-[#714B67] py-3 rounded-xl font-bold shadow-sm hover:bg-[#fdf4ff] transition transform active:scale-95">{t.stuck_task_btn || 'דיווח על משימה תקועה'}</button>
+                                )}
                             </div>
                         )}
                         {mode === 'complete' && (
@@ -595,6 +583,17 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                 </div>
             </div>
         </div>
+        {showStuck && (
+            <StuckModal
+                task={task}
+                onClose={() => setShowStuck(false)}
+                token={token}
+                user={user}
+                onRefresh={onRefresh}
+                t={t}
+            />
+        )}
+        </>
     );
 };
 
@@ -633,7 +632,7 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
     if (showSuccess) return (
         <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[130]">
             <div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center">
-                <Check size={40} className="text-purple-600 mb-2"/>
+                <Check size={40} className="text-[#714B67] mb-2"/>
                 <h2 className="text-xl font-bold">{t.stuck_sent || 'Reported!'}</h2>
             </div>
         </div>
@@ -642,8 +641,8 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
     return (
         <div className="fixed inset-0 bg-black/60 flex justify-center items-end sm:items-center z-[120] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-md rounded-2xl overflow-hidden shadow-2xl animate-slide-up">
-                <div className="bg-purple-50 p-4 border-b border-purple-100 flex justify-between items-center">
-                    <h2 className="text-lg font-bold text-purple-800">⚠️ {t.stuck_task_modal_title || 'Report Stuck Task'}</h2>
+                <div className="bg-[#fdf4ff] p-4 border-b border-[#714B67]/20 flex justify-between items-center">
+                    <h2 className="text-lg font-bold text-[#714B67]">⚠️ {t.stuck_task_modal_title || 'Report Stuck Task'}</h2>
                     <button onClick={onClose} className="bg-white p-2 rounded-full hover:bg-gray-100 border"><X size={18}/></button>
                 </div>
                 <div className="p-5 space-y-4">
@@ -656,19 +655,19 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
                         onChange={e => setNote(e.target.value)}
                         placeholder={t.stuck_description_placeholder || 'Describe the problem or obstacle...'}
                         rows={4}
-                        className="w-full p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-300 outline-none text-sm resize-none"
+                        className="w-full p-3 border border-[#714B67]/30 rounded-xl focus:ring-2 focus:ring-[#714B67]/30 outline-none text-sm resize-none"
                     />
                     <input
                         type="file"
                         onChange={e => setFile(e.target.files[0])}
-                        className="text-xs file:bg-purple-50 file:text-purple-700 file:border-0 file:px-4 file:py-2 file:rounded-lg file:font-bold hover:file:bg-purple-100 cursor-pointer w-full"
+                        className="text-xs file:bg-[#fdf4ff] file:text-[#714B67] file:border-0 file:px-4 file:py-2 file:rounded-lg file:font-bold hover:file:bg-[#714B67]/10 cursor-pointer w-full"
                     />
                     <div className="flex gap-3">
                         <button onClick={onClose} className="flex-1 py-2.5 border rounded-xl bg-white text-gray-600 hover:bg-gray-50 font-medium">{t.cancel}</button>
                         <button
                             onClick={handleSubmit}
                             disabled={loading}
-                            className="flex-1 py-2.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl font-bold transition disabled:opacity-60"
+                            className="flex-1 py-2.5 bg-[#714B67] hover:bg-[#5a3b52] text-white rounded-xl font-bold transition disabled:opacity-60"
                         >
                             {loading ? '...' : (t.stuck_send_btn || 'Report Stuck Task')}
                         </button>

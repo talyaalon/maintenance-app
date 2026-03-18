@@ -1,4 +1,4 @@
-import { Clock, MapPin, Box, Image as ImageIcon, Video, User, AlertOctagon } from 'lucide-react';
+import { Clock, MapPin, Box, Image as ImageIcon, Video, User } from 'lucide-react';
 import { format, isBefore, startOfDay } from 'date-fns';
 
 // 🚀 פונקציה חכמה שממירה כל שעה לשעון בנגקוק
@@ -8,8 +8,7 @@ const getBkkTime = (dateInput) => {
     return new Date(d.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
 };
 
-const TaskCard = ({ task, onClick, onStuck, t, lang = 'en' }) => {
-  const canShowStuck = task.status === 'PENDING' && !task.is_stuck && typeof onStuck === 'function';
+const TaskCard = ({ task, onClick, t, lang = 'en' }) => {
   const getTaskName = (base) => task[base + '_' + lang] || task[base + '_en'] || task[base] || '';
 
   const taskBkkDate = getBkkTime(task.due_date);
@@ -64,14 +63,6 @@ const TaskCard = ({ task, onClick, onStuck, t, lang = 'en' }) => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {canShowStuck && (
-                        <button
-                            onClick={e => { e.stopPropagation(); onStuck(task); }}
-                            className="flex items-center gap-1 bg-slate-100 hover:bg-purple-100 text-slate-500 hover:text-purple-700 border border-slate-200 hover:border-purple-300 px-2 py-0.5 rounded-md font-bold transition-colors"
-                        >
-                            <AlertOctagon size={11}/> {t.stuck_task_btn || 'Stuck'}
-                        </button>
-                    )}
                     <div className={`flex items-center gap-1 font-medium ${isOverdue ? 'text-red-500' : ''}`}>
                         <Clock size={12}/>
                         <span>{format(taskBkkDate, 'dd/MM HH:mm')}</span>
