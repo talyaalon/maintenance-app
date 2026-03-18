@@ -298,8 +298,8 @@ function App() {
       {/* כפתור צף לפעולה מהירה */}
       {activeTab === 1 && (
         <button onClick={() => setIsTaskFormOpen(true)}
-            className={`fixed bottom-24 w-12 h-12 sm:w-14 sm:h-14 bg-[#714B67] text-white rounded-full shadow-md flex items-center justify-center z-40 transition hover:bg-[#5a3b52] hover:shadow-lg active:scale-95 ${isRTL ? 'left-5' : 'right-5'}`}>
-            <Plus size={26} />
+            className={`fixed bottom-24 w-12 h-12 sm:w-14 sm:h-14 bg-[#714B67] text-white rounded-full shadow-md flex items-center justify-center z-40 transition-colors transition-transform hover:bg-[#5a3b52] hover:shadow-lg active:scale-95 ${isRTL ? 'left-5' : 'right-5'}`}>
+            <Plus size={26} strokeWidth={2} />
         </button>
       )}
 
