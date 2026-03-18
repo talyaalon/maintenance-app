@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Calendar, Camera, Box } from 'lucide-react';
 
 const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang }) => {
-  const [frequency, setFrequency] = useState('Once'); 
+  const [frequency, setFrequency] = useState('Once');
   const currentUser = user;
 
   const userRole = currentUser?.role ? String(currentUser.role).toUpperCase() : '';
@@ -20,16 +20,17 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   };
 
   const [formData, setFormData] = useState({
-    title: '', 
-    urgency: 'Normal', 
-    due_date: getCurrentBkkTimeForInput(), 
-    location_id: '', 
-    asset_id: '', 
-    assigned_worker_id: isEmployee ? currentUser?.id : '', 
-    description: '', 
-    selected_days: [], 
-    recurring_date: 1, 
-    recurring_month: 0 
+    title: '',
+    urgency: 'Normal',
+    due_date: getCurrentBkkTimeForInput(),
+    location_id: '',
+    asset_id: '',
+    assigned_worker_id: isEmployee ? currentUser?.id : '',
+    description: '',
+    selected_days: [1, 2, 3, 4, 5], // Mon-Fri default for Daily
+    recurring_date: 1,
+    recurring_month: 0,
+    quarterly_dates: { Q1: '', Q2: '', Q3: '', Q4: '' }
   });
 
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -37,11 +38,20 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   const [teamMembers, setTeamMembers] = useState([]);
   const [categories, setCategories] = useState([]);
   const [assets, setAssets] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState(''); 
+  const [selectedCategory, setSelectedCategory] = useState('');
 
   const daysEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const daysHe = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
   const currentDays = lang === 'he' ? daysHe : daysEn;
+
+  // Quarter constraints: [minMonth, maxMonth] (1-indexed for HTML date input)
+  const quarterConstraints = [
+    { label: t.q1_label || 'Q1 (Jan–Mar)', min: '-01-01', max: '-03-31' },
+    { label: t.q2_label || 'Q2 (Apr–Jun)', min: '-04-01', max: '-06-30' },
+    { label: t.q3_label || 'Q3 (Jul–Sep)', min: '-07-01', max: '-09-30' },
+    { label: t.q4_label || 'Q4 (Oct–Dec)', min: '-10-01', max: '-12-31' },
+  ];
+  const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     const headers = { 'Authorization': `Bearer ${token}` };
@@ -118,16 +128,33 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
       const r = member?.role ? String(member.role).toUpperCase() : '';
       return r === 'EMPLOYEE' || r === 'WORKER' || r === 'עובד';
   });
-  
+
   const optionsToRender = employeesOnly.length > 0 ? employeesOnly : teamMembers;
 
+  const handleFrequencyChange = (newFreq) => {
+    setFrequency(newFreq);
+    if (newFreq === 'Daily') {
+      // Pre-select Mon-Fri
+      setFormData(prev => ({ ...prev, selected_days: [1, 2, 3, 4, 5] }));
+    } else if (newFreq === 'Weekly') {
+      // Clear to single-select
+      setFormData(prev => ({ ...prev, selected_days: [] }));
+    }
+  };
+
   const toggleDay = (dayIndex) => {
-    setFormData(prev => ({ 
-        ...prev, 
-        selected_days: prev.selected_days.includes(dayIndex) 
-            ? prev.selected_days.filter(d => d !== dayIndex) 
-            : [...prev.selected_days, dayIndex] 
-    }));
+    if (frequency === 'Weekly') {
+      // Single-select: clicking a day selects only that day
+      setFormData(prev => ({ ...prev, selected_days: [dayIndex] }));
+    } else {
+      // Multi-select for Daily
+      setFormData(prev => ({
+          ...prev,
+          selected_days: prev.selected_days.includes(dayIndex)
+              ? prev.selected_days.filter(d => d !== dayIndex)
+              : [...prev.selected_days, dayIndex]
+      }));
+    }
   };
 
   const handleFileChange = (e) => {
@@ -143,7 +170,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.title || !formData.due_date || !formData.location_id || (isManager && !formData.assigned_worker_id)) {
         alert(t.alert_required_fields || "עליך למלא את כל שדות החובה: תאריך, שם המשימה, מיקום, ובחירת עובד לביצוע.");
         return;
@@ -153,6 +180,15 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     if (selectedCategory && !formData.asset_id) {
         alert(t.alert_category_requires_asset || "אם בחרת קטגוריה, חובה לבחור גם נכס.");
         return;
+    }
+
+    // Validate Quarterly dates
+    if (frequency === 'Quarterly') {
+        const { Q1, Q2, Q3, Q4 } = formData.quarterly_dates;
+        if (!Q1 || !Q2 || !Q3 || !Q4) {
+            alert(t.alert_quarterly_dates || "Please fill in all 4 quarterly dates.");
+            return;
+        }
     }
 
     const data = new FormData();
@@ -175,10 +211,19 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         data.append('recurring_type', frequency.toLowerCase());
         data.append('due_date', dueDateUtc);
 
-        if (frequency === 'Weekly') {
+        if (frequency === 'Daily' || frequency === 'Weekly') {
             data.append('selected_days', JSON.stringify(formData.selected_days));
         } else if (frequency === 'Monthly') {
             data.append('recurring_date', formData.recurring_date);
+        } else if (frequency === 'Quarterly') {
+            // Convert each date to DD/MM format
+            const qdates = ['Q1', 'Q2', 'Q3', 'Q4'].map(q => {
+                const d = formData.quarterly_dates[q];
+                if (!d) return '';
+                const dt = new Date(d);
+                return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}`;
+            });
+            data.append('quarterly_dates', JSON.stringify(qdates));
         } else if (frequency === 'Yearly') {
             const dateObj = new Date(formData.due_date);
             data.append('recurring_month', dateObj.getMonth());
@@ -199,19 +244,19 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         body: data
       });
 
-      const responseData = await res.json(); 
+      const responseData = await res.json();
 
-      if (res.ok) { 
-          alert((t.save || "Saved") + '!'); 
-          if (onRefresh) onRefresh(); 
-          if (onTaskCreated) onTaskCreated(); 
-          if (onClose) onClose(); 
-      } else { 
-          alert(responseData.error || t.error_create_task || 'Error creating task'); 
+      if (res.ok) {
+          alert((t.save || "Saved") + '!');
+          if (onRefresh) onRefresh();
+          if (onTaskCreated) onTaskCreated();
+          if (onClose) onClose();
+      } else {
+          alert(responseData.error || t.error_create_task || 'Error creating task');
       }
-    } catch (err) { 
+    } catch (err) {
         console.error(err);
-        alert(t.server_error || 'Server Error'); 
+        alert(t.server_error || 'Server Error');
     }
   };
 
@@ -223,21 +268,21 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-60 p-4 backdrop-blur-sm">
       <div className="bg-white w-[95%] max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[80vh] animate-scale-in overflow-hidden">
-        
+
         <div className="flex justify-between items-center p-4 border-b bg-gray-50 shrink-0">
             <h2 className="text-xl font-bold text-[#714B67]">{t.create_new_task || "Create Task"}</h2>
             <button type="button" onClick={handleClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={20}/></button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            
+
             {isManager && (
                 <div className="bg-[#fdf4ff] p-3 rounded-xl border border-[#714B67]/20 shadow-sm">
                     <label className="text-sm font-bold text-[#714B67] block mb-1">
                         {t.assign_to_label || "Assign To"} <span className="text-red-500 ml-1">*</span>
                     </label>
-                    <select required className="w-full p-3 border rounded-lg bg-white outline-none focus:ring-2 focus:ring-[#714B67]/30 font-bold" 
-                        value={formData.assigned_worker_id} 
+                    <select required className="w-full p-3 border rounded-lg bg-white outline-none focus:ring-2 focus:ring-[#714B67]/30 font-bold"
+                        value={formData.assigned_worker_id}
                         onChange={e => {
                             setFormData({...formData, assigned_worker_id: e.target.value, location_id: '', asset_id: ''});
                             setSelectedCategory('');
@@ -250,18 +295,20 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
             <div className="bg-white p-4 rounded-xl border border-[#714B67]/30 shadow-sm">
                 <label className="block text-sm font-bold text-[#714B67] mb-2 flex items-center gap-2">
-                    <Calendar size={18}/> {t.frequency_label || "Frequency / Date"} 
+                    <Calendar size={18}/> {t.frequency_label || "Frequency / Date"}
                     <span className="text-red-500 ml-1">*</span>
                 </label>
-                
-                <select 
+
+                <select
                     className="w-full p-2.5 border rounded-lg bg-white font-bold text-gray-700 mb-3 focus:ring-1 focus:ring-[#714B67] outline-none"
-                    value={frequency} 
-                    onChange={e => setFrequency(e.target.value)}
+                    value={frequency}
+                    onChange={e => handleFrequencyChange(e.target.value)}
                 >
                     <option value="Once">{t.freq_once || "One Time (Specific Date)"}</option>
-                    <option value="Weekly">{t.freq_weekly || "Weekly (Repeats)"}</option>
+                    <option value="Daily">{t.freq_daily || "Daily (Mon–Fri)"}</option>
+                    <option value="Weekly">{t.freq_weekly || "Weekly (One Day)"}</option>
                     <option value="Monthly">{t.freq_monthly || "Monthly (Repeats)"}</option>
+                    <option value="Quarterly">{t.freq_quarterly || "Quarterly"}</option>
                     <option value="Yearly">{t.freq_yearly || "Yearly (Repeats)"}</option>
                 </select>
 
@@ -271,20 +318,24 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                             {frequency === 'Once' ? (t.pick_date || "Pick Date & Time") : (t.start_date || "Start Date")}
                         </label>
                         <div className="relative w-full">
-                            <input type="datetime-local" className="w-full p-2 border border-[#714B67]/30 rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-[#714B67]/30 min-w-0" 
-                             value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})} 
+                            <input type="datetime-local" className="w-full p-2 border border-[#714B67]/30 rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-[#714B67]/30 min-w-0"
+                             value={formData.due_date} onChange={e => setFormData({...formData, due_date: e.target.value})}
                             />
                         </div>
                     </div>
 
-                    {frequency === 'Weekly' && (
+                    {(frequency === 'Daily' || frequency === 'Weekly') && (
                         <div className="mt-3">
-                            <label className="text-xs font-bold text-gray-500 mb-2 block">{t.pick_days || "Select Days"}</label>
+                            <label className="text-xs font-bold text-gray-500 mb-2 block">
+                                {frequency === 'Daily'
+                                    ? (t.pick_days_daily || "Select Days (Mon–Fri default)")
+                                    : (t.pick_day_weekly || "Select One Day")}
+                            </label>
                             <div className="grid grid-cols-7 gap-1 text-center">
                                 {currentDays.map((day, index) => (
-                                    <button type="button" key={index} onClick={() => toggleDay(index)} 
+                                    <button type="button" key={index} onClick={() => toggleDay(index)}
                                         className={`w-8 h-8 rounded-full text-[10px] font-bold transition-all flex items-center justify-center shadow-sm mx-auto ${
-                                            formData.selected_days.includes(index) 
+                                            formData.selected_days.includes(index)
                                             ? 'bg-[#714B67] text-white scale-110' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                                         }`}
                                     >
@@ -307,6 +358,33 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                             </select>
                         </div>
                     )}
+
+                    {frequency === 'Quarterly' && (
+                        <div className="mt-3 space-y-2">
+                            <label className="text-xs font-bold text-gray-500 mb-1 block">
+                                {t.pick_quarterly_dates || "Select One Date Per Quarter"}
+                            </label>
+                            {quarterConstraints.map((q, i) => {
+                                const key = `Q${i + 1}`;
+                                return (
+                                    <div key={key} className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-[#714B67] w-28 shrink-0">{q.label}</span>
+                                        <input
+                                            type="date"
+                                            min={`${currentYear}${q.min}`}
+                                            max={`${currentYear}${q.max}`}
+                                            className="flex-1 p-2 border border-[#714B67]/30 rounded-lg bg-white outline-none focus:ring-2 focus:ring-[#714B67]/30 text-sm"
+                                            value={formData.quarterly_dates[key]}
+                                            onChange={e => setFormData(prev => ({
+                                                ...prev,
+                                                quarterly_dates: { ...prev.quarterly_dates, [key]: e.target.value }
+                                            }))}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -314,8 +392,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 <label className="text-sm font-bold text-gray-700 block mb-1">
                     {t.task_title_label} <span className="text-red-500 ml-1">*</span>
                 </label>
-                <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition" 
-                    value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} 
+                <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
+                    value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
                     placeholder={t.task_title_placeholder}
                 />
             </div>
@@ -338,7 +416,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                  </div>
                  <div className="flex-1">
                     <label className="text-sm font-bold text-gray-700 block mb-1">{t.urgency_label}</label>
-                    <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]" 
+                    <select className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]"
                         value={formData.urgency} onChange={e => setFormData({...formData, urgency: e.target.value})}>
                         <option value="Normal">{t.normal_label}</option>
                         <option value="High">{t.urgent_label}</option>
@@ -352,13 +430,13 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                      <p className="text-xs text-gray-400 mb-2">{t.select_worker_first || "Select a worker first"}</p>
                  )}
                  <div className="flex gap-2">
-                    <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]" 
+                    <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]"
                         value={selectedCategory} onChange={e => { setSelectedCategory(e.target.value); setFormData({...formData, asset_id: ''}); }}>
                         <option value="">{t.category_label}</option>
                         {/* 🚀 מציג רק קטגוריות של המנהל הנוכחי */}
                         {filteredCategories.map(c => <option key={c.id} value={c.id}>{c['name_' + lang] || c.name_en || c.name}</option>)}
                     </select>
-                    <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]" 
+                    <select className="flex-1 p-2 border rounded text-sm bg-white outline-none focus:border-[#714B67]"
                         disabled={!selectedCategory} value={formData.asset_id} onChange={e => setFormData({...formData, asset_id: e.target.value})}>
                         <option value="">{t.select_asset}</option>
                         {filteredAssets.map(a => <option key={a.id} value={a.id}>{a['name_' + lang] || a.name_en || a.name}</option>)}
@@ -368,24 +446,24 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
             <div>
                 <label className="text-sm font-bold text-gray-700 block mb-1">{t.description_label}</label>
-                <textarea className="w-full p-3 border rounded-lg bg-gray-50 h-20 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-[#714B67]" 
-                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} 
+                <textarea className="w-full p-3 border rounded-lg bg-gray-50 h-20 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-[#714B67]"
+                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
                 />
             </div>
              <div>
                 <label className="text-sm font-bold text-gray-700 block mb-1 flex items-center gap-1">
                     <Camera size={16}/> {t.add_image || "Add Photos/Video"}
                 </label>
-                
+
                 {/* 🚀 התיקון העיצובי לכפתור העלאת קבצים */}
-                <input 
-                    type="file" 
-                    multiple 
-                    accept="image/*,video/*" 
-                    onChange={handleFileChange} 
-                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] hover:file:bg-[#714B67]/10 cursor-pointer" 
+                <input
+                    type="file"
+                    multiple
+                    accept="image/*,video/*"
+                    onChange={handleFileChange}
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] hover:file:bg-[#714B67]/10 cursor-pointer"
                 />
-                
+
                 {selectedFiles.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-2">
                         {selectedFiles.map((f, i) => (

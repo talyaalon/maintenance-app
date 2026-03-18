@@ -85,26 +85,32 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
     // ==========================================
     const handleDownloadTemplate = () => {
         const imgExample = "https://images.unsplash.com/photo-1581092160562-40aa08e78837, https://images.unsplash.com/photo-1581092335397-9583eb92d232";
-        
+
         const dataHE = [
-            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "ניקיון יסודי חלונות", "מיקום": "לובי", "תדירות": "חד פעמי", "תאריך או ימים": "25/12/2026", "דחיפות": "רגילה", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": imgExample, "הערות": "תאריך מלא עם סלאש"},
-            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "בדיקת מזגנים", "מיקום": "לובי", "תדירות": "שבועי", "תאריך או ימים": "1, 3, 5", "דחיפות": "דחוף", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": "", "הערות": "ימים ראשון, שלישי וחמישי"},
-            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "הזמנת ציוד", "מיקום": "לובי", "תדירות": "חודשי", "תאריך או ימים": "1, 15", "דחיפות": "רגילה", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": "", "הערות": "ב-1 וב-15 לכל חודש"},
-            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "חידוש ביטוח מבנה", "מיקום": "לובי", "תדירות": "שנתי", "תאריך או ימים": "01-08", "דחיפות": "דחוף", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": imgExample, "הערות": "ב-1 לאוגוסט כל שנה, מופרד בקו"}
+            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "ניקיון יסודי חלונות", "מיקום": "לובי", "תדירות": "חד פעמי", "תאריך או ימים": "25/12/2026", "דחיפות": "רגילה", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": imgExample, "הערות": "חד פעמי – תאריך מלא (יום/חודש/שנה)"},
+            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "ניקיון משרדים", "מיקום": "לובי", "תדירות": "יומי", "תאריך או ימים": "2, 3, 4, 5, 6", "דחיפות": "רגילה", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": "", "הערות": "יומי – ספרות 1-7 (1=ראשון). ברירת מחדל: 2-6 = ב׳-ו׳"},
+            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "בדיקת מזגנים", "מיקום": "לובי", "תדירות": "שבועי", "תאריך או ימים": "2", "דחיפות": "דחוף", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": "", "הערות": "שבועי – יום אחד בלבד (2=יום ב׳)"},
+            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "הזמנת ציוד", "מיקום": "לובי", "תדירות": "חודשי", "תאריך או ימים": "1, 15", "דחיפות": "רגילה", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": "", "הערות": "חודשי – מספרים 1-31 מופרדים בפסיקים"},
+            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "בדיקת רבעונית", "מיקום": "לובי", "תדירות": "רבעוני", "תאריך או ימים": "15/01, 15/04, 15/07, 15/10", "דחיפות": "דחוף", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": "", "הערות": "רבעוני – 4 תאריכים בפורמט יום/חודש (אחד לכל רבעון)"},
+            {"שם העובד": user.full_name || "ישראל ישראלי", "מנהל ישיר": "שם המנהל", "שם המשימה": "חידוש ביטוח מבנה", "מיקום": "לובי", "תדירות": "שנתי", "תאריך או ימים": "01-08", "דחיפות": "דחוף", "קטגוריה": "", "נכס": "", "תמונות (קישורים)": imgExample, "הערות": "שנתי – פורמט יום/חודש (01-08 = 1 באוגוסט)"}
         ];
 
         const dataEN = [
-            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Clean Windows", "Location": "Lobby", "Frequency": "One-time", "Date or Days": "25/12/2026", "Urgency": "Normal", "Category": "", "Asset": "", "Images (URLs)": imgExample, "Notes": "Full date"},
-            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "AC Check", "Location": "Lobby", "Frequency": "Weekly", "Date or Days": "1, 3, 5", "Urgency": "High", "Category": "", "Asset": "", "Images (URLs)": "", "Notes": "Sun, Tue, Thu"},
-            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Order Supplies", "Location": "Lobby", "Frequency": "Monthly", "Date or Days": "1, 15", "Urgency": "Normal", "Category": "", "Asset": "", "Images (URLs)": "", "Notes": "1st and 15th"},
-            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Renew Insurance", "Location": "Lobby", "Frequency": "Yearly", "Date or Days": "01-08", "Urgency": "High", "Category": "", "Asset": "", "Images (URLs)": imgExample, "Notes": "Aug 1st"}
+            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Clean Windows", "Location": "Lobby", "Frequency": "One-time", "Date or Days": "25/12/2026", "Urgency": "Normal", "Category": "", "Asset": "", "Images (URLs)": imgExample, "Notes": "One-time – full date (DD/MM/YYYY)"},
+            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Clean Offices", "Location": "Lobby", "Frequency": "Daily", "Date or Days": "2, 3, 4, 5, 6", "Urgency": "Normal", "Category": "", "Asset": "", "Images (URLs)": "", "Notes": "Daily – digits 1-7 (1=Sun). Default Mon-Fri = 2,3,4,5,6"},
+            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "AC Check", "Location": "Lobby", "Frequency": "Weekly", "Date or Days": "2", "Urgency": "High", "Category": "", "Asset": "", "Images (URLs)": "", "Notes": "Weekly – ONE day only (2=Monday)"},
+            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Order Supplies", "Location": "Lobby", "Frequency": "Monthly", "Date or Days": "1, 15", "Urgency": "Normal", "Category": "", "Asset": "", "Images (URLs)": "", "Notes": "Monthly – numbers 1-31 separated by commas"},
+            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Quarterly Inspection", "Location": "Lobby", "Frequency": "Quarterly", "Date or Days": "15/01, 15/04, 15/07, 15/10", "Urgency": "High", "Category": "", "Asset": "", "Images (URLs)": "", "Notes": "Quarterly – 4 dates in DD/MM format (one per quarter)"},
+            {"Worker Name": user.full_name || "John Doe", "Manager Name": "Manager", "Task Title": "Renew Insurance", "Location": "Lobby", "Frequency": "Yearly", "Date or Days": "01-08", "Urgency": "High", "Category": "", "Asset": "", "Images (URLs)": imgExample, "Notes": "Yearly – DD/MM format (01-08 = Aug 1st)"}
         ];
 
         const dataTH = [
-            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ทำความสะอาดหน้าต่าง", "สถานที่": "Lobby", "ความถี่": "ครั้งเดียว", "วันที่หรือวัน": "25/12/2026", "ความเร่งด่วน": "ปกติ", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": imgExample, "หมายเหตุ": "Full date"},
-            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ตรวจสอบแอร์", "สถานที่": "Lobby", "ความถี่": "รายสัปดาห์", "วันที่หรือวัน": "1, 3, 5", "ความเร่งด่วน": "ด่วน", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": "", "หมายเหตุ": "Sun, Tue, Thu"},
-            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "สั่งซื้ออุปกรณ์", "สถานที่": "Lobby", "ความถี่": "รายเดือน", "วันที่หรือวัน": "1, 15", "ความเร่งด่วน": "ปกติ", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": "", "หมายเหตุ": "1st and 15th"},
-            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ต่อประกัน", "สถานที่": "Lobby", "ความถี่": "รายปี", "วันที่หรือวัน": "01-08", "ความเร่งด่วน": "ด่วน", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": imgExample, "หมายเหตุ": "Aug 1st"}
+            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ทำความสะอาดหน้าต่าง", "สถานที่": "Lobby", "ความถี่": "ครั้งเดียว", "วันที่หรือวัน": "25/12/2026", "ความเร่งด่วน": "ปกติ", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": imgExample, "หมายเหตุ": "ครั้งเดียว – วันที่เต็ม (วว/ดด/ปปปป)"},
+            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ทำความสะอาดออฟฟิศ", "สถานที่": "Lobby", "ความถี่": "รายวัน", "วันที่หรือวัน": "2, 3, 4, 5, 6", "ความเร่งด่วน": "ปกติ", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": "", "หมายเหตุ": "รายวัน – ตัวเลข 1-7 (1=อาทิตย์). จ-ศ = 2,3,4,5,6"},
+            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ตรวจสอบแอร์", "สถานที่": "Lobby", "ความถี่": "รายสัปดาห์", "วันที่หรือวัน": "2", "ความเร่งด่วน": "ด่วน", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": "", "หมายเหตุ": "รายสัปดาห์ – เลือกได้ 1 วันเท่านั้น (2=จันทร์)"},
+            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "สั่งซื้ออุปกรณ์", "สถานที่": "Lobby", "ความถี่": "รายเดือน", "วันที่หรือวัน": "1, 15", "ความเร่งด่วน": "ปกติ", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": "", "หมายเหตุ": "รายเดือน – ตัวเลข 1-31 คั่นด้วยจุลภาค"},
+            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ตรวจสอบรายไตรมาส", "สถานที่": "Lobby", "ความถี่": "รายไตรมาส", "วันที่หรือวัน": "15/01, 15/04, 15/07, 15/10", "ความเร่งด่วน": "ด่วน", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": "", "หมายเหตุ": "รายไตรมาส – 4 วันที่ในรูปแบบ วว/ดด (ไตรมาสละ 1 วัน)"},
+            {"ชื่อพนักงาน": user.full_name || "Somchai", "ชื่อผู้จัดการ": "Manager", "ชื่องาน": "ต่อประกัน", "สถานที่": "Lobby", "ความถี่": "รายปี", "วันที่หรือวัน": "01-08", "ความเร่งด่วน": "ด่วน", "หมวดหมู่": "", "ทรัพย์สิน": "", "รูปภาพ (ลิงก์)": imgExample, "หมายเหตุ": "รายปี – รูปแบบ วว/ดด (01-08 = 1 สิงหาคม)"}
         ];
 
         const workbook = XLSX.utils.book_new();
@@ -200,8 +206,10 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
             let finalDate = new Date(); // לחד פעמי
             
             const isOnce = ['חד פעמי', 'one-time', 'ครั้งเดียว'].includes(freqValue);
+            const isDaily = ['יומי', 'daily', 'รายวัน'].includes(freqValue);
             const isWeekly = ['שבועי', 'weekly', 'รายสัปดาห์'].includes(freqValue);
             const isMonthly = ['חודשי', 'monthly', 'รายเดือน'].includes(freqValue);
+            const isQuarterly = ['רבעוני', 'quarterly', 'รายไตรมาส'].includes(freqValue);
             const isYearly = ['שנתי', 'yearly', 'รายปี'].includes(freqValue);
 
             const fullDateRegex = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/; // DD/MM/YYYY or DD-MM-YYYY
@@ -217,17 +225,31 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                 } else {
                     errors.push(`שורה ${rowNum}: תאריך חד פעמי לא חוקי. השתמש בפורמט יום/חודש/שנה (למשל 25/12/2026 או 25-12-2026).`);
                 }
-            } 
-            else if (isWeekly) {
-                recurringType = 'weekly';
+            }
+            else if (isDaily) {
+                recurringType = 'daily';
                 const days = datesValue.split(',').map(d => parseInt(d.trim()));
                 const invalidDays = days.filter(d => isNaN(d) || d < 1 || d > 7);
                 if (invalidDays.length > 0) {
-                    errors.push(`שורה ${rowNum}: במשימה שבועית מותר להזין רק ספרות 1 עד 7 מופרדות בפסיקים. (נמצא: ${invalidDays.join(',')})`);
+                    errors.push(`שורה ${rowNum}: במשימה יומית מותר להזין ספרות 1 עד 7 מופרדות בפסיקים. (נמצא: ${invalidDays.join(',')})`);
                 } else {
                     parsedDays = days.map(d => d === 1 ? 0 : d === 2 ? 1 : d === 3 ? 2 : d === 4 ? 3 : d === 5 ? 4 : d === 6 ? 5 : 6);
                 }
-            } 
+            }
+            else if (isWeekly) {
+                recurringType = 'weekly';
+                const days = datesValue.split(',').map(d => parseInt(d.trim()));
+                if (days.length > 1) {
+                    errors.push(`שורה ${rowNum}: במשימה שבועית יש להזין יום אחד בלבד (1-7).`);
+                } else {
+                    const invalidDays = days.filter(d => isNaN(d) || d < 1 || d > 7);
+                    if (invalidDays.length > 0) {
+                        errors.push(`שורה ${rowNum}: במשימה שבועית מותר להזין ספרה אחת בין 1 ל-7. (נמצא: ${invalidDays.join(',')})`);
+                    } else {
+                        parsedDays = days.map(d => d === 1 ? 0 : d === 2 ? 1 : d === 3 ? 2 : d === 4 ? 3 : d === 5 ? 4 : d === 6 ? 5 : 6);
+                    }
+                }
+            }
             else if (isMonthly) {
                 recurringType = 'monthly';
                 const days = datesValue.split(',').map(d => parseInt(d.trim()));
@@ -238,6 +260,29 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                     monthlyDates = days;
                 }
             } 
+            else if (isQuarterly) {
+                recurringType = 'quarterly';
+                const datesArr = datesValue.split(',').map(d => d.trim());
+                if (datesArr.length !== 4) {
+                    errors.push(`שורה ${rowNum}: משימה רבעונית חייבת לכלול בדיוק 4 תאריכים מופרדים בפסיקים (למשל 15/01, 15/04, 15/07, 15/10).`);
+                } else {
+                    datesArr.forEach((d, qi) => {
+                        const match = d.match(shortDateRegex);
+                        if (match) {
+                            const day = match[1].padStart(2, '0');
+                            const month = parseInt(match[2]);
+                            const quarterMonths = [[1,2,3],[4,5,6],[7,8,9],[10,11,12]];
+                            if (!quarterMonths[qi].includes(month)) {
+                                errors.push(`שורה ${rowNum}: תאריך Q${qi+1} ("${d}") חייב להיות בחודשים ${quarterMonths[qi].join('/')}.`);
+                            } else {
+                                yearlyDates.push(`${day}/${String(month).padStart(2,'0')}`);
+                            }
+                        } else {
+                            errors.push(`שורה ${rowNum}: תאריך רבעוני לא חוקי ("${d}"). השתמש בפורמט יום/חודש (למשל 15/01).`);
+                        }
+                    });
+                }
+            }
             else if (isYearly) {
                 recurringType = 'yearly';
                 const datesArr = datesValue.split(',').map(d => d.trim());
@@ -290,10 +335,11 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                     is_recurring: recurringType !== 'once',
                     recurring_type: recurringType !== 'once' ? recurringType : null,
                     due_date: finalDate.toISOString(),
-                    selected_days: parsedDays, // [0, 2, 4]
-                    monthly_dates: monthlyDates, // [1, 15]
-                    yearly_dates: yearlyDates, // ["01/08", "25/12"]
-                    images: parsedImages // ["http://..", "http://.."]
+                    selected_days: parsedDays,       // [0, 2, 4] for daily/weekly
+                    monthly_dates: monthlyDates,     // [1, 15] for monthly
+                    quarterly_dates: recurringType === 'quarterly' ? yearlyDates : [], // ["15/01", "15/04", ...]
+                    yearly_dates: recurringType === 'yearly' ? yearlyDates : [],       // ["01/08", "25/12"]
+                    images: parsedImages             // ["http://..", "http://.."]
                 });
             }
         });
@@ -523,9 +569,9 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                                 <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
                             </div>
 
-                            <div className="flex justify-between items-center bg-purple-50 p-3 rounded border border-purple-100">
-                                <span className="text-xs text-purple-800 font-medium">✨ {t.template_download_hint || 'תבנית מיוחדת ב-3 שפות קיימת להורדה, כולל עמודת תמונות ודוגמאות!'}</span>
-                                <button onClick={handleDownloadTemplate} className="bg-purple-600 text-white px-4 py-2 rounded text-xs font-bold hover:bg-purple-700 shadow-sm flex items-center gap-1 transition">
+                            <div className="flex justify-between items-center bg-[#fdf4ff] p-3 rounded border border-[#714B67]/20">
+                                <span className="text-xs text-[#714B67] font-medium">✨ {t.template_download_hint || 'תבנית מיוחדת ב-3 שפות קיימת להורדה, כולל עמודת תמונות ודוגמאות!'}</span>
+                                <button onClick={handleDownloadTemplate} className="bg-[#714B67] text-white px-4 py-2 rounded text-xs font-bold hover:bg-[#5a3b52] shadow-sm flex items-center gap-1 transition">
                                     <Download size={14}/> {t.download_template_btn || 'הורד תבנית מתקדמת'}
                                 </button>
                             </div>

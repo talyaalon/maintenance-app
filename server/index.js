@@ -1136,12 +1136,12 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
     
     console.log("📝 Creating Task:", { body: req.body, images: imageUrls });
 
-    let { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id } = req.body;
-    
+    let { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id, quarterly_dates } = req.body;
+
     if (!location_id || location_id === 'undefined') return res.status(400).json({ error: "Location is required" });
     if (!asset_id || asset_id === 'undefined' || asset_id === 'null') asset_id = null;
     if (!due_date) due_date = new Date();
-    
+
     const worker_id = (assigned_worker_id && assigned_worker_id !== 'undefined') ? assigned_worker_id : req.user.id;
     const isRecurring = is_recurring === 'true';
 
@@ -1149,28 +1149,36 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
     if (!isRecurring) {
         await pool.query(
-            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
+            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id)
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
-            [title, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id] 
+            [title, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id]
         );
     } else {
         const tasksToInsert = [];
         const start = new Date(due_date);
         const end = new Date(start);
         end.setFullYear(end.getFullYear() + 1);
-        
+
         let daysArray = [];
         if (selected_days) {
             try { daysArray = JSON.parse(selected_days).map(d => parseInt(d)); } catch (e) {}
         }
         const monthlyDate = parseInt(recurring_date) || 1;
 
+        let quarterlyDatesArray = [];
+        if (recurring_type === 'quarterly' && quarterly_dates) {
+            try { quarterlyDatesArray = JSON.parse(quarterly_dates).filter(d => d); } catch (e) {}
+        }
+
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             let match = false;
-            if (recurring_type === 'weekly') {
+            if (recurring_type === 'daily' || recurring_type === 'weekly') {
                 if (daysArray.includes(d.getDay())) match = true;
             } else if (recurring_type === 'monthly') {
                 if (d.getDate() === monthlyDate) match = true;
+            } else if (recurring_type === 'quarterly') {
+                const dayMonthStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                if (quarterlyDatesArray.includes(dayMonthStr)) match = true;
             } else if (recurring_type === 'yearly') {
                 if (d.getMonth() === start.getMonth() && d.getDate() === start.getDate()) match = true;
             }
@@ -1272,10 +1280,15 @@ app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
                 for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                     let match = false;
                     
-                    if (task.recurring_type === 'weekly' && task.selected_days.includes(d.getDay())) match = true;
-                    
+                    if ((task.recurring_type === 'daily' || task.recurring_type === 'weekly') && task.selected_days.includes(d.getDay())) match = true;
+
                     if (task.recurring_type === 'monthly' && task.monthly_dates.includes(d.getDate())) match = true;
-                    
+
+                    if (task.recurring_type === 'quarterly') {
+                        const dayMonthStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        if (task.quarterly_dates && task.quarterly_dates.includes(dayMonthStr)) match = true;
+                    }
+
                     if (task.recurring_type === 'yearly') {
                         const dayMonthStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
                         if (task.yearly_dates.includes(dayMonthStr)) match = true;
