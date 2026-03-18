@@ -2281,6 +2281,14 @@ app.listen(port, async () => {
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_lang_en BOOLEAN DEFAULT TRUE');
         await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_lang_th BOOLEAN DEFAULT TRUE');
 
+        // Stuck-task permission — when TRUE, stuck tasks skip WAITING_APPROVAL and go directly to COMPLETED
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS stuck_skip_approval BOOLEAN DEFAULT FALSE');
+
+        // Stuck-task fields on tasks — required by PUT /tasks/:id/stuck
+        await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_stuck BOOLEAN DEFAULT FALSE');
+        await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_description TEXT');
+        await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_file_url TEXT');
+
         // Seed English name from legacy single-name column (idempotent)
         await pool.query("UPDATE locations  SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
         await pool.query("UPDATE categories SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");

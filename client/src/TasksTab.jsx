@@ -546,7 +546,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                                 <button onClick={() => { setMode('complete'); setModalError(''); }} className="flex-1 bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-md hover:bg-[#5a3b52] transition transform active:scale-95">{t.complete_task_btn}</button>
                                 <button onClick={() => { setMode('followup'); setModalError(''); }} className="flex-1 bg-white text-[#714B67] border-2 border-[#714B67] py-3 rounded-xl font-bold shadow-sm hover:bg-[#fdf4ff] transition transform active:scale-95">{t.followup_task_btn}</button>
                                 {canShowStuck && (
-                                    <button onClick={() => setShowStuck(true)} className="flex-1 bg-white text-[#714B67] border-2 border-[#714B67] py-3 rounded-xl font-bold shadow-sm hover:bg-[#fdf4ff] transition transform active:scale-95">{t.stuck_task_btn || 'דיווח על משימה תקועה'}</button>
+                                    <button onClick={() => setShowStuck(true)} className="flex-1 bg-gray-50 text-[#714B67] border-2 border-[#714B67] py-3 rounded-xl font-bold shadow-sm hover:bg-gray-100 transition transform active:scale-95">{t.stuck_task_btn || 'דיווח על משימה תקועה'}</button>
                                 )}
                             </div>
                         )}
@@ -642,7 +642,7 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
         <div className="fixed inset-0 bg-black/60 flex justify-center items-end sm:items-center z-[120] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-md rounded-2xl overflow-hidden shadow-2xl animate-slide-up">
                 <div className="bg-[#fdf4ff] p-4 border-b border-[#714B67]/20 flex justify-between items-center">
-                    <h2 className="text-lg font-bold text-[#714B67]">⚠️ {t.stuck_task_modal_title || 'Report Stuck Task'}</h2>
+                    <h2 className="text-lg font-bold text-[#714B67]">{t.stuck_task_modal_title || 'Report Stuck Task'}</h2>
                     <button onClick={onClose} className="bg-white p-2 rounded-full hover:bg-gray-100 border"><X size={18}/></button>
                 </div>
                 <div className="p-5 space-y-4">
