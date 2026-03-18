@@ -616,6 +616,12 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                           onToggle={() => handleTogglePermission(manager, 'auto_approve_tasks')}
                                       />
                                       <PermissionToggle
+                                          label={t.perm_stuck_skip_approval || 'Stuck Tasks Skip Approval'}
+                                          hint={t.perm_stuck_skip_approval_hint || "When ON, stuck tasks go directly to History instead of Pending Approval"}
+                                          value={!!manager.stuck_skip_approval}
+                                          onToggle={() => handleTogglePermission(manager, 'stuck_skip_approval')}
+                                      />
+                                      <PermissionToggle
                                           label={t.perm_lang_he || 'Allow Hebrew (HE)'}
                                           hint={t.perm_lang_he_hint || 'Allow this manager and their employees to use the Hebrew interface'}
                                           value={manager.allowed_lang_he !== false}

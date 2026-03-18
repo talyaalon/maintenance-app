@@ -77,10 +77,16 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [stuckTask, setStuckTask] = useState(null);
 
   const isTeamView = Array.isArray(subordinates);
 
   const todayBkk = getBkkDateObj(new Date());
+
+  const canActOnTask = (task) =>
+      task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
+
+  const stuckProps = (task) => canActOnTask(task) ? { onStuck: setStuckTask } : {};
 
   // Today-only: tasks due exactly today
   const todayTasks = tasks.filter(task => {
@@ -129,7 +135,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                               <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1">
                                   <AlertTriangle size={12}/> {t.overdue} — {formatBkkDate(task.due_date)}
                               </div>
-                              <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+                              <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} {...stuckProps(task)} />
                           </div>
                       ))}
                   </div>
@@ -156,7 +162,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                       <div className="space-y-3">
                           {filtered.map(task => (
                               <div key={task.id}>
-                                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+                                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} {...stuckProps(task)} />
                               </div>
                           ))}
                       </div>
@@ -180,7 +186,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                               </div>
                               <div className="p-2 pt-0 space-y-2">
                                   {dayTasks.length > 0 ? (
-                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)
+                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} {...stuckProps(task)} />)
                                   ) : (
                                       <div className="p-3 pt-0 text-xs text-gray-400 text-center">No tasks</div>
                                   )}
@@ -212,7 +218,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                       <h4 className="font-bold mb-4 text-[#714B67] text-lg border-b pb-2">{t.tasks_for_date} {format(selectedDate, 'dd/MM/yyyy')}:</h4>
                       {calendarTasks.length === 0 && <p className="text-gray-400 text-sm p-2">No tasks for this date.</p>}
                       <div className="space-y-2">
-                          {calendarTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
+                          {calendarTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} {...stuckProps(task)} />)}
                       </div>
                   </div>
               </div>
@@ -312,6 +318,17 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
               onRefresh={onRefresh}
               t={t}
               allUsers={subordinates}
+          />
+      )}
+
+      {stuckTask && (
+          <StuckModal
+              task={stuckTask}
+              onClose={() => setStuckTask(null)}
+              token={token}
+              user={user}
+              onRefresh={onRefresh}
+              t={t}
           />
       )}
 
@@ -526,6 +543,18 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                         </div>
                     )}
 
+                    {task.is_stuck && (
+                        <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                            <span className="block text-xs text-purple-700 font-bold mb-1">⚠️ {t.stuck_task_btn || 'Stuck Task'}:</span>
+                            {task.stuck_description && <p className="text-sm text-purple-900 mb-2">{task.stuck_description}</p>}
+                            {task.stuck_file_url && (
+                                isVideo(task.stuck_file_url)
+                                    ? <video src={task.stuck_file_url} className="w-full h-32 object-cover rounded-lg border bg-black cursor-pointer" onClick={() => openMedia(task.stuck_file_url)} />
+                                    : <img src={task.stuck_file_url} onClick={() => openMedia(task.stuck_file_url)} className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition" alt="stuck evidence" />
+                            )}
+                        </div>
+                    )}
+
                     <div className="pt-4 space-y-3">
                         {canComplete && mode === 'view' && (
                             <div className="flex flex-col sm:flex-row gap-3">
@@ -562,6 +591,87 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                                 {t.approve_close_btn}
                             </button>
                         )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
+    const [note, setNote] = useState('');
+    const [file, setFile] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async () => {
+        setLoading(true);
+        setError('');
+        const formData = new FormData();
+        formData.append('stuck_description', note);
+        if (file) formData.append('stuck_file', file);
+        try {
+            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/stuck`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+            if (res.ok) {
+                setShowSuccess(true);
+                setTimeout(() => { setShowSuccess(false); onRefresh(); onClose(); }, 1500);
+            } else {
+                setError(t.server_error || 'Error reporting stuck task.');
+            }
+        } catch {
+            setError(t.server_error || 'Error reporting stuck task.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (showSuccess) return (
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[130]">
+            <div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center">
+                <Check size={40} className="text-purple-600 mb-2"/>
+                <h2 className="text-xl font-bold">{t.stuck_sent || 'Reported!'}</h2>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-end sm:items-center z-[120] backdrop-blur-sm p-4">
+            <div className="bg-white w-full sm:w-[95%] max-w-md rounded-2xl overflow-hidden shadow-2xl animate-slide-up">
+                <div className="bg-purple-50 p-4 border-b border-purple-100 flex justify-between items-center">
+                    <h2 className="text-lg font-bold text-purple-800">⚠️ {t.stuck_task_modal_title || 'Report Stuck Task'}</h2>
+                    <button onClick={onClose} className="bg-white p-2 rounded-full hover:bg-gray-100 border"><X size={18}/></button>
+                </div>
+                <div className="p-5 space-y-4">
+                    <div>
+                        <p className="text-sm font-semibold text-gray-700 mb-1">{task.title}</p>
+                    </div>
+                    {error && <InlineAlert message={error} onClose={() => setError('')} />}
+                    <textarea
+                        value={note}
+                        onChange={e => setNote(e.target.value)}
+                        placeholder={t.stuck_description_placeholder || 'Describe the problem or obstacle...'}
+                        rows={4}
+                        className="w-full p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-300 outline-none text-sm resize-none"
+                    />
+                    <input
+                        type="file"
+                        onChange={e => setFile(e.target.files[0])}
+                        className="text-xs file:bg-purple-50 file:text-purple-700 file:border-0 file:px-4 file:py-2 file:rounded-lg file:font-bold hover:file:bg-purple-100 cursor-pointer w-full"
+                    />
+                    <div className="flex gap-3">
+                        <button onClick={onClose} className="flex-1 py-2.5 border rounded-xl bg-white text-gray-600 hover:bg-gray-50 font-medium">{t.cancel}</button>
+                        <button
+                            onClick={handleSubmit}
+                            disabled={loading}
+                            className="flex-1 py-2.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl font-bold transition disabled:opacity-60"
+                        >
+                            {loading ? '...' : (t.stuck_send_btn || 'Report Stuck Task')}
+                        </button>
                     </div>
                 </div>
             </div>

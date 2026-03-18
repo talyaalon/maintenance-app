@@ -350,7 +350,16 @@ export const translations = {
     perm_lang_en_hint: "Allow this manager and their employees to use the English interface",
     perm_lang_th: "Allow Thai (TH)",
     perm_lang_th_hint: "Allow this manager and their employees to use the Thai interface",
+    perm_stuck_skip_approval: "Stuck Tasks Skip Approval",
+    perm_stuck_skip_approval_hint: "When ON, stuck tasks go directly to History instead of Pending Approval",
     btn_send_report: "Send Daily Report",
+
+    // --- Stuck Task ---
+    stuck_task_btn: "Stuck Task",
+    stuck_task_modal_title: "Report Stuck Task",
+    stuck_description_placeholder: "Describe the problem or obstacle...",
+    stuck_send_btn: "Report Stuck Task",
+    stuck_sent: "Stuck task reported!",
 
     // --- LocationsTab ---
     confirm_delete_location: "Delete this location? This will also delete all tasks associated with it!",
@@ -752,7 +761,16 @@ export const translations = {
     perm_lang_en_hint: "אפשר למנהל זה ולעובדיו להשתמש בממשק באנגלית",
     perm_lang_th: "אפשר תאית (TH)",
     perm_lang_th_hint: "אפשר למנהל זה ולעובדיו להשתמש בממשק בתאית",
+    perm_stuck_skip_approval: "משימות תקועות מדלגות על אישור",
+    perm_stuck_skip_approval_hint: "כאשר פעיל, משימות תקועות עוברות ישירות להיסטוריה במקום לממתין לאישור",
     btn_send_report: "שלח דוח משימות",
+
+    // --- Stuck Task ---
+    stuck_task_btn: "משימה תקועה",
+    stuck_task_modal_title: "דיווח על משימה תקועה",
+    stuck_description_placeholder: "תאר את הבעיה או המכשול...",
+    stuck_send_btn: "שלח דיווח",
+    stuck_sent: "הדיווח נשלח!",
 
     // --- LocationsTab ---
     confirm_delete_location: "למחוק מיקום זה? זה ימחק גם את המשימות שקשורות אליו!",
@@ -1192,7 +1210,16 @@ export const translations = {
     perm_lang_en_hint: "อนุญาตให้ผู้จัดการนี้และพนักงานใช้อินเทอร์เฟซภาษาอังกฤษ",
     perm_lang_th: "อนุญาตภาษาไทย (TH)",
     perm_lang_th_hint: "อนุญาตให้ผู้จัดการนี้และพนักงานใช้อินเทอร์เฟซภาษาไทย",
+    perm_stuck_skip_approval: "งานที่ติดขัดข้ามการอนุมัติ",
+    perm_stuck_skip_approval_hint: "เมื่อเปิด งานที่ติดขัดจะไปที่ประวัติโดยตรง แทนที่จะรออนุมัติ",
     btn_send_report: "ส่งรายงานประจำวัน",
+
+    // --- Stuck Task ---
+    stuck_task_btn: "งานติดขัด",
+    stuck_task_modal_title: "รายงานงานติดขัด",
+    stuck_description_placeholder: "อธิบายปัญหาหรืออุปสรรค...",
+    stuck_send_btn: "รายงานงานติดขัด",
+    stuck_sent: "รายงานแล้ว!",
 
     // --- LocationsTab ---
     confirm_delete_location: "ลบสถานที่นี้? การดำเนินการนี้จะลบงานที่เกี่ยวข้องทั้งหมดด้วย!",

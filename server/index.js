@@ -358,6 +358,14 @@ app.get('/fix-db', async (req, res) => {
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_lang_en BOOLEAN DEFAULT TRUE');
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_lang_th BOOLEAN DEFAULT TRUE');
 
+            // Stuck-task permission — when TRUE, stuck tasks skip WAITING_APPROVAL and go directly to COMPLETED
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS stuck_skip_approval BOOLEAN DEFAULT FALSE');
+
+            // Stuck-task fields on tasks
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_stuck BOOLEAN DEFAULT FALSE');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_description TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_file_url TEXT');
+
             // ── Multilingual name columns ──
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_he TEXT');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS name_en TEXT');
@@ -438,13 +446,15 @@ app.post('/login', async (req, res) => {
     let managerAllowedLangHe = true;
     let managerAllowedLangEn = true;
     let managerAllowedLangTh = true;
+    let managerStuckSkipApproval = false;
     if (user.role === 'EMPLOYEE' && user.parent_manager_id) {
         try {
-            const mgr = await pool.query('SELECT auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th FROM users WHERE id = $1', [user.parent_manager_id]);
-            managerAutoApprove    = mgr.rows[0]?.auto_approve_tasks  || false;
-            managerAllowedLangHe  = mgr.rows[0]?.allowed_lang_he  !== false;
-            managerAllowedLangEn  = mgr.rows[0]?.allowed_lang_en  !== false;
-            managerAllowedLangTh  = mgr.rows[0]?.allowed_lang_th  !== false;
+            const mgr = await pool.query('SELECT auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th, stuck_skip_approval FROM users WHERE id = $1', [user.parent_manager_id]);
+            managerAutoApprove       = mgr.rows[0]?.auto_approve_tasks   || false;
+            managerAllowedLangHe     = mgr.rows[0]?.allowed_lang_he   !== false;
+            managerAllowedLangEn     = mgr.rows[0]?.allowed_lang_en   !== false;
+            managerAllowedLangTh     = mgr.rows[0]?.allowed_lang_th   !== false;
+            managerStuckSkipApproval = mgr.rows[0]?.stuck_skip_approval || false;
         } catch (e) { /* non-critical, leave defaults */ }
     }
 
@@ -473,6 +483,7 @@ app.post('/login', async (req, res) => {
             manager_allowed_lang_he: managerAllowedLangHe,
             manager_allowed_lang_en: managerAllowedLangEn,
             manager_allowed_lang_th: managerAllowedLangTh,
+            manager_stuck_skip_approval: managerStuckSkipApproval,
             parent_manager_id: user.parent_manager_id
         }
     });
@@ -651,7 +662,7 @@ app.post('/users', authenticateToken, async (req, res) => {
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th, line_user_id } = req.body;
+    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th, line_user_id, stuck_skip_approval } = req.body;
 
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
@@ -721,6 +732,11 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     if ('allowed_lang_th' in oldUser) {
         setClauses.push(`allowed_lang_th=$${paramCount}`);
         params.push(allowed_lang_th !== undefined ? allowed_lang_th : oldUser.allowed_lang_th);
+        paramCount++;
+    }
+    if ('stuck_skip_approval' in oldUser || stuck_skip_approval !== undefined) {
+        setClauses.push(`stuck_skip_approval=$${paramCount}`);
+        params.push(stuck_skip_approval !== undefined ? stuck_skip_approval : oldUser.stuck_skip_approval);
         paramCount++;
     }
 
@@ -1404,6 +1420,61 @@ app.put('/tasks/:id/approve', authenticateToken, async (req, res) => {
         await pool.query(`UPDATE tasks SET status = 'COMPLETED' WHERE id = $1`, [req.params.id]);
         res.json({ success: true });
     } catch (err) { res.status(500).send('Error'); }
+});
+
+app.put('/tasks/:id/stuck', authenticateToken, upload.single('stuck_file'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { stuck_description } = req.body;
+        const stuckFileUrl = req.file ? req.file.path : null;
+
+        // Check manager's stuck_skip_approval flag
+        const managerCheckQuery = `
+            SELECT m.stuck_skip_approval, m.device_token, m.line_user_id, m.preferred_language
+            FROM tasks t
+            JOIN users w ON t.worker_id = w.id
+            JOIN users m ON w.parent_manager_id = m.id
+            WHERE t.id = $1
+        `;
+        const managerCheck = await pool.query(managerCheckQuery, [id]);
+        const managerRow = managerCheck.rows[0];
+
+        // If stuck_skip_approval = true → go directly to COMPLETED; otherwise → WAITING_APPROVAL
+        const newStatus = managerRow?.stuck_skip_approval ? 'COMPLETED' : 'WAITING_APPROVAL';
+
+        await pool.query(
+            `UPDATE tasks SET status = $1, is_stuck = TRUE, stuck_description = $2, stuck_file_url = $3 WHERE id = $4`,
+            [newStatus, stuck_description || null, stuckFileUrl, id]
+        );
+
+        // Notify manager when task needs manual review
+        try {
+            if (newStatus === 'WAITING_APPROVAL' && managerRow) {
+                const mgrLang = managerRow.preferred_language || 'he';
+                const stuckLineDict = {
+                    he: `⚠️ עובד דיווח על משימה תקועה וממתינה לאישורך.`,
+                    en: `⚠️ A worker reported a stuck task and it is awaiting your review.`,
+                    th: `⚠️ พนักงานรายงานงานที่ติดขัดและรอการตรวจสอบจากคุณ`
+                };
+                if (managerRow.line_user_id) {
+                    await sendLineMessage(managerRow.line_user_id, stuckLineDict[mgrLang] || stuckLineDict['en']);
+                } else if (managerRow.device_token) {
+                    await admin.messaging().send({
+                        token: managerRow.device_token,
+                        notification: {
+                            title: '⚠️ משימה תקועה ממתינה לאישור',
+                            body: 'עובד דיווח שנתקל בבעיה. היכנס לבדוק.'
+                        },
+                        webpush: { fcmOptions: { link: '/' } }
+                    });
+                }
+            }
+        } catch (err) {
+            console.error("⚠️ Failed to send stuck notification:", err.message);
+        }
+
+        res.json({ success: true, status: newStatus });
+    } catch (err) { console.error(err); res.status(500).send('Error'); }
 });
 
 app.post('/tasks/:id/follow-up', authenticateToken, async (req, res) => {
