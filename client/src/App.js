@@ -299,6 +299,11 @@ function App() {
         {renderContent()}
       </main>
 
+{/* ─── Footer ────────────────────────────────────────────────────────────── */}
+      <footer className="pb-16 pt-4 flex justify-center">
+        <img src={logoImg} alt="Air Manage" className="h-6 w-auto object-contain opacity-30" />
+      </footer>
+
 {/* ─── Bottom navigation ─────────────────────────────────────────────────── */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
         <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Globe, Eye, EyeOff, Loader2, X, KeyRound, ArrowLeft } from 'lucide-react';
+import airManageLogo from './app-logo.png';
 
 const API = 'https://maintenance-app-staging.onrender.com';
 
@@ -350,9 +351,7 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
 
           {/* Title */}
           <div className="text-center mb-8 mt-8">
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight mb-1">
-              {t.app_name || 'Maintenance App'}
-            </h2>
+            <img src={airManageLogo} alt="Air Manage" className="h-16 w-auto object-contain mx-auto mb-4" />
             <p className="text-slate-400 text-sm font-medium">{t.login_title}</p>
           </div>
 
