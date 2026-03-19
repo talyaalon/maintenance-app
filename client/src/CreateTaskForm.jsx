@@ -7,7 +7,6 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
   const userRole = currentUser?.role ? String(currentUser.role).toUpperCase() : '';
   const isEmployee = userRole === 'EMPLOYEE' || userRole === 'WORKER' || userRole === 'עובד';
-  const isSupervisor = userRole === 'SUPERVISOR';
   const isManager = currentUser && !isEmployee;
 
   // 🚀 שעון בנגקוק חסין תקלות - לוקח את השעה הנוכחית בבנגקוק ומעצב אותה במדויק לשדה התאריך
@@ -54,24 +53,18 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   ];
   const currentYear = new Date().getFullYear();
 
+  const isBigBoss = userRole === 'BIG_BOSS';
+
   useEffect(() => {
     const headers = { 'Authorization': `Bearer ${token}` };
 
+    // Backend handles area-based filtering for all non-BIG_BOSS roles automatically
+    fetch('https://maintenance-app-h84v.onrender.com/locations', { headers })
+        .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
     fetch('https://maintenance-app-h84v.onrender.com/categories', { headers })
         .then(res => res.json()).then(setCategories).catch(err => console.error("Error categories", err));
-
     fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
         .then(res => res.json()).then(setAssets).catch(err => console.error("Error assets", err));
-
-    // For employees, load locations for their own manager immediately
-    if (isEmployee && currentUser?.parent_manager_id) {
-        fetch(`https://maintenance-app-h84v.onrender.com/locations?manager_id=${currentUser.parent_manager_id}`, { headers })
-            .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
-    } else if (isSupervisor || !isManager) {
-        // Supervisors use a shared pool — load ALL locations immediately (no manager filter)
-        fetch('https://maintenance-app-h84v.onrender.com/locations', { headers })
-            .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
-    }
 
     if (isManager) {
         if (subordinates && subordinates.length > 0) {
@@ -83,46 +76,29 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 .catch(err => console.error("Error users", err));
         }
     }
-  }, [token, isManager, isEmployee, subordinates, currentUser?.parent_manager_id]);
+  }, [token, isManager, subordinates]);
 
-  // Determine which manager's locations/categories to show.
-  // SUPERVISOR: always null → show everything (shared global pool, no silo)
-  let targetManagerId = null;
-  if (isEmployee) {
-      targetManagerId = currentUser.parent_manager_id;
-  } else if (!isSupervisor && formData.assigned_worker_id) {
+  // For BIG_BOSS: filter by the selected worker's area_id so each area stays isolated
+  // For all other roles: backend already scoped the data to their area — show everything fetched
+  let targetAreaId = null;
+  if (isBigBoss && formData.assigned_worker_id) {
       const selectedWorker = teamMembers.find(u => String(u.id) === String(formData.assigned_worker_id));
-      if (selectedWorker) {
-          targetManagerId = selectedWorker.role === 'MANAGER' ? selectedWorker.id : selectedWorker.parent_manager_id;
-      }
-  } else if (userRole === 'MANAGER') {
-      targetManagerId = currentUser.id;
+      targetAreaId = selectedWorker?.area_id || null;
   }
 
-  // Re-fetch locations when target manager changes (MANAGER role only; SUPERVISOR loads all upfront)
-  useEffect(() => {
-    if (!isManager || isSupervisor || !targetManagerId) return;
-    const headers = { 'Authorization': `Bearer ${token}` };
-    fetch(`https://maintenance-app-h84v.onrender.com/locations?manager_id=${targetManagerId}`, { headers })
-        .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
-  }, [targetManagerId, token, isManager, isSupervisor]);
-
-  // Show only locations that belong strictly to the target manager
-  const filteredLocations = targetManagerId
-      ? locations.filter(l => String(l.created_by) === String(targetManagerId))
+  const filteredLocations = (isBigBoss && targetAreaId)
+      ? locations.filter(l => String(l.area_id) === String(targetAreaId) || !l.area_id)
       : locations;
 
-  // Strict filter: only show categories that explicitly belong to the target manager (same logic as locations)
-  const filteredCategories = targetManagerId
-      ? categories.filter(c => String(c.created_by) === String(targetManagerId))
+  const filteredCategories = (isBigBoss && targetAreaId)
+      ? categories.filter(c => String(c.area_id) === String(targetAreaId) || !c.area_id)
       : categories;
 
-  // 🚀 FIX: Filter assets by BOTH selected category AND the target manager's ownership
   const filteredAssets = selectedCategory
       ? assets.filter(a => {
           const categoryMatch = String(a.category_id) === String(selectedCategory);
-          const managerMatch = !targetManagerId || !a.created_by || String(a.created_by) === String(targetManagerId);
-          return categoryMatch && managerMatch;
+          const areaMatch = !isBigBoss || !targetAreaId || String(a.area_id) === String(targetAreaId) || !a.area_id;
+          return categoryMatch && areaMatch;
       })
       : [];
 
@@ -408,11 +384,11 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                     <select required className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67] disabled:opacity-50"
                         value={formData.location_id}
                         onChange={e => setFormData({...formData, location_id: e.target.value})}
-                        disabled={isManager && !isSupervisor && !formData.assigned_worker_id}>
+                        disabled={isBigBoss && !formData.assigned_worker_id}>
                         <option value="">{t.select_location}</option>
                         {filteredLocations.map(l => <option key={l.id} value={l.id}>{l['name_' + lang] || l.name_en || l.name}</option>)}
                     </select>
-                    {isManager && !isSupervisor && !formData.assigned_worker_id && (
+                    {isBigBoss && !formData.assigned_worker_id && (
                         <p className="text-xs text-gray-400 mt-1">{t.select_worker_first || "Select a worker first"}</p>
                     )}
                  </div>
@@ -426,9 +402,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                  </div>
             </div>
 
-            <div className={`border border-gray-200 rounded-xl p-3 bg-slate-50 transition ${isManager && !isSupervisor && !formData.assigned_worker_id ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`border border-gray-200 rounded-xl p-3 bg-slate-50 transition ${isBigBoss && !formData.assigned_worker_id ? 'opacity-50 pointer-events-none' : ''}`}>
                  <label className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1"><Box size={14}/> {t.select_asset_title || "Asset (Optional)"}</label>
-                 {isManager && !isSupervisor && !formData.assigned_worker_id && (
+                 {isBigBoss && !formData.assigned_worker_id && (
                      <p className="text-xs text-gray-400 mb-2">{t.select_worker_first || "Select a worker first"}</p>
                  )}
                  <div className="flex gap-2">

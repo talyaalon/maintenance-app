@@ -36,14 +36,27 @@ const SkeletonRow = ({ indent = false }) => (
     </div>
 );
 
+// ─── Role badge ───────────────────────────────────────────────────────────────
+const RoleBadge = ({ role, t }) => {
+    if (role === 'BIG_BOSS')
+        return <span className="text-[10px] bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded-full font-semibold">Admin</span>;
+    if (role === 'MANAGER')
+        return <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full font-semibold">{t?.role_area_manager || 'Area Manager'}</span>;
+    if (role === 'SUPERVISOR')
+        return <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-semibold">{t?.role_dept_manager || 'Dept Manager'}</span>;
+    if (role === 'EMPLOYEE')
+        return <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-semibold">{t?.role_employee || 'Employee'}</span>;
+    return null;
+};
+
 const TeamTab = ({ token, t, user, lang }) => {
     const [team, setTeam] = useState([]);
     const [isLoadingTeam, setIsLoadingTeam] = useState(true);
-    const [expandedManagers, setExpandedManagers] = useState(new Set());
+    const [expandedNodes, setExpandedNodes] = useState(new Set());
 
     const [editMember, setEditMember] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editForm, setEditForm] = useState({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', phone: '', password: '', line_user_id: '' });
+    const [editForm, setEditForm] = useState({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', phone: '', role: '', password: '', line_user_id: '' });
     const [showPassword, setShowPassword] = useState(false);
 
     const [showAddModal, setShowAddModal] = useState(false);
@@ -54,46 +67,18 @@ const TeamTab = ({ token, t, user, lang }) => {
         parent_manager_id: '', preferred_language: 'he', line_user_id: ''
     });
 
-    // Branded confirm-delete state
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-
-    const activeManagers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS' || u.role === 'SUPERVISOR');
-
-    const handleAddUser = async (e) => {
-        e.preventDefault();
-        let payload = { ...addForm };
-        if (user.role === 'MANAGER' || user.role === 'SUPERVISOR') {
-            payload.parent_manager_id = user.id;
-            payload.role = 'EMPLOYEE';
-        }
-        if (payload.role === 'MANAGER' || payload.role === 'SUPERVISOR') payload.parent_manager_id = null;
-
-        try {
-            const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(payload)
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setShowAddModal(false);
-                setAddForm({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '', preferred_language: 'he', line_user_id: '' });
-                fetchTeam();
-            } else {
-                alert(data.error === "Email already exists"
-                    ? (t.error_email_exists || "Email already exists")
-                    : ("Error: " + (data.error || "Failed")));
-            }
-        } catch (e) { alert("Server Error"); }
-    };
-
     const [selectedMember, setSelectedMember] = useState(null);
     const [memberTasks, setMemberTasks] = useState([]);
     const [isLoadingTasks, setIsLoadingTasks] = useState(false);
 
+    // All managers/supervisors visible to the viewer (for parent dropdown)
+    const activeManagers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS' || u.role === 'SUPERVISOR');
+
     useEffect(() => { fetchTeam(); }, []);
 
     const fetchTeam = async () => {
+        setIsLoadingTeam(true);
         try {
             const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -101,11 +86,22 @@ const TeamTab = ({ token, t, user, lang }) => {
             if (res.ok) {
                 const data = await res.json();
                 setTeam(data);
-                const managerIds = data.filter(u => u.role === 'MANAGER' || u.role === 'SUPERVISOR').map(u => u.id);
-                setExpandedManagers(new Set(managerIds));
+                // Auto-expand all area managers and dept managers
+                const toExpand = data
+                    .filter(u => u.role === 'MANAGER' || u.role === 'SUPERVISOR')
+                    .map(u => u.id);
+                setExpandedNodes(new Set(toExpand));
             }
         } catch (e) { console.error(e); }
         finally { setIsLoadingTeam(false); }
+    };
+
+    const toggleNode = (id) => {
+        setExpandedNodes(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
     };
 
     const handleMemberClick = async (member) => {
@@ -117,20 +113,8 @@ const TeamTab = ({ token, t, user, lang }) => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) setMemberTasks(await res.json());
-        } catch (e) {
-            console.error("Error fetching tasks", e);
-        } finally {
-            setIsLoadingTasks(false);
-        }
-    };
-
-    const toggleManager = (managerId) => {
-        setExpandedManagers(prev => {
-            const next = new Set(prev);
-            if (next.has(managerId)) next.delete(managerId);
-            else next.add(managerId);
-            return next;
-        });
+        } catch (e) { console.error("Error fetching tasks", e); }
+        finally { setIsLoadingTasks(false); }
     };
 
     const confirmDelete = async () => {
@@ -174,23 +158,49 @@ const TeamTab = ({ token, t, user, lang }) => {
                 body: JSON.stringify(editForm)
             });
             const data = await res.json();
+            if (res.ok) { setShowEditModal(false); fetchTeam(); }
+            else alert(data.error === "Email already exists" ? (t.error_email_exists || "Email already exists") : "Error updating user");
+        } catch (e) { alert("Server error"); }
+    };
+
+    const handleAddUser = async (e) => {
+        e.preventDefault();
+        let payload = { ...addForm };
+        if (user.role === 'MANAGER' || user.role === 'SUPERVISOR') {
+            payload.parent_manager_id = user.id;
+            payload.role = 'EMPLOYEE';
+        }
+        if (payload.role === 'MANAGER' || payload.role === 'SUPERVISOR') payload.parent_manager_id = null;
+
+        try {
+            const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
             if (res.ok) {
-                setShowEditModal(false);
+                setShowAddModal(false);
+                setAddForm({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '', preferred_language: 'he', line_user_id: '' });
                 fetchTeam();
             } else {
                 alert(data.error === "Email already exists"
                     ? (t.error_email_exists || "Email already exists")
-                    : "Error updating user");
+                    : ("Error: " + (data.error || "Failed")));
             }
-        } catch (e) { alert("Server error"); }
+        } catch (e) { alert("Server Error"); }
     };
 
-    const renderMemberRow = (member, isSub = false) => {
+    // ─── Member row renderer ───────────────────────────────────────────────────
+    const renderMemberRow = (member, depth = 0) => {
         const displayName = member['full_name_' + lang] || member.full_name_en || member.full_name || '?';
         const initial = displayName.charAt(0).toUpperCase();
+        const isExpandable = member.role === 'MANAGER' || member.role === 'SUPERVISOR';
+        const indentClass = depth === 1 ? 'ml-4 sm:ml-6' : depth === 2 ? 'ml-8 sm:ml-12' : depth === 3 ? 'ml-12 sm:ml-16' : '';
+        const borderClass = depth === 1 ? 'border-l-4 border-l-indigo-200' : depth === 2 ? 'border-l-4 border-l-blue-200' : depth === 3 ? 'border-l-4 border-l-green-200' : '';
 
         return (
-            <div key={member.id} className={`bg-white p-3 sm:p-4 rounded-xl border border-gray-200 flex justify-between items-center ${isSub ? 'ml-3 sm:ml-6 border-l-4 border-l-[#714B67]/20' : 'mb-2'}`}>
+            <div key={member.id} className={`bg-white p-3 sm:p-4 rounded-xl border border-gray-200 flex justify-between items-center ${indentClass} ${borderClass} mb-1`}>
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-200 bg-slate-50 flex items-center justify-center">
                         {member.profile_picture_url ? (
@@ -199,7 +209,6 @@ const TeamTab = ({ token, t, user, lang }) => {
                             <span className="text-sm font-bold text-[#714B67]">{initial}</span>
                         )}
                     </div>
-
                     <div className="flex flex-col min-w-0">
                         <span
                             onClick={() => handleMemberClick(member)}
@@ -212,25 +221,13 @@ const TeamTab = ({ token, t, user, lang }) => {
                         </div>
                     </div>
                 </div>
-
                 <div className="flex items-center gap-2 shrink-0">
-                    {member.role === 'BIG_BOSS' && (
-                        <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-semibold">Admin</span>
-                    )}
-                    {member.role === 'MANAGER' && (
-                        <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-semibold">{t.role_manager || 'Manager'}</span>
-                    )}
-                    {member.role === 'SUPERVISOR' && (
-                        <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-semibold">{t.role_supervisor || 'Supervisor'}</span>
-                    )}
-                    {member.role === 'EMPLOYEE' && (
-                        <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-semibold">{t.role_employee || 'Employee'}</span>
-                    )}
+                    <RoleBadge role={member.role} t={t} />
                     <button onClick={() => openEditModal(member)} className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-[#fdf4ff] rounded-full transition"><Edit2 size={16}/></button>
                     <button onClick={() => setDeleteConfirmId(member.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash2 size={16}/></button>
-                    {(member.role === 'MANAGER' || member.role === 'SUPERVISOR') && (
-                        <button onClick={() => toggleManager(member.id)} className="p-1 text-gray-400 hover:text-[#714B67] transition">
-                            {expandedManagers.has(member.id) ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
+                    {isExpandable && (
+                        <button onClick={() => toggleNode(member.id)} className="p-1 text-gray-400 hover:text-[#714B67] transition">
+                            {expandedNodes.has(member.id) ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
                         </button>
                     )}
                 </div>
@@ -238,18 +235,119 @@ const TeamTab = ({ token, t, user, lang }) => {
         );
     };
 
-    const isSupervisorViewer = user.role === 'SUPERVISOR';
-    const bigBosses = team.filter(u => u.role === 'BIG_BOSS');
-    // Exclude self from the manager list so a SUPERVISOR doesn't appear twice
-    const regularManagers = team.filter(u => (u.role === 'MANAGER' || u.role === 'SUPERVISOR') && u.id !== user.id);
-    // Supervisors see the full shared employee pool; others see only their direct reports
-    const directEmployees = isSupervisorViewer
-        ? team.filter(u => u.role === 'EMPLOYEE')
-        : team.filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === user.id);
+    // ─── 4-tier hierarchy builders ─────────────────────────────────────────────
+    const bigBosses    = team.filter(u => u.role === 'BIG_BOSS');
+    const areaManagers = team.filter(u => u.role === 'MANAGER');
+    const deptManagers = team.filter(u => u.role === 'SUPERVISOR');
+    const employees    = team.filter(u => u.role === 'EMPLOYEE');
+
+    // Render Employees under a given parent id
+    const renderEmployees = (parentId) => {
+        const emps = employees.filter(e => e.parent_manager_id === parentId);
+        if (emps.length === 0) return null;
+        return (
+            <div className="space-y-1 mt-1">
+                {emps.map(emp => renderMemberRow(emp, 3))}
+            </div>
+        );
+    };
+
+    // Render DeptManagers under a given AreaManager id, with their employees nested
+    const renderDeptManagers = (areaManagerId) => {
+        const depts = deptManagers.filter(d => d.parent_manager_id === areaManagerId);
+        // Also show employees directly under this area manager
+        const directEmps = employees.filter(e => e.parent_manager_id === areaManagerId);
+        if (depts.length === 0 && directEmps.length === 0) {
+            return <p className="text-sm text-gray-400 text-center py-2 ml-8">{t?.no_dept_managers || 'No Dept Managers assigned'}</p>;
+        }
+        return (
+            <div className="space-y-1 mt-1">
+                {depts.map(dept => (
+                    <div key={dept.id}>
+                        {renderMemberRow(dept, 2)}
+                        {expandedNodes.has(dept.id) && (
+                            <div className="animate-fade-in">
+                                {renderEmployees(dept.id) || (
+                                    <p className="text-sm text-gray-400 text-center py-2 ml-12">{t?.no_employees_assigned || 'No employees assigned'}</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ))}
+                {directEmps.map(emp => renderMemberRow(emp, 2))}
+            </div>
+        );
+    };
+
+    // ─── View for BIG_BOSS or MANAGER (AreaManager) viewers ───────────────────
+    const renderFullHierarchy = () => {
+        const isBigBoss = user.role === 'BIG_BOSS';
+
+        if (isBigBoss) {
+            return (
+                <>
+                    {bigBosses.map(boss => renderMemberRow(boss, 0))}
+                    {areaManagers.length === 0 && (
+                        <p className="text-sm text-gray-400 text-center py-4">{t?.no_area_managers || 'No Area Managers assigned'}</p>
+                    )}
+                    {areaManagers.map(am => (
+                        <div key={am.id} className="space-y-1">
+                            {renderMemberRow(am, 1)}
+                            {expandedNodes.has(am.id) && (
+                                <div className="animate-fade-in">
+                                    {renderDeptManagers(am.id)}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </>
+            );
+        }
+
+        // MANAGER (AreaManager) viewer: sees self + their deptManagers + employees
+        const myDepts = deptManagers.filter(d => d.area_id === user.id || d.parent_manager_id === user.id);
+        const myDirectEmps = employees.filter(e => e.parent_manager_id === user.id);
+
+        return (
+            <>
+                {myDepts.map(dept => (
+                    <div key={dept.id}>
+                        {renderMemberRow(dept, 0)}
+                        {expandedNodes.has(dept.id) && (
+                            <div className="animate-fade-in">
+                                {renderEmployees(dept.id) || (
+                                    <p className="text-sm text-gray-400 text-center py-2 ml-8">{t?.no_employees_assigned || 'No employees assigned'}</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ))}
+                {myDirectEmps.map(emp => renderMemberRow(emp, 0))}
+                {myDepts.length === 0 && myDirectEmps.length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-4">{t?.no_employees_assigned || 'No employees assigned'}</p>
+                )}
+            </>
+        );
+    };
+
+    // ─── View for SUPERVISOR (DeptManager) viewer ──────────────────────────────
+    const renderDeptManagerView = () => {
+        const myEmps = employees.filter(e => e.parent_manager_id === user.id || (e.area_id && e.area_id === user.area_id && e.role === 'EMPLOYEE'));
+        // Deduplicate
+        const seen = new Set();
+        const uniqueEmps = myEmps.filter(e => { if (seen.has(e.id)) return false; seen.add(e.id); return true; });
+        return (
+            <>
+                {uniqueEmps.length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-4">{t?.no_employees_assigned || 'No employees assigned'}</p>
+                )}
+                {uniqueEmps.map(emp => renderMemberRow(emp, 0))}
+            </>
+        );
+    };
 
     return (
         <div className="px-3 sm:px-4 pt-3 pb-24 min-h-screen bg-slate-50">
-            {/* Branded delete confirm */}
             {deleteConfirmId !== null && (
                 <ConfirmDeleteModal
                     message={t.confirm_delete_user || "Are you sure you want to delete this user?"}
@@ -261,15 +359,26 @@ const TeamTab = ({ token, t, user, lang }) => {
 
             <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4">{t.my_team_title || t.nav_team || 'Team'}</h1>
 
-            {/* Header */}
             <div className="flex justify-end items-center mb-5">
-                <button className="bg-[#714B67] text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#5a3b52] transition flex items-center gap-1.5" onClick={() => setShowAddModal(true)}>
+                <button
+                    className="bg-[#714B67] text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#5a3b52] transition flex items-center gap-1.5"
+                    onClick={() => setShowAddModal(true)}
+                >
                     <Plus size={18}/> {t.add_team_member || "Add User"}
                 </button>
             </div>
 
-            {/* Team List */}
-            <div className="space-y-4 max-w-3xl mx-auto">
+            {/* Hierarchy Legend (Admin/AreaManager viewers only) */}
+            {(user.role === 'BIG_BOSS' || user.role === 'MANAGER') && (
+                <div className="flex gap-3 mb-4 flex-wrap text-xs text-gray-500">
+                    {user.role === 'BIG_BOSS' && <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-400 inline-block"/> Admin</span>}
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-indigo-400 inline-block"/> {t.role_area_manager || 'Area Manager'}</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-400 inline-block"/> {t.role_dept_manager || 'Dept Manager'}</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-400 inline-block"/> {t.role_employee || 'Employee'}</span>
+                </div>
+            )}
+
+            <div className="space-y-2 max-w-3xl mx-auto">
                 {isLoadingTeam ? (
                     <>
                         <SkeletonRow />
@@ -278,62 +387,9 @@ const TeamTab = ({ token, t, user, lang }) => {
                         <SkeletonRow indent />
                     </>
                 ) : (
-                    <>
-                        {bigBosses.map(boss => (
-                            <div key={boss.id} className="space-y-2">
-                                {renderMemberRow(boss)}
-                                <div className="ml-3 sm:ml-6 pl-4 border-l-2 border-[#714B67]/20 space-y-2">
-                                    {regularManagers.map(manager => {
-                                        const subEmployees = team.filter(u => u.parent_manager_id === manager.id);
-                                        return (
-                                            <div key={manager.id} className="space-y-2">
-                                                {renderMemberRow(manager, true)}
-                                                {expandedManagers.has(manager.id) && (
-                                                    <div className="ml-3 sm:ml-8 pl-4 border-l-2 border-[#714B67]/10 space-y-2 animate-fade-in">
-                                                        {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">{t.no_employees_assigned || "No employees assigned"}</p>}
-                                                        {subEmployees.map(sub => renderMemberRow(sub, true))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                    {regularManagers.length === 0 && (
-                                        <p className="text-sm text-gray-400 text-center py-2">{t.no_managers_assigned || "No supervisors or managers assigned"}</p>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-
-                        {bigBosses.length === 0 && regularManagers.map(manager => {
-                            const subEmployees = team.filter(u => u.parent_manager_id === manager.id);
-                            return (
-                                <div key={manager.id} className="space-y-2">
-                                    {renderMemberRow(manager)}
-                                    {expandedManagers.has(manager.id) && (
-                                        <div className="ml-3 sm:ml-8 pl-4 border-l-2 border-[#714B67]/10 space-y-2 animate-fade-in">
-                                            {subEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">{t.no_employees_assigned || "No employees assigned"}</p>}
-                                            {subEmployees.map(sub => renderMemberRow(sub, true))}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-
-                        {isSupervisorViewer && (
-                            <div className="space-y-2">
-                                <h3 className="text-sm font-bold text-gray-500 mb-2">{t.shared_employee_pool || "Shared Employee Pool"}</h3>
-                                {directEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">{t.no_employees_assigned || "No employees found"}</p>}
-                                {directEmployees.map(emp => renderMemberRow(emp))}
-                            </div>
-                        )}
-
-                        {!isSupervisorViewer && bigBosses.length === 0 && regularManagers.length === 0 && directEmployees.length > 0 && (
-                            <>
-                                <h3 className="text-sm font-bold text-gray-500 mt-6 mb-2">{t.direct_employees || "Direct Employees"}</h3>
-                                {directEmployees.map(emp => renderMemberRow(emp))}
-                            </>
-                        )}
-                    </>
+                    user.role === 'SUPERVISOR'
+                        ? renderDeptManagerView()
+                        : renderFullHierarchy()
                 )}
             </div>
 
@@ -398,8 +454,8 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         onChange={e => setEditForm({...editForm, role: e.target.value})}
                                     >
                                         <option value="EMPLOYEE">{t.role_employee || 'Employee'}</option>
-                                        <option value="SUPERVISOR">{t.role_supervisor || 'Supervisor'}</option>
-                                        <option value="MANAGER">{t.role_manager || 'Manager'}</option>
+                                        <option value="SUPERVISOR">{t.role_dept_manager || 'Dept Manager'}</option>
+                                        <option value="MANAGER">{t.role_area_manager || 'Area Manager'}</option>
                                     </select>
                                 </div>
                             )}
@@ -475,12 +531,17 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         onChange={e => setAddForm({ ...addForm, role: e.target.value, parent_manager_id: '' })}
                                     >
                                         <option value="EMPLOYEE">{t.role_employee || "Employee"}</option>
-                                        <option value="SUPERVISOR">{t.role_supervisor || "Supervisor"}</option>
-                                        <option value="MANAGER">{t.role_manager || "Manager"}</option>
+                                        <option value="SUPERVISOR">{t.role_dept_manager || "Dept Manager"}</option>
+                                        <option value="MANAGER">{t.role_area_manager || "Area Manager"}</option>
                                     </select>
 
-                                    {addForm.role === 'EMPLOYEE' && (
+                                    {(addForm.role === 'EMPLOYEE' || addForm.role === 'SUPERVISOR') && (
                                         <div className="relative">
+                                            <p className="text-xs text-gray-500 mb-1">
+                                                {addForm.role === 'SUPERVISOR'
+                                                    ? (t.role_area_manager || 'Area Manager') + ' (parent)'
+                                                    : t.select_manager || "Select Manager..."}
+                                            </p>
                                             <button
                                                 type="button"
                                                 onClick={() => setManagerDropdownOpen(o => !o)}
@@ -503,7 +564,9 @@ const TeamTab = ({ token, t, user, lang }) => {
                                             </button>
                                             {managerDropdownOpen && (
                                                 <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                    {activeManagers.map(m => (
+                                                    {activeManagers
+                                                        .filter(m => addForm.role === 'SUPERVISOR' ? m.role === 'MANAGER' : true)
+                                                        .map(m => (
                                                         <div
                                                             key={m.id}
                                                             onClick={() => { setAddForm({...addForm, parent_manager_id: m.id}); setManagerDropdownOpen(false); }}
@@ -514,7 +577,12 @@ const TeamTab = ({ token, t, user, lang }) => {
                                                                     ? <img src={m.profile_picture_url} alt={m.full_name} className="w-full h-full object-cover"/>
                                                                     : <span className="text-xs font-bold text-[#714B67]">{(m.full_name||'?').charAt(0).toUpperCase()}</span>}
                                                             </span>
-                                                            <span className="text-sm text-gray-700">{m.full_name} <span className="text-xs text-gray-400">({m.role})</span></span>
+                                                            <span className="text-sm text-gray-700">
+                                                                {m.full_name}
+                                                                <span className="text-xs text-gray-400 ml-1">
+                                                                    ({m.role === 'MANAGER' ? (t.role_area_manager || 'Area Mgr') : m.role === 'SUPERVISOR' ? (t.role_dept_manager || 'Dept Mgr') : m.role})
+                                                                </span>
+                                                            </span>
                                                         </div>
                                                     ))}
                                                 </div>
