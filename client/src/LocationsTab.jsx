@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Trash2, Pencil, MapPin, Plus, X, Save, Navigation } from 'lucide-react';
 
-const API = 'https://maintenance-app-h84v.onrender.com';
+const API = 'https://maintenance-app-staging.onrender.com';
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const emptyForm = () => ({ name_he: '', name_en: '', name_th: '', address: '' });

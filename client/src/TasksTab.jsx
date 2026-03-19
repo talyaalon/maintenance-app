@@ -389,7 +389,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
         formData.append('completion_note', note);
         if (file) formData.append('completion_image', file);
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/complete`, {
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/tasks/${task.id}/complete`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
@@ -399,7 +399,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
     };
 
     const handleApprove = async () => {
-        await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/approve`, {
+        await fetch(`https://maintenance-app-staging.onrender.com/tasks/${task.id}/approve`, {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -413,7 +413,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
             return;
         }
         setModalError('');
-        await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/follow-up`, {
+        await fetch(`https://maintenance-app-staging.onrender.com/tasks/${task.id}/follow-up`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ due_date: followUpDate, description: note || 'Follow up' })
@@ -614,7 +614,7 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
         formData.append('stuck_description', note);
         if (file) formData.append('stuck_file', file);
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/stuck`, {
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/tasks/${task.id}/stuck`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData

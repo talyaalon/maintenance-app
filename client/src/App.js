@@ -123,7 +123,7 @@ function App() {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await fetch('https://maintenance-app-h84v.onrender.com/tasks', {
+      const res = await fetch('https://maintenance-app-staging.onrender.com/tasks', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.status === 401) { setUser(null); return; }
@@ -265,7 +265,7 @@ function App() {
                       if (user) {
                           try {
                               const tok = localStorage.getItem('token');
-                              await fetch(`https://maintenance-app-h84v.onrender.com/users/${user.id}`, {
+                              await fetch(`https://maintenance-app-staging.onrender.com/users/${user.id}`, {
                                   method: 'PUT',
                                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
                                   body: JSON.stringify({

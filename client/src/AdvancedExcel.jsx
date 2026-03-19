@@ -52,10 +52,10 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
             const headers = { 'Authorization': `Bearer ${token}` };
             try {
                 const [uRes, lRes, cRes, aRes] = await Promise.all([
-                    fetch('https://maintenance-app-h84v.onrender.com/users', { headers }),
-                    fetch('https://maintenance-app-h84v.onrender.com/locations', { headers }),
-                    fetch('https://maintenance-app-h84v.onrender.com/categories', { headers }),
-                    fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
+                    fetch('https://maintenance-app-staging.onrender.com/users', { headers }),
+                    fetch('https://maintenance-app-staging.onrender.com/locations', { headers }),
+                    fetch('https://maintenance-app-staging.onrender.com/categories', { headers }),
+                    fetch('https://maintenance-app-staging.onrender.com/assets', { headers })
                 ]);
                 
                 if (uRes.ok) {
@@ -369,7 +369,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
         }
 
         try {
-            const res = await fetch('https://maintenance-app-h84v.onrender.com/tasks/bulk-excel', {
+            const res = await fetch('https://maintenance-app-staging.onrender.com/tasks/bulk-excel', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ tasks: mappedTasks })
@@ -395,7 +395,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
     const handleDeleteAll = async () => {
         if(!window.confirm("⚠️ Delete ALL tasks?")) return;
         try {
-            await fetch('https://maintenance-app-h84v.onrender.com/tasks/delete-all', {
+            await fetch('https://maintenance-app-staging.onrender.com/tasks/delete-all', {
                 method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
             });
             alert("Deleted."); onRefresh(); onClose();
@@ -419,7 +419,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
             if (endDate) params.append('end_date', endDate);
             if (filterStatus) params.append('status', filterStatus);
 
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/export/advanced?${params.toString()}`, { headers: { 'Authorization': `Bearer ${token}` }});
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/tasks/export/advanced?${params.toString()}`, { headers: { 'Authorization': `Bearer ${token}` }});
             if (!res.ok) throw new Error("Export failed");
             const rawData = await res.json();
             if (rawData.length === 0) { alert("No tasks found matching filters."); setIsExporting(false); return; }

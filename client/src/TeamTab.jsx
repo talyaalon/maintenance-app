@@ -85,7 +85,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const fetchTeam = async () => {
         setIsLoadingTeam(true);
         try {
-            const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
+            const res = await fetch('https://maintenance-app-staging.onrender.com/users', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const raw = res.ok ? await res.json().catch(() => []) : [];
@@ -114,7 +114,7 @@ const TeamTab = ({ token, t, user, lang }) => {
         setSelectedMember(member);
         setIsLoadingTasks(true);
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/user/${member.id}`, {
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/tasks/user/${member.id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) setMemberTasks(await res.json());
@@ -126,7 +126,7 @@ const TeamTab = ({ token, t, user, lang }) => {
         const userId = deleteConfirmId;
         setDeleteConfirmId(null);
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${userId}`, {
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/users/${userId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -166,7 +166,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const handleEditSubmit = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${editMember.id}`, {
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/users/${editMember.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(editForm)
@@ -175,7 +175,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             if (res.ok) {
                 // For DeptManagers, persist the employee assignment in the same save
                 if (editMember.role === 'SUPERVISOR') {
-                    await fetch(`https://maintenance-app-h84v.onrender.com/users/${editMember.id}/assign-employees`, {
+                    await fetch(`https://maintenance-app-staging.onrender.com/users/${editMember.id}/assign-employees`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ employeeIds: Array.from(assignedEmployeeIds) })
@@ -199,7 +199,7 @@ const TeamTab = ({ token, t, user, lang }) => {
         if (payload.role === 'MANAGER' || payload.role === 'SUPERVISOR') payload.parent_manager_id = null;
 
         try {
-            const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
+            const res = await fetch('https://maintenance-app-staging.onrender.com/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(payload)
@@ -208,7 +208,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             if (res.ok) {
                 // If creating a DeptManager with employees selected, assign them now
                 if (payload.role === 'SUPERVISOR' && addAssignedEmployeeIds.size > 0) {
-                    await fetch(`https://maintenance-app-h84v.onrender.com/users/${data.id}/assign-employees`, {
+                    await fetch(`https://maintenance-app-staging.onrender.com/users/${data.id}/assign-employees`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ employeeIds: Array.from(addAssignedEmployeeIds) })

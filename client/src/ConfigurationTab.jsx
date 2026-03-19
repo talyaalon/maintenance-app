@@ -50,10 +50,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
     try {
       const headers = { 'Authorization': `Bearer ${token}` };
       const [catRes, assetRes, locRes, fieldsRes] = await Promise.all([
-        fetch('https://maintenance-app-h84v.onrender.com/categories', { headers }),
-        fetch('https://maintenance-app-h84v.onrender.com/assets', { headers }),
-        fetch('https://maintenance-app-h84v.onrender.com/locations', { headers }),
-        fetch('https://maintenance-app-h84v.onrender.com/location-fields', { headers }),
+        fetch('https://maintenance-app-staging.onrender.com/categories', { headers }),
+        fetch('https://maintenance-app-staging.onrender.com/assets', { headers }),
+        fetch('https://maintenance-app-staging.onrender.com/locations', { headers }),
+        fetch('https://maintenance-app-staging.onrender.com/location-fields', { headers }),
       ]);
       if (catRes.ok)    { const d = await catRes.json();    setCategories(Array.isArray(d) ? d : []); }
       if (assetRes.ok)  { const d = await assetRes.json();  setAssets(Array.isArray(d) ? d : []); }
@@ -64,7 +64,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
   const fetchManagers = async () => {
       try {
-          const res = await fetch('https://maintenance-app-h84v.onrender.com/managers', { headers: { 'Authorization': `Bearer ${token}` } });
+          const res = await fetch('https://maintenance-app-staging.onrender.com/managers', { headers: { 'Authorization': `Bearer ${token}` } });
           if (res.ok) { const d = await res.json(); setManagers(Array.isArray(d) ? d : []); }
       } catch (e) { console.error(e); }
   };
@@ -136,7 +136,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       setManagers(prev => prev.map(m => m.id === manager.id ? { ...m, [field]: newValue } : m));
 
       try {
-          const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${manager.id}`, {
+          const res = await fetch(`https://maintenance-app-staging.onrender.com/users/${manager.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify({
@@ -170,7 +170,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   const handleSendReport = async (managerId) => {
       setSendingReportId(managerId);
       try {
-          await fetch('https://maintenance-app-h84v.onrender.com/api/trigger-daily-reports', {
+          await fetch('https://maintenance-app-staging.onrender.com/api/trigger-daily-reports', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify({ manager_id: managerId }),
@@ -207,7 +207,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   const handleDelete = async (type, id) => {
       if (!window.confirm(t.confirm_delete || "האם למחוק פריט זה?")) return;
       try {
-          const res = await fetch(`https://maintenance-app-h84v.onrender.com/${type}/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+          const res = await fetch(`https://maintenance-app-staging.onrender.com/${type}/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
           if (res.ok) fetchData();
           else alert("לא ניתן למחוק. ייתכן והפריט בשימוש במערכת.");
       } catch (e) { alert("Server Error"); }
@@ -253,11 +253,11 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
       if (treeNodeType === 'category') {
           method = categoryForm.id ? 'PUT' : 'POST';
-          url = categoryForm.id ? `https://maintenance-app-h84v.onrender.com/categories/${categoryForm.id}` : 'https://maintenance-app-h84v.onrender.com/categories';
+          url = categoryForm.id ? `https://maintenance-app-staging.onrender.com/categories/${categoryForm.id}` : 'https://maintenance-app-staging.onrender.com/categories';
           payload = { name_he: categoryForm.name_he, name_en: categoryForm.name_en, name_th: categoryForm.name_th, code: categoryForm.code.toUpperCase().slice(0, 3), created_by: categoryForm.created_by };
       } else {
           method = assetForm.id ? 'PUT' : 'POST';
-          url = assetForm.id ? `https://maintenance-app-h84v.onrender.com/assets/${assetForm.id}` : 'https://maintenance-app-h84v.onrender.com/assets';
+          url = assetForm.id ? `https://maintenance-app-staging.onrender.com/assets/${assetForm.id}` : 'https://maintenance-app-staging.onrender.com/assets';
           const finalCode = assetForm.id ? assetForm.code : generateAssetCode(assetForm.category_id);
           payload = { name_he: assetForm.name_he, name_en: assetForm.name_en, name_th: assetForm.name_th, category_id: assetForm.category_id, location_id: assetForm.location_id, code: finalCode, created_by: assetForm.created_by };
       }
@@ -288,7 +288,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       });
 
       try {
-          const res = await fetch('https://maintenance-app-h84v.onrender.com/location-fields', {
+          const res = await fetch('https://maintenance-app-staging.onrender.com/location-fields', {
               method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify({ name: nameObjectStr, type: newField.type, created_by: targetManagerId })
           });
@@ -307,7 +307,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   const handleSaveLocation = async (e) => {
       e.preventDefault();
       const method = locationForm.id ? 'PUT' : 'POST';
-      const url = locationForm.id ? `https://maintenance-app-h84v.onrender.com/locations/${locationForm.id}` : 'https://maintenance-app-h84v.onrender.com/locations';
+      const url = locationForm.id ? `https://maintenance-app-staging.onrender.com/locations/${locationForm.id}` : 'https://maintenance-app-staging.onrender.com/locations';
       
       const formData = new FormData();
       formData.append('name_he', locationForm.name_he || '');
@@ -350,7 +350,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           try { parsedFields = typeof loc.dynamic_fields === 'string' ? JSON.parse(loc.dynamic_fields) : (loc.dynamic_fields || []); } catch(e){}
           try { parsedMap = (typeof loc.coordinates === 'string' ? JSON.parse(loc.coordinates) : loc.coordinates)?.link || ''; } catch(e){}
 
-          const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') ? `https://maintenance-app-h84v.onrender.com${loc.image_url}` : loc.image_url;
+          const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') ? `https://maintenance-app-staging.onrender.com${loc.image_url}` : loc.image_url;
 
           setLocationForm({ id: loc.id, name_he: loc.name_he || '', name_en: loc.name_en || loc.name || '', name_th: loc.name_th || '', address: parsedMap, existing_image: loc.image_url || '', created_by: targetManagerId });
           setLocationImagePreview(fullImgUrl);
@@ -476,7 +476,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               let fieldsCount = 0;
                               try { fieldsCount = (typeof loc.dynamic_fields === 'string' ? JSON.parse(loc.dynamic_fields) : (loc.dynamic_fields || [])).length; } catch(e){}
                               
-                              const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') ? `https://maintenance-app-h84v.onrender.com${loc.image_url}` : loc.image_url;
+                              const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') ? `https://maintenance-app-staging.onrender.com${loc.image_url}` : loc.image_url;
 
                               return (
                                   <div key={loc.id} className="bg-white p-3 rounded-xl border border-gray-200 group">
@@ -796,7 +796,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                                   {dynamicFiles[key] ? (
                                                       <span className="text-xs text-blue-600 font-medium">נבחר קובץ: {dynamicFiles[key].name}</span>
                                                   ) : (dynamicValues[key] || dynamicValues[field.name]) && (dynamicValues[key] || dynamicValues[field.name]).includes('/uploads/') ? (
-                                                      <a href={`https://maintenance-app-h84v.onrender.com${dynamicValues[key] || dynamicValues[field.name]}`} target="_blank" rel="noreferrer" className="text-xs text-green-600 font-medium hover:underline flex items-center gap-1">✓ צפה בקובץ הקיים</a>
+                                                      <a href={`https://maintenance-app-staging.onrender.com${dynamicValues[key] || dynamicValues[field.name]}`} target="_blank" rel="noreferrer" className="text-xs text-green-600 font-medium hover:underline flex items-center gap-1">✓ צפה בקובץ הקיים</a>
                                                   ) : (
                                                       <span className="text-xs text-gray-400">לא נבחר קובץ</span>
                                                   )}

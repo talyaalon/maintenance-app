@@ -61,18 +61,18 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     const headers = { 'Authorization': `Bearer ${token}` };
 
     // Backend handles area-based filtering for all non-BIG_BOSS roles automatically
-    fetch('https://maintenance-app-h84v.onrender.com/locations', { headers })
+    fetch('https://maintenance-app-staging.onrender.com/locations', { headers })
         .then(res => res.json()).then(d => setLocations(Array.isArray(d) ? d : [])).catch(err => console.error("Error locations", err));
-    fetch('https://maintenance-app-h84v.onrender.com/categories', { headers })
+    fetch('https://maintenance-app-staging.onrender.com/categories', { headers })
         .then(res => res.json()).then(d => setCategories(Array.isArray(d) ? d : [])).catch(err => console.error("Error categories", err));
-    fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
+    fetch('https://maintenance-app-staging.onrender.com/assets', { headers })
         .then(res => res.json()).then(d => setAssets(Array.isArray(d) ? d : [])).catch(err => console.error("Error assets", err));
 
     if (isManager) {
         if (subordinates && subordinates.length > 0) {
             setTeamMembers(subordinates);
         } else {
-            fetch('https://maintenance-app-h84v.onrender.com/users', { headers })
+            fetch('https://maintenance-app-staging.onrender.com/users', { headers })
                 .then(res => res.json())
                 .then(d => setTeamMembers(Array.isArray(d) ? d : []))
                 .catch(err => console.error("Error users", err));
@@ -238,7 +238,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     }
 
     try {
-      const res = await fetch('https://maintenance-app-h84v.onrender.com/tasks', {
+      const res = await fetch('https://maintenance-app-staging.onrender.com/tasks', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: data

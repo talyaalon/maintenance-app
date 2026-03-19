@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Globe, Eye, EyeOff, Loader2, X, KeyRound, ArrowLeft } from 'lucide-react';
 
-const API = 'https://maintenance-app-h84v.onrender.com';
+const API = 'https://maintenance-app-staging.onrender.com';
 
 // ── Forgot/Reset Password Modal ──────────────────────────────────────────────
 const ForgotPasswordModal = ({ t, lang, onClose }) => {

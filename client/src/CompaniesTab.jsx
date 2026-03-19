@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Building2, Plus, ChevronRight, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2 } from 'lucide-react';
+import { Building2, Plus, ChevronRight, Users, MapPin, Tag, Box, Shield, Lock, X, Pencil, Trash2, ArrowLeft, Loader2 } from 'lucide-react';
 
-const BASE = 'https://maintenance-app-h84v.onrender.com';
+const BASE = 'https://maintenance-app-staging.onrender.com';
 
 // ─── Confirm delete modal ─────────────────────────────────────────────────────
 const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
@@ -112,9 +112,10 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
             </div>
 
             {/* Stats row */}
-            <div className="grid grid-cols-4 gap-2 mb-5">
+            <div className="grid grid-cols-5 gap-2 mb-5">
                 {[
-                    { label: t?.nav_team || 'Team', count: (users ?? []).length, icon: Users },
+                    { label: t?.managers_label || 'Managers', count: (managers ?? []).length, icon: Shield },
+                    { label: t?.employees_label || 'Employees', count: (employees ?? []).length, icon: Users },
                     { label: t?.locations_title || 'Locations', count: (locations ?? []).length, icon: MapPin },
                     { label: t?.categories_title || 'Categories', count: (categories ?? []).length, icon: Tag },
                     { label: t?.assets_title || 'Assets', count: (assets ?? []).length, icon: Box },
@@ -167,6 +168,49 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                         </div>
                     )}
                 />
+
+                {/* ── Permissions (manager language access) ── */}
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-slate-50">
+                        <Lock size={16} className="text-[#714B67]" />
+                        <h3 className="text-sm font-bold text-slate-700">{t?.permissions_label || 'Permissions'}</h3>
+                        <span className="ml-auto text-xs font-semibold text-[#714B67] bg-[#714B67]/10 px-2 py-0.5 rounded-full">
+                            {(managers ?? []).length}
+                        </span>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                        {(managers ?? []).length === 0 ? (
+                            <p className="px-4 py-3 text-xs text-gray-400 italic">{t?.no_managers || 'No managers assigned'}</p>
+                        ) : (managers ?? []).map((mgr, idx) => (
+                            <div key={mgr?.id ?? idx} className="px-4 py-2.5">
+                                <p className="text-sm font-semibold text-slate-700 mb-1">{userName(mgr)}</p>
+                                <div className="flex gap-2 flex-wrap">
+                                    {[
+                                        { key: 'allowed_lang_he', label: '🇮🇱 HE' },
+                                        { key: 'allowed_lang_en', label: '🇺🇸 EN' },
+                                        { key: 'allowed_lang_th', label: '🇹🇭 TH' },
+                                    ].map(({ key, label }) => (
+                                        <span
+                                            key={key}
+                                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                                mgr?.[key] !== false
+                                                    ? 'bg-green-50 text-green-700 border-green-200'
+                                                    : 'bg-gray-100 text-gray-400 border-gray-200 line-through'
+                                            }`}
+                                        >
+                                            {label}
+                                        </span>
+                                    ))}
+                                    {mgr?.auto_approve_tasks && (
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
+                                            {t?.auto_approve_label || 'Auto-Approve'}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
 
                 <SectionCard
                     icon={MapPin}
