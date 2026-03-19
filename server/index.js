@@ -641,24 +641,32 @@ app.get('/users', authenticateToken, async (req, res) => {
     try {
         let query = `
             SELECT u.id, u.full_name, u.full_name_he, u.full_name_en, u.full_name_th,
-                   u.email, u.phone, u.role, u.parent_manager_id, u.area_id,
+                   u.email, u.phone, u.role, u.parent_manager_id,
+                   COALESCE(u.area_id, NULL) AS area_id,
                    u.profile_picture_url, u.preferred_language,
-                   u.can_manage_fields, u.auto_approve_tasks,
-                   u.allowed_lang_he, u.allowed_lang_en, u.allowed_lang_th,
+                   COALESCE(u.can_manage_fields, TRUE)  AS can_manage_fields,
+                   COALESCE(u.auto_approve_tasks, FALSE) AS auto_approve_tasks,
+                   COALESCE(u.allowed_lang_he, TRUE)    AS allowed_lang_he,
+                   COALESCE(u.allowed_lang_en, TRUE)    AS allowed_lang_en,
+                   COALESCE(u.allowed_lang_th, TRUE)    AS allowed_lang_th,
                    u.line_user_id,
                    m.full_name AS manager_name,
-                   m.auto_approve_tasks AS manager_auto_approve_tasks
+                   COALESCE(m.auto_approve_tasks, FALSE) AS manager_auto_approve_tasks
             FROM users u
             LEFT JOIN users m ON u.parent_manager_id = m.id
         `;
         let params = [];
-        if (req.user.role === 'MANAGER') {
+
+        // BIG_BOSS: absolute bypass — no area filter, sees ALL users
+        if (req.user.role === 'BIG_BOSS') {
+            // no WHERE clause — intentional full access
+        } else if (req.user.role === 'MANAGER') {
             // AreaManager sees all users sharing their area (area_id = their own id)
             query += ` WHERE u.area_id = $1`;
             params.push(req.user.id);
         } else if (req.user.role === 'SUPERVISOR') {
             // DeptManager sees self + employees in the same area
-            const areaId = req.user.area_id || null;
+            const areaId = req.user.area_id ?? null;
             if (areaId) {
                 query += ` WHERE u.id = $1 OR (u.area_id = $2 AND u.role = 'EMPLOYEE')`;
                 params.push(req.user.id, areaId);
@@ -667,13 +675,18 @@ app.get('/users', authenticateToken, async (req, res) => {
                 params.push(req.user.id);
             }
         } else if (req.user.role === 'EMPLOYEE') {
-             query += ` WHERE u.id = $1`;
-             params.push(req.user.id);
+            query += ` WHERE u.id = $1`;
+            params.push(req.user.id);
         }
+
         query += ` ORDER BY u.role, u.full_name`;
         const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (err) { console.error("❌ GET /users error:", err.message); res.status(500).json({ error: err.message }); }
+        res.json(result.rows ?? []);
+    } catch (err) {
+        console.error("❌ GET /users error:", err.message);
+        // Return safe empty state so the UI never shows a blank screen from a backend crash
+        res.json([]);
+    }
 });
 
 app.post('/users', authenticateToken, async (req, res) => {
@@ -911,9 +924,39 @@ app.delete('/users/:id', authenticateToken, async (req, res) => {
 
 app.get('/managers', authenticateToken, async (req, res) => {
   try {
-    const managers = await pool.query("SELECT id, full_name, email, phone, role, area_id, profile_picture_url, can_manage_fields, auto_approve_tasks, stuck_skip_approval, allowed_lang_he, allowed_lang_en, allowed_lang_th FROM users WHERE role IN ('MANAGER','SUPERVISOR','BIG_BOSS') ORDER BY role, full_name");
-    res.json(managers.rows);
-  } catch (err) { console.error('GET /managers error:', err.message); res.status(500).json({ error: 'Server Error' }); }
+    let query = `
+      SELECT id, full_name, full_name_he, full_name_en, full_name_th,
+             email, phone, role,
+             COALESCE(area_id, NULL)             AS area_id,
+             profile_picture_url,
+             COALESCE(can_manage_fields, TRUE)   AS can_manage_fields,
+             COALESCE(auto_approve_tasks, FALSE) AS auto_approve_tasks,
+             COALESCE(stuck_skip_approval, FALSE) AS stuck_skip_approval,
+             COALESCE(allowed_lang_he, TRUE)     AS allowed_lang_he,
+             COALESCE(allowed_lang_en, TRUE)     AS allowed_lang_en,
+             COALESCE(allowed_lang_th, TRUE)     AS allowed_lang_th
+      FROM users
+      WHERE role IN ('MANAGER','SUPERVISOR','BIG_BOSS')
+    `;
+    const params = [];
+
+    // BIG_BOSS: absolute bypass — sees ALL managers across all areas
+    if (req.user.role !== 'BIG_BOSS') {
+      const areaId = req.user.role === 'MANAGER' ? req.user.id : (req.user.area_id ?? null);
+      if (areaId) {
+        query += ` AND (area_id = $1 OR area_id IS NULL OR role = 'BIG_BOSS')`;
+        params.push(areaId);
+      }
+    }
+
+    query += ` ORDER BY role, full_name`;
+    const result = await pool.query(query, params);
+    res.json(result.rows ?? []);
+  } catch (err) {
+    console.error('GET /managers error:', err.message);
+    // Return safe empty state instead of crashing the UI
+    res.json([]);
+  }
 });
 
 // ==========================================
@@ -923,7 +966,7 @@ app.get('/location-fields', authenticateToken, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM location_fields ORDER BY id ASC');
         res.json(result.rows);
-    } catch (err) { console.error('GET /location-fields error:', err.message); res.status(500).json({ error: err.message }); }
+    } catch (err) { console.error('GET /location-fields error:', err.message); res.json([]); }
 });
 
 app.post('/location-fields', authenticateToken, requireAdmin, async (req, res) => {
@@ -976,7 +1019,7 @@ app.get('/locations', authenticateToken, async (req, res) => {
         query += ` ORDER BY locations.name ASC`;
         const r = await pool.query(query, params);
         res.json(r.rows);
-    } catch (err) { console.error('GET /locations error:', err.message); res.status(500).json({ error: err.message }); }
+    } catch (err) { console.error('GET /locations error:', err.message); res.json([]); }
 });
 
 // ==========================================
@@ -1092,7 +1135,7 @@ app.get('/categories', authenticateToken, async (req, res) => {
 
         const result = await pool.query(query, params);
         res.json(result.rows);
-    } catch (err) { console.error('GET /categories error:', err.message); res.status(500).json({ error: err.message }); }
+    } catch (err) { console.error('GET /categories error:', err.message); res.json([]); }
 });
 
 app.post('/categories', authenticateToken, requireAdmin, async (req, res) => {
@@ -1165,7 +1208,7 @@ app.get('/assets', authenticateToken, async (req, res) => {
 
         const result = await pool.query(query, params);
         res.json(result.rows);
-    } catch (err) { console.error('GET /assets error:', err.message); res.status(500).json({ error: err.message }); }
+    } catch (err) { console.error('GET /assets error:', err.message); res.json([]); }
 });
 
 app.post('/assets', authenticateToken, requireAdmin, async (req, res) => {
@@ -2444,6 +2487,37 @@ app.listen(port, async () => {
         await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_stuck BOOLEAN DEFAULT FALSE');
         await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_description TEXT');
         await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_file_url TEXT');
+
+        // ── 4-Tier RBAC: area_id grouping — CRITICAL: must exist before GET /users & GET /managers run ──
+        await pool.query('ALTER TABLE users      ADD COLUMN IF NOT EXISTS area_id INTEGER');
+        await pool.query('ALTER TABLE locations  ADD COLUMN IF NOT EXISTS area_id INTEGER');
+        await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS area_id INTEGER');
+        await pool.query('ALTER TABLE assets     ADD COLUMN IF NOT EXISTS area_id INTEGER');
+
+        // Backfill: MANAGER (AreaManager) → area_id = their own id (defines the area)
+        await pool.query("UPDATE users SET area_id = id WHERE role = 'MANAGER' AND area_id IS NULL");
+
+        // Backfill: SUPERVISOR (DeptManager) → area_id = parent MANAGER's area_id
+        await pool.query(`
+            UPDATE users SET area_id = (
+                SELECT u2.area_id FROM users u2 WHERE u2.id = users.parent_manager_id
+            )
+            WHERE role = 'SUPERVISOR' AND parent_manager_id IS NOT NULL AND area_id IS NULL
+        `);
+
+        // Backfill: EMPLOYEE → area_id from parent (SUPERVISOR or MANAGER)
+        await pool.query(`
+            UPDATE users SET area_id = (
+                SELECT COALESCE(u2.area_id, CASE WHEN u2.role = 'MANAGER' THEN u2.id ELSE NULL END)
+                FROM users u2 WHERE u2.id = users.parent_manager_id
+            )
+            WHERE role = 'EMPLOYEE' AND parent_manager_id IS NOT NULL AND area_id IS NULL
+        `);
+
+        // Backfill: locations/categories/assets → area_id from their creator's area
+        await pool.query(`UPDATE locations  SET area_id = (SELECT area_id FROM users WHERE users.id = locations.created_by)  WHERE area_id IS NULL AND created_by IS NOT NULL`);
+        await pool.query(`UPDATE categories SET area_id = (SELECT area_id FROM users WHERE users.id = categories.created_by) WHERE area_id IS NULL AND created_by IS NOT NULL`);
+        await pool.query(`UPDATE assets     SET area_id = (SELECT area_id FROM users WHERE users.id = assets.created_by)     WHERE area_id IS NULL AND created_by IS NOT NULL`);
 
         // Seed English name from legacy single-name column (idempotent)
         await pool.query("UPDATE locations  SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");

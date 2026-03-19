@@ -304,7 +304,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                 .filter(e => e?.parent_manager_id === am.id)
                 .forEach(e => renderedIds.add(e.id));
         });
-        const orphans = safeTeam.filter(u => u?.role !== 'BIG_BOSS' && u?.role !== 'MANAGER' && !renderedIds.has(u?.id));
+        const orphans = safeTeam.filter(u => u?.id && u?.role !== 'BIG_BOSS' && u?.role !== 'MANAGER' && !renderedIds.has(u?.id));
         if (orphans.length === 0) return null;
         return (
             <div className="mt-4">
