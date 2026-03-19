@@ -723,9 +723,13 @@ app.get('/users', authenticateToken, async (req, res) => {
         `;
         let params = [];
 
-        // BIG_BOSS: absolute bypass — no area filter, sees ALL users
+        // BIG_BOSS: full access, optional company_id filter for scoped views
         if (req.user.role === 'BIG_BOSS') {
-            // no WHERE clause — intentional full access
+            if (req.query.company_id) {
+                query += ` WHERE u.company_id = $1`;
+                params.push(req.query.company_id);
+            }
+            // else: no WHERE clause — intentional full access
         } else if (req.user.role === 'MANAGER') {
             // AreaManager sees all users sharing their area (area_id = their own id)
             query += ` WHERE u.area_id = $1`;
@@ -1294,7 +1298,11 @@ app.get('/locations', authenticateToken, async (req, res) => {
             query += ` WHERE (locations.area_id = $1 OR locations.area_id IS NULL)`;
             params.push(req.query.area_id);
         } else if (req.user.role === 'BIG_BOSS') {
-            // Admin sees everything — no filter
+            if (req.query.company_id) {
+                query += ` WHERE (locations.company_id = $1 OR (locations.company_id IS NULL AND locations.area_id IN (SELECT id FROM users WHERE company_id = $1 AND role = 'MANAGER')))`;
+                params.push(req.query.company_id);
+            }
+            // else: Admin sees everything — no filter
         } else {
             // MANAGER, SUPERVISOR, EMPLOYEE: restrict to their area
             const areaId = getEffectiveAreaId(req.user);
@@ -1348,19 +1356,23 @@ app.post('/locations', authenticateToken, requireAdmin, (req, res) => {
                 });
             }
 
-            // Determine area_id for the new location
+            // Determine area_id and company_id for the new location
             let locAreaId = null;
+            let locCompanyId = null;
             if (req.user.role === 'MANAGER') {
                 locAreaId = req.user.id;
+                const coRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [req.user.id]);
+                locCompanyId = coRes.rows[0]?.company_id ?? null;
             } else if (req.user.role === 'BIG_BOSS' && ownerId !== req.user.id) {
-                const ownerRes = await pool.query('SELECT area_id, role FROM users WHERE id = $1', [ownerId]);
+                const ownerRes = await pool.query('SELECT area_id, role, company_id FROM users WHERE id = $1', [ownerId]);
                 const owner = ownerRes.rows[0];
                 locAreaId = owner?.area_id || (owner?.role === 'MANAGER' ? ownerId : null);
+                locCompanyId = owner?.company_id ?? null;
             }
 
             const r = await pool.query(
-                `INSERT INTO locations (name, name_he, name_en, name_th, created_by, code, image_url, coordinates, dynamic_fields, area_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-                [primaryName, name_he || null, name_en || null, name_th || null, ownerId, generatedCode, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields), locAreaId]
+                `INSERT INTO locations (name, name_he, name_en, name_th, created_by, code, image_url, coordinates, dynamic_fields, area_id, company_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+                [primaryName, name_he || null, name_en || null, name_th || null, ownerId, generatedCode, mainImageUrl, JSON.stringify({ link: map_link }), JSON.stringify(parsedDynamicFields), locAreaId, locCompanyId]
             );
             res.json(r.rows[0]); 
         } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1411,7 +1423,12 @@ app.get('/categories', authenticateToken, async (req, res) => {
             LEFT JOIN users ON categories.created_by = users.id
         `;
         let params = [];
-        if (req.user.role !== 'BIG_BOSS') {
+        if (req.user.role === 'BIG_BOSS') {
+            if (req.query.company_id) {
+                query += ` WHERE (categories.company_id = $1 OR (categories.company_id IS NULL AND categories.area_id IN (SELECT id FROM users WHERE company_id = $1 AND role = 'MANAGER')))`;
+                params.push(req.query.company_id);
+            }
+        } else {
             const areaId = getEffectiveAreaId(req.user);
             if (areaId) {
                 query += ` WHERE (categories.area_id = $1 OR categories.area_id IS NULL)`;
@@ -1435,17 +1452,21 @@ app.post('/categories', authenticateToken, requireAdmin, async (req, res) => {
         if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: קטגוריה בשם זה כבר קיימת אצלך במערכת!" });
 
         let catAreaId = null;
+        let catCompanyId = null;
         if (req.user.role === 'MANAGER') {
             catAreaId = req.user.id;
+            const coRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [req.user.id]);
+            catCompanyId = coRes.rows[0]?.company_id ?? null;
         } else if (req.user.role === 'BIG_BOSS' && ownerId !== req.user.id) {
-            const ownerRes = await pool.query('SELECT area_id, role FROM users WHERE id = $1', [ownerId]);
+            const ownerRes = await pool.query('SELECT area_id, role, company_id FROM users WHERE id = $1', [ownerId]);
             const owner = ownerRes.rows[0];
             catAreaId = owner?.area_id || (owner?.role === 'MANAGER' ? parseInt(ownerId) : null);
+            catCompanyId = owner?.company_id ?? null;
         }
 
         const result = await pool.query(
-            'INSERT INTO categories (name, name_he, name_en, name_th, code, created_by, area_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [primaryName, name_he || null, name_en || null, name_th || null, code, ownerId, catAreaId]
+            'INSERT INTO categories (name, name_he, name_en, name_th, code, created_by, area_id, company_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+            [primaryName, name_he || null, name_en || null, name_th || null, code, ownerId, catAreaId, catCompanyId]
         );
         res.json(result.rows[0]); 
     } catch (err) { 
@@ -1484,7 +1505,12 @@ app.get('/assets', authenticateToken, async (req, res) => {
             LEFT JOIN users ON assets.created_by = users.id
         `;
         let params = [];
-        if (req.user.role !== 'BIG_BOSS') {
+        if (req.user.role === 'BIG_BOSS') {
+            if (req.query.company_id) {
+                query += ` WHERE (assets.company_id = $1 OR (assets.company_id IS NULL AND assets.area_id IN (SELECT id FROM users WHERE company_id = $1 AND role = 'MANAGER')))`;
+                params.push(req.query.company_id);
+            }
+        } else {
             const areaId = getEffectiveAreaId(req.user);
             if (areaId) {
                 query += ` WHERE (assets.area_id = $1 OR assets.area_id IS NULL)`;
@@ -1532,18 +1558,22 @@ app.post('/assets', authenticateToken, requireAdmin, async (req, res) => {
         }
 
         let assetAreaId = null;
+        let assetCompanyId = null;
         if (req.user.role === 'MANAGER') {
             assetAreaId = req.user.id;
+            const coRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [req.user.id]);
+            assetCompanyId = coRes.rows[0]?.company_id ?? null;
         } else if (req.user.role === 'BIG_BOSS' && ownerId !== req.user.id) {
-            const ownerRes = await pool.query('SELECT area_id, role FROM users WHERE id = $1', [ownerId]);
+            const ownerRes = await pool.query('SELECT area_id, role, company_id FROM users WHERE id = $1', [ownerId]);
             const owner = ownerRes.rows[0];
             assetAreaId = owner?.area_id || (owner?.role === 'MANAGER' ? parseInt(ownerId) : null);
+            assetCompanyId = owner?.company_id ?? null;
         }
 
         const result = await pool.query(
-            `INSERT INTO assets (name, name_he, name_en, name_th, code, category_id, location_id, created_by, area_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-            [primaryName, name_he || null, name_en || null, name_th || null, finalCode, category_id, location_id || null, ownerId, assetAreaId]
+            `INSERT INTO assets (name, name_he, name_en, name_th, code, category_id, location_id, created_by, area_id, company_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+            [primaryName, name_he || null, name_en || null, name_th || null, finalCode, category_id, location_id || null, ownerId, assetAreaId, assetCompanyId]
         );
         res.json(result.rows[0]);
     } catch (err) {
@@ -1626,7 +1656,13 @@ app.get('/tasks', authenticateToken, async (req, res) => {
             }
         }
 
-        const result = await pool.query(query + ` ORDER BY t.due_date ASC`);
+        // BIG_BOSS: optional company_id filter
+        let bbParams = [];
+        if (req.query.company_id) {
+            query += ` WHERE t.worker_id IN (SELECT id FROM users WHERE company_id = $1)`;
+            bbParams.push(req.query.company_id);
+        }
+        const result = await pool.query(query + ` ORDER BY t.due_date ASC`, bbParams);
         res.json(result.rows);
     } catch (err) { console.error(err); res.sendStatus(500); }
 });

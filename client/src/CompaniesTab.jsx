@@ -20,8 +20,8 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
     </div>
 );
 
-// ─── Section card in company detail ──────────────────────────────────────────
-const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel }) => (
+// ─── Section card with optional Add button ────────────────────────────────────
+const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd }) => (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-slate-50">
             <Icon size={16} className="text-[#714B67]" />
@@ -29,6 +29,14 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel }) => (
             <span className="ml-auto text-xs font-semibold text-[#714B67] bg-[#714B67]/10 px-2 py-0.5 rounded-full">
                 {(items ?? []).length}
             </span>
+            {onAdd && (
+                <button
+                    onClick={onAdd}
+                    className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#714B67] text-white text-[10px] font-bold hover:bg-[#5a3b52] transition"
+                >
+                    <Plus size={11} /> Add
+                </button>
+            )}
         </div>
         <div className="divide-y divide-gray-100">
             {(items ?? []).length === 0 ? (
@@ -44,6 +52,347 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel }) => (
     </div>
 );
 
+// ─── User Modal (Add / Edit) ──────────────────────────────────────────────────
+const UserModal = ({ editUser, role, parentManagerId, token, t, onClose, onSaved }) => {
+    const isEdit = !!editUser;
+    const [form, setForm] = useState({
+        full_name_en: editUser?.full_name_en || editUser?.full_name || '',
+        full_name_he: editUser?.full_name_he || '',
+        email: editUser?.email || '',
+        password: '',
+        phone: editUser?.phone || '',
+        preferred_language: editUser?.preferred_language || 'en',
+        line_user_id: editUser?.line_user_id || '',
+    });
+    const [saving, setSaving] = useState(false);
+    const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+    const handleSave = async () => {
+        if (!form.full_name_en?.trim() || !form.email?.trim()) { alert('Name and email are required'); return; }
+        if (!isEdit && !form.password?.trim()) { alert('Password is required for new users'); return; }
+        setSaving(true);
+        try {
+            const payload = {
+                full_name: form.full_name_en,
+                full_name_en: form.full_name_en,
+                full_name_he: form.full_name_he || undefined,
+                email: form.email.toLowerCase(),
+                phone: form.phone || undefined,
+                preferred_language: form.preferred_language,
+                line_user_id: form.line_user_id || undefined,
+                role,
+            };
+            if (!isEdit) { payload.password = form.password; payload.parent_manager_id = parentManagerId; }
+            if (form.password?.trim() && isEdit) payload.password = form.password;
+
+            const method = isEdit ? 'PUT' : 'POST';
+            const url = isEdit ? `${BASE}/users/${editUser.id}` : `${BASE}/users`;
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify(payload),
+            });
+            if (res.ok) { onSaved(); onClose(); }
+            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving user'); }
+        } catch { alert('Server error'); }
+        finally { setSaving(false); }
+    };
+
+    const roleLabel = role === 'SUPERVISOR' ? 'Manager' : 'Employee';
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-bold text-slate-800">{isEdit ? `Edit ${roleLabel}` : `Add ${roleLabel}`}</h3>
+                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+                </div>
+                <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+                    {[
+                        { label: 'Name (EN) *', key: 'full_name_en', type: 'text' },
+                        { label: 'Name (HE)', key: 'full_name_he', type: 'text' },
+                        { label: 'Email *', key: 'email', type: 'email' },
+                        { label: isEdit ? 'Password (blank = keep current)' : 'Password *', key: 'password', type: 'password' },
+                        { label: 'Phone', key: 'phone', type: 'text' },
+                        { label: 'LINE User ID', key: 'line_user_id', type: 'text' },
+                    ].map(({ label, key, type }) => (
+                        <div key={key}>
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">{label}</label>
+                            <input type={type} value={form[key]} onChange={e => set(key, e.target.value)}
+                                className="w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition" />
+                        </div>
+                    ))}
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Language</label>
+                        <select value={form.preferred_language} onChange={e => set('preferred_language', e.target.value)}
+                            className="w-full p-2.5 border rounded-xl bg-gray-50 text-sm outline-none focus:ring-1 focus:ring-[#714B67]">
+                            <option value="en">English</option>
+                            <option value="he">Hebrew</option>
+                            <option value="th">Thai</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="flex gap-3 mt-5">
+                    <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">{t?.cancel || 'Cancel'}</button>
+                    <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-[#714B67] text-white rounded-xl font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-2">
+                        {saving && <Loader2 size={14} className="animate-spin" />}
+                        {t?.save || 'Save'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─── Location Modal ────────────────────────────────────────────────────────────
+const LocationModal = ({ editLocation, createdBy, token, t, onClose, onSaved }) => {
+    const isEdit = !!editLocation;
+    const [form, setForm] = useState({
+        name_en: editLocation?.name_en || editLocation?.name || '',
+        name_he: editLocation?.name_he || '',
+        name_th: editLocation?.name_th || '',
+        address: '',
+    });
+    const [imageFile, setImageFile] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+    useEffect(() => {
+        if (editLocation?.coordinates) {
+            try {
+                const coords = typeof editLocation.coordinates === 'string'
+                    ? JSON.parse(editLocation.coordinates)
+                    : editLocation.coordinates;
+                setForm(p => ({ ...p, address: coords?.link || '' }));
+            } catch {}
+        }
+    }, []);
+
+    const handleSave = async () => {
+        if (!form.name_en?.trim() && !form.name_he?.trim()) { alert('Name is required'); return; }
+        setSaving(true);
+        try {
+            const fd = new FormData();
+            fd.append('name_en', form.name_en);
+            fd.append('name_he', form.name_he);
+            fd.append('name_th', form.name_th);
+            fd.append('map_link', form.address);
+            fd.append('dynamic_fields', JSON.stringify([]));
+            if (!isEdit) fd.append('created_by', createdBy);
+            if (imageFile) fd.append('main_image', imageFile);
+            else if (editLocation?.image_url) fd.append('existing_image', editLocation.image_url);
+
+            const method = isEdit ? 'PUT' : 'POST';
+            const url = isEdit ? `${BASE}/locations/${editLocation.id}` : `${BASE}/locations`;
+            const res = await fetch(url, { method, headers: { Authorization: `Bearer ${token}` }, body: fd });
+            if (res.ok) { onSaved(); onClose(); }
+            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving location'); }
+        } catch { alert('Server error'); }
+        finally { setSaving(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-bold text-slate-800">{isEdit ? 'Edit Location' : 'Add Location'}</h3>
+                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+                </div>
+                <div className="space-y-3">
+                    {[
+                        { label: 'Name (EN) *', key: 'name_en' },
+                        { label: 'Name (HE)', key: 'name_he' },
+                        { label: 'Name (TH)', key: 'name_th' },
+                        { label: 'Address / Map Link', key: 'address' },
+                    ].map(({ label, key }) => (
+                        <div key={key}>
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">{label}</label>
+                            <input type="text" value={form[key]} onChange={e => set(key, e.target.value)}
+                                className="w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition" />
+                        </div>
+                    ))}
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Image (optional)</label>
+                        <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] ?? null)}
+                            className="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] cursor-pointer" />
+                        {editLocation?.image_url && !imageFile && (
+                            <img src={editLocation.image_url} alt="" className="mt-2 h-10 rounded-lg object-contain border border-gray-200" />
+                        )}
+                    </div>
+                </div>
+                <div className="flex gap-3 mt-5">
+                    <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">{t?.cancel || 'Cancel'}</button>
+                    <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-[#714B67] text-white rounded-xl font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-2">
+                        {saving && <Loader2 size={14} className="animate-spin" />}
+                        {t?.save || 'Save'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─── Category Modal ────────────────────────────────────────────────────────────
+const CategoryModal = ({ editCategory, createdBy, token, t, onClose, onSaved }) => {
+    const isEdit = !!editCategory;
+    const [form, setForm] = useState({
+        name_en: editCategory?.name_en || editCategory?.name || '',
+        name_he: editCategory?.name_he || '',
+        name_th: editCategory?.name_th || '',
+        code: editCategory?.code || '',
+    });
+    const [saving, setSaving] = useState(false);
+    const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+    const handleSave = async () => {
+        if (!form.name_en?.trim() && !form.name_he?.trim()) { alert('Name is required'); return; }
+        if (!form.code?.trim()) { alert('Code is required (3 chars max)'); return; }
+        setSaving(true);
+        try {
+            const payload = {
+                name_en: form.name_en, name_he: form.name_he, name_th: form.name_th,
+                code: form.code.toUpperCase().slice(0, 3),
+                created_by: createdBy,
+            };
+            const method = isEdit ? 'PUT' : 'POST';
+            const url = isEdit ? `${BASE}/categories/${editCategory.id}` : `${BASE}/categories`;
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify(payload),
+            });
+            if (res.ok) { onSaved(); onClose(); }
+            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving category'); }
+        } catch { alert('Server error'); }
+        finally { setSaving(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-bold text-slate-800">{isEdit ? 'Edit Category' : 'Add Category'}</h3>
+                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+                </div>
+                <div className="space-y-3">
+                    {[
+                        { label: 'Name (EN) *', key: 'name_en' },
+                        { label: 'Name (HE)', key: 'name_he' },
+                        { label: 'Name (TH)', key: 'name_th' },
+                    ].map(({ label, key }) => (
+                        <div key={key}>
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">{label}</label>
+                            <input type="text" value={form[key]} onChange={e => set(key, e.target.value)}
+                                className="w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition" />
+                        </div>
+                    ))}
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Code (3 chars) *</label>
+                        <input type="text" value={form.code} maxLength={3}
+                            onChange={e => set('code', e.target.value.toUpperCase().slice(0, 3))}
+                            className="w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition font-mono" />
+                    </div>
+                </div>
+                <div className="flex gap-3 mt-5">
+                    <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">{t?.cancel || 'Cancel'}</button>
+                    <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-[#714B67] text-white rounded-xl font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-2">
+                        {saving && <Loader2 size={14} className="animate-spin" />}
+                        {t?.save || 'Save'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─── Asset Modal ───────────────────────────────────────────────────────────────
+const AssetModal = ({ editAsset, createdBy, categories, locations, token, t, onClose, onSaved }) => {
+    const isEdit = !!editAsset;
+    const [form, setForm] = useState({
+        name_en: editAsset?.name_en || editAsset?.name || '',
+        name_he: editAsset?.name_he || '',
+        name_th: editAsset?.name_th || '',
+        category_id: editAsset?.category_id ? String(editAsset.category_id) : '',
+        location_id: editAsset?.location_id ? String(editAsset.location_id) : '',
+    });
+    const [saving, setSaving] = useState(false);
+    const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+    const handleSave = async () => {
+        if (!form.name_en?.trim() && !form.name_he?.trim()) { alert('Name is required'); return; }
+        if (!form.category_id) { alert('Category is required'); return; }
+        setSaving(true);
+        try {
+            const payload = {
+                name_en: form.name_en, name_he: form.name_he, name_th: form.name_th,
+                category_id: form.category_id,
+                location_id: form.location_id || null,
+                created_by: createdBy,
+            };
+            const method = isEdit ? 'PUT' : 'POST';
+            const url = isEdit ? `${BASE}/assets/${editAsset.id}` : `${BASE}/assets`;
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify(payload),
+            });
+            if (res.ok) { onSaved(); onClose(); }
+            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving asset'); }
+        } catch { alert('Server error'); }
+        finally { setSaving(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-bold text-slate-800">{isEdit ? 'Edit Asset' : 'Add Asset'}</h3>
+                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+                </div>
+                <div className="space-y-3">
+                    {[
+                        { label: 'Name (EN) *', key: 'name_en' },
+                        { label: 'Name (HE)', key: 'name_he' },
+                        { label: 'Name (TH)', key: 'name_th' },
+                    ].map(({ label, key }) => (
+                        <div key={key}>
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">{label}</label>
+                            <input type="text" value={form[key]} onChange={e => set(key, e.target.value)}
+                                className="w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition" />
+                        </div>
+                    ))}
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Category *</label>
+                        <select value={form.category_id} onChange={e => set('category_id', e.target.value)}
+                            className="w-full p-2.5 border rounded-xl bg-gray-50 text-sm outline-none focus:ring-1 focus:ring-[#714B67]">
+                            <option value="">Select category…</option>
+                            {(categories ?? []).map(c => (
+                                <option key={c.id} value={String(c.id)}>{c.name_en || c.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Location (optional)</label>
+                        <select value={form.location_id} onChange={e => set('location_id', e.target.value)}
+                            className="w-full p-2.5 border rounded-xl bg-gray-50 text-sm outline-none focus:ring-1 focus:ring-[#714B67]">
+                            <option value="">None</option>
+                            {(locations ?? []).map(l => (
+                                <option key={l.id} value={String(l.id)}>{l.name_en || l.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+                <div className="flex gap-3 mt-5">
+                    <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">{t?.cancel || 'Cancel'}</button>
+                    <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-[#714B67] text-white rounded-xl font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-2">
+                        {saving && <Loader2 size={14} className="animate-spin" />}
+                        {t?.save || 'Save'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // ─── Company detail view ──────────────────────────────────────────────────────
 const CompanyDetail = ({ company, token, t, lang, onBack }) => {
     const [users, setUsers] = useState([]);
@@ -52,31 +401,101 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
     const [assets, setAssets] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
+    // CRUD modal state
+    const [userModal, setUserModal] = useState(null);       // { role, user? }
+    const [locationModal, setLocationModal] = useState(null); // {} | { loc }
+    const [categoryModal, setCategoryModal] = useState(null); // {} | { cat }
+    const [assetModal, setAssetModal] = useState(null);       // {} | { asset }
+    const [deleteConfirm, setDeleteConfirm] = useState(null); // { type, id, name }
+
+    const cid = company?.id;
+
+    const fetchData = async () => {
         const headers = { Authorization: `Bearer ${token}` };
-        Promise.all([
-            fetch(`${BASE}/users`, { headers }).then(r => r.json()).catch(() => []),
-            fetch(`${BASE}/locations`, { headers }).then(r => r.json()).catch(() => []),
-            fetch(`${BASE}/categories`, { headers }).then(r => r.json()).catch(() => []),
-            fetch(`${BASE}/assets`, { headers }).then(r => r.json()).catch(() => []),
-        ]).then(([rawUsers, rawLocs, rawCats, rawAssets]) => {
-            const cid = company?.id;
-            setUsers((rawUsers ?? []).filter(u => u?.company_id === cid));
-            setLocations((rawLocs ?? []).filter(l => l?.company_id === cid));
-            setCategories((rawCats ?? []).filter(c => c?.company_id === cid));
-            setAssets((rawAssets ?? []).filter(a => a?.company_id === cid));
-            setLoading(false);
-        });
-    }, [company?.id, token]);
+        const [rawUsers, rawLocs, rawCats, rawAssets] = await Promise.all([
+            fetch(`${BASE}/users?company_id=${cid}`, { headers }).then(r => r.json()).catch(() => []),
+            fetch(`${BASE}/locations?company_id=${cid}`, { headers }).then(r => r.json()).catch(() => []),
+            fetch(`${BASE}/categories?company_id=${cid}`, { headers }).then(r => r.json()).catch(() => []),
+            fetch(`${BASE}/assets?company_id=${cid}`, { headers }).then(r => r.json()).catch(() => []),
+        ]);
+        // Users: server already filters by company_id; keep client filter as safety net
+        setUsers((rawUsers ?? []).filter(u => u?.company_id === cid));
+        // Locations / Categories / Assets: server uses compound query (handles legacy null company_id)
+        setLocations(rawLocs ?? []);
+        setCategories(rawCats ?? []);
+        setAssets(rawAssets ?? []);
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        setLoading(true);
+        fetchData();
+    }, [cid, token]);
 
     const managers = (users ?? []).filter(u => u?.role === 'MANAGER' || u?.role === 'SUPERVISOR');
     const employees = (users ?? []).filter(u => u?.role === 'EMPLOYEE');
 
-    const userName = (u) =>
-        u?.['full_name_' + lang] || u?.full_name_en || u?.full_name || u?.name || '—';
+    // Primary MANAGER (not SUPERVISOR) — used as created_by for new entities
+    const primaryManagerId = (users ?? []).find(u => u?.role === 'MANAGER')?.id
+        ?? managers[0]?.id
+        ?? null;
 
-    const itemName = (item) =>
-        item?.['name_' + lang] || item?.name_en || item?.name || '—';
+    const userName = u => u?.['full_name_' + lang] || u?.full_name_en || u?.full_name || u?.name || '—';
+    const itemName = item => item?.['name_' + lang] || item?.name_en || item?.name || '—';
+
+    const handleDelete = async () => {
+        if (!deleteConfirm) return;
+        const { type, id } = deleteConfirm;
+        try {
+            const res = await fetch(`${BASE}/${type}/${id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) fetchData();
+            else alert('Error deleting item. It may be in use.');
+        } catch { alert('Server error'); }
+        setDeleteConfirm(null);
+    };
+
+    // Inline permission toggle for managers in Permissions section
+    const handleTogglePermission = async (mgr, field) => {
+        const defaultTrueFields = ['can_manage_fields', 'allowed_lang_he', 'allowed_lang_en', 'allowed_lang_th'];
+        const currentValue = defaultTrueFields.includes(field) ? mgr[field] !== false : !!mgr[field];
+        const newValue = !currentValue;
+
+        // Optimistic update
+        setUsers(prev => prev.map(u => u.id === mgr.id ? { ...u, [field]: newValue } : u));
+        try {
+            const res = await fetch(`${BASE}/users/${mgr.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                    full_name: mgr.full_name, email: mgr.email,
+                    phone: mgr.phone || '', role: mgr.role,
+                    preferred_language: mgr.preferred_language || 'he',
+                    [field]: newValue,
+                }),
+            });
+            if (!res.ok) {
+                setUsers(prev => prev.map(u => u.id === mgr.id ? { ...u, [field]: currentValue } : u));
+                alert('Error updating permission');
+            }
+        } catch {
+            setUsers(prev => prev.map(u => u.id === mgr.id ? { ...u, [field]: currentValue } : u));
+        }
+    };
+
+    // Row action buttons (Edit + Delete)
+    const RowActions = ({ onEdit, onDelete }) => (
+        <div className="ml-auto flex items-center gap-1 shrink-0">
+            <button onClick={onEdit} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition">
+                <Pencil size={12} />
+            </button>
+            <button onClick={onDelete} className="p-1 rounded-lg hover:bg-red-50 text-red-400 transition">
+                <Trash2 size={12} />
+            </button>
+        </div>
+    );
 
     if (loading) {
         return (
@@ -90,10 +509,7 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
         <div className="animate-fade-in">
             {/* Header */}
             <div className="flex items-center gap-3 mb-5">
-                <button
-                    onClick={onBack}
-                    className="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition"
-                >
+                <button onClick={onBack} className="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition">
                     <ArrowLeft size={18} className="text-gray-500" />
                 </button>
                 <div className="flex items-center gap-3">
@@ -114,11 +530,11 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
             {/* Stats row */}
             <div className="grid grid-cols-5 gap-2 mb-5">
                 {[
-                    { label: t?.managers_label || 'Managers', count: (managers ?? []).length, icon: Shield },
-                    { label: t?.employees_label || 'Employees', count: (employees ?? []).length, icon: Users },
-                    { label: t?.locations_title || 'Locations', count: (locations ?? []).length, icon: MapPin },
-                    { label: t?.categories_title || 'Categories', count: (categories ?? []).length, icon: Tag },
-                    { label: t?.assets_title || 'Assets', count: (assets ?? []).length, icon: Box },
+                    { label: t?.managers_label || 'Managers', count: managers.length, icon: Shield },
+                    { label: t?.employees_label || 'Employees', count: employees.length, icon: Users },
+                    { label: t?.locations_title || 'Locations', count: locations.length, icon: MapPin },
+                    { label: t?.categories_title || 'Categories', count: categories.length, icon: Tag },
+                    { label: t?.assets_title || 'Assets', count: assets.length, icon: Box },
                 ].map(({ label, count, icon: Icon }) => (
                     <div key={label} className="bg-white rounded-xl border border-gray-200 p-2.5 text-center">
                         <Icon size={16} className="text-[#714B67] mx-auto mb-1" />
@@ -130,117 +546,219 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
 
             {/* Detail sections */}
             <div className="space-y-4">
+                {/* ── Managers ── */}
                 <SectionCard
                     icon={Shield}
                     title={t?.managers_label || 'Managers'}
                     items={managers}
                     emptyLabel={t?.no_managers || 'No managers assigned'}
+                    onAdd={() => setUserModal({ role: 'SUPERVISOR' })}
                     renderItem={u => (
                         <div className="flex items-center gap-2">
                             {u?.profile_picture_url ? (
-                                <img src={u.profile_picture_url} className="w-6 h-6 rounded-full object-cover" alt="" />
+                                <img src={u.profile_picture_url} className="w-6 h-6 rounded-full object-cover shrink-0" alt="" />
                             ) : (
-                                <div className="w-6 h-6 rounded-full bg-[#714B67]/10 flex items-center justify-center text-[10px] font-bold text-[#714B67]">
+                                <div className="w-6 h-6 rounded-full bg-[#714B67]/10 flex items-center justify-center text-[10px] font-bold text-[#714B67] shrink-0">
                                     {(userName(u)[0] || '?').toUpperCase()}
                                 </div>
                             )}
-                            <span>{userName(u)}</span>
-                            <span className="ml-auto text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{u?.role}</span>
+                            <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
+                            <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{u?.role}</span>
+                            <RowActions
+                                onEdit={() => setUserModal({ role: u?.role, user: u })}
+                                onDelete={() => setDeleteConfirm({ type: 'users', id: u?.id, name: userName(u) })}
+                            />
                         </div>
                     )}
                 />
 
+                {/* ── Employees ── */}
                 <SectionCard
                     icon={Users}
                     title={t?.employees_label || 'Employees'}
                     items={employees}
                     emptyLabel={t?.no_employees || 'No employees assigned'}
+                    onAdd={() => setUserModal({ role: 'EMPLOYEE' })}
                     renderItem={u => (
                         <div className="flex items-center gap-2">
                             {u?.profile_picture_url ? (
-                                <img src={u.profile_picture_url} className="w-6 h-6 rounded-full object-cover" alt="" />
+                                <img src={u.profile_picture_url} className="w-6 h-6 rounded-full object-cover shrink-0" alt="" />
                             ) : (
-                                <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                                <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0">
                                     {(userName(u)[0] || '?').toUpperCase()}
                                 </div>
                             )}
-                            <span>{userName(u)}</span>
+                            <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
+                            <RowActions
+                                onEdit={() => setUserModal({ role: 'EMPLOYEE', user: u })}
+                                onDelete={() => setDeleteConfirm({ type: 'users', id: u?.id, name: userName(u) })}
+                            />
                         </div>
                     )}
                 />
 
-                {/* ── Permissions (manager language access) ── */}
+                {/* ── Permissions (manager language access + toggles) ── */}
                 <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-slate-50">
                         <Lock size={16} className="text-[#714B67]" />
                         <h3 className="text-sm font-bold text-slate-700">{t?.permissions_label || 'Permissions'}</h3>
                         <span className="ml-auto text-xs font-semibold text-[#714B67] bg-[#714B67]/10 px-2 py-0.5 rounded-full">
-                            {(managers ?? []).length}
+                            {managers.length}
                         </span>
                     </div>
                     <div className="divide-y divide-gray-100">
-                        {(managers ?? []).length === 0 ? (
+                        {managers.length === 0 ? (
                             <p className="px-4 py-3 text-xs text-gray-400 italic">{t?.no_managers || 'No managers assigned'}</p>
-                        ) : (managers ?? []).map((mgr, idx) => (
-                            <div key={mgr?.id ?? idx} className="px-4 py-2.5">
-                                <p className="text-sm font-semibold text-slate-700 mb-1">{userName(mgr)}</p>
+                        ) : managers.map((mgr, idx) => (
+                            <div key={mgr?.id ?? idx} className="px-4 py-3">
+                                <p className="text-sm font-semibold text-slate-700 mb-2">{userName(mgr)}</p>
                                 <div className="flex gap-2 flex-wrap">
                                     {[
                                         { key: 'allowed_lang_he', label: '🇮🇱 HE' },
                                         { key: 'allowed_lang_en', label: '🇺🇸 EN' },
                                         { key: 'allowed_lang_th', label: '🇹🇭 TH' },
                                     ].map(({ key, label }) => (
-                                        <span
+                                        <button
                                             key={key}
-                                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                            onClick={() => handleTogglePermission(mgr, key)}
+                                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition cursor-pointer ${
                                                 mgr?.[key] !== false
-                                                    ? 'bg-green-50 text-green-700 border-green-200'
-                                                    : 'bg-gray-100 text-gray-400 border-gray-200 line-through'
+                                                    ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                    : 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200 line-through'
                                             }`}
-                                        >
-                                            {label}
-                                        </span>
+                                        >{label}</button>
                                     ))}
-                                    {mgr?.auto_approve_tasks && (
-                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
-                                            {t?.auto_approve_label || 'Auto-Approve'}
-                                        </span>
-                                    )}
+                                    <button
+                                        onClick={() => handleTogglePermission(mgr, 'auto_approve_tasks')}
+                                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition cursor-pointer ${
+                                            mgr?.auto_approve_tasks
+                                                ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                                                : 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200'
+                                        }`}
+                                    >{t?.auto_approve_label || 'Auto-Approve'}</button>
+                                    <button
+                                        onClick={() => handleTogglePermission(mgr, 'can_manage_fields')}
+                                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition cursor-pointer ${
+                                            mgr?.can_manage_fields !== false
+                                                ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                                                : 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200 line-through'
+                                        }`}
+                                    >Field Settings</button>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </div>
 
+                {/* ── Locations ── */}
                 <SectionCard
                     icon={MapPin}
                     title={t?.locations_title || 'Locations'}
                     items={locations}
                     emptyLabel={t?.no_locations || 'No locations'}
-                    renderItem={l => <span>{itemName(l)}</span>}
+                    onAdd={() => setLocationModal({})}
+                    renderItem={l => (
+                        <div className="flex items-center gap-2">
+                            <span className="flex-1 min-w-0 truncate">{itemName(l)}</span>
+                            <RowActions
+                                onEdit={() => setLocationModal({ loc: l })}
+                                onDelete={() => setDeleteConfirm({ type: 'locations', id: l?.id, name: itemName(l) })}
+                            />
+                        </div>
+                    )}
                 />
 
+                {/* ── Categories ── */}
                 <SectionCard
                     icon={Tag}
                     title={t?.categories_title || 'Categories'}
                     items={categories}
                     emptyLabel={t?.no_categories || 'No categories'}
-                    renderItem={c => <span>{itemName(c)}</span>}
+                    onAdd={() => setCategoryModal({})}
+                    renderItem={c => (
+                        <div className="flex items-center gap-2">
+                            <span className="flex-1 min-w-0 truncate">{itemName(c)}</span>
+                            {c?.code && <span className="text-xs text-gray-400 font-mono shrink-0">{c.code}</span>}
+                            <RowActions
+                                onEdit={() => setCategoryModal({ cat: c })}
+                                onDelete={() => setDeleteConfirm({ type: 'categories', id: c?.id, name: itemName(c) })}
+                            />
+                        </div>
+                    )}
                 />
 
+                {/* ── Assets ── */}
                 <SectionCard
                     icon={Box}
                     title={t?.assets_title || 'Assets'}
                     items={assets}
                     emptyLabel={t?.no_assets || 'No assets'}
+                    onAdd={() => setAssetModal({})}
                     renderItem={a => (
-                        <div className="flex items-center justify-between">
-                            <span>{itemName(a)}</span>
-                            {a?.code && <span className="text-xs text-gray-400">{a.code}</span>}
+                        <div className="flex items-center gap-2">
+                            <span className="flex-1 min-w-0 truncate">{itemName(a)}</span>
+                            {a?.code && <span className="text-xs text-gray-400 font-mono shrink-0">{a.code}</span>}
+                            <RowActions
+                                onEdit={() => setAssetModal({ asset: a })}
+                                onDelete={() => setDeleteConfirm({ type: 'assets', id: a?.id, name: itemName(a) })}
+                            />
                         </div>
                     )}
                 />
             </div>
+
+            {/* ── CRUD Modals ── */}
+            {userModal && (
+                <UserModal
+                    editUser={userModal.user}
+                    role={userModal.role}
+                    parentManagerId={primaryManagerId}
+                    token={token}
+                    t={t}
+                    onClose={() => setUserModal(null)}
+                    onSaved={fetchData}
+                />
+            )}
+            {locationModal && (
+                <LocationModal
+                    editLocation={locationModal.loc}
+                    createdBy={primaryManagerId}
+                    token={token}
+                    t={t}
+                    onClose={() => setLocationModal(null)}
+                    onSaved={fetchData}
+                />
+            )}
+            {categoryModal && (
+                <CategoryModal
+                    editCategory={categoryModal.cat}
+                    createdBy={primaryManagerId}
+                    token={token}
+                    t={t}
+                    onClose={() => setCategoryModal(null)}
+                    onSaved={fetchData}
+                />
+            )}
+            {assetModal && (
+                <AssetModal
+                    editAsset={assetModal.asset}
+                    createdBy={primaryManagerId}
+                    categories={categories}
+                    locations={locations}
+                    token={token}
+                    t={t}
+                    onClose={() => setAssetModal(null)}
+                    onSaved={fetchData}
+                />
+            )}
+            {deleteConfirm && (
+                <ConfirmDeleteModal
+                    message={`Delete "${deleteConfirm?.name}"?`}
+                    onConfirm={handleDelete}
+                    onCancel={() => setDeleteConfirm(null)}
+                    t={t}
+                />
+            )}
         </div>
     );
 };
@@ -268,7 +786,7 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
                 body: formData,
             });
             if (res.ok) { onSaved(); onClose(); }
-            else { const d = await res.json(); alert(d?.error || 'Error saving company'); }
+            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving company'); }
         } catch (e) { console.error(e); alert(t?.server_error || 'Server error'); }
         finally { setSaving(false); }
     };
