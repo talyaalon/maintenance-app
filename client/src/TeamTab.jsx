@@ -243,6 +243,7 @@ const TeamTab = ({ token, t, user, lang }) => {
 
     // Render Employees under a given parent id
     const renderEmployees = (parentId) => {
+        if (parentId == null) return null;
         const emps = employees.filter(e => e.parent_manager_id === parentId);
         if (emps.length === 0) return null;
         return (
@@ -252,13 +253,15 @@ const TeamTab = ({ token, t, user, lang }) => {
         );
     };
 
-    // Render DeptManagers under a given AreaManager id, with their employees nested
+    // Render DeptManagers AND direct Employees under a given AreaManager id.
+    // DeptManager is OPTIONAL — direct employees are shown at the same level as DeptManagers.
     const renderDeptManagers = (areaManagerId) => {
+        if (areaManagerId == null) return null;
         const depts = deptManagers.filter(d => d.parent_manager_id === areaManagerId);
-        // Also show employees directly under this area manager
+        // Employees reporting directly to this AreaManager (no DeptManager)
         const directEmps = employees.filter(e => e.parent_manager_id === areaManagerId);
         if (depts.length === 0 && directEmps.length === 0) {
-            return <p className="text-sm text-gray-400 text-center py-2 ml-8">{t?.no_dept_managers || 'No Dept Managers assigned'}</p>;
+            return <p className="text-sm text-gray-400 text-center py-2 ml-8">{t?.no_employees_assigned || 'No team members assigned'}</p>;
         }
         return (
             <div className="space-y-1 mt-1">
@@ -274,6 +277,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                         )}
                     </div>
                 ))}
+                {/* Direct employees (no DeptManager) — rendered at the same level as DeptManagers */}
                 {directEmps.map(emp => renderMemberRow(emp, 2))}
             </div>
         );
@@ -304,8 +308,8 @@ const TeamTab = ({ token, t, user, lang }) => {
             );
         }
 
-        // MANAGER (AreaManager) viewer: sees self + their deptManagers + employees
-        const myDepts = deptManagers.filter(d => d.area_id === user.id || d.parent_manager_id === user.id);
+        // MANAGER (AreaManager) viewer: sees DeptManagers + direct Employees (DeptManager is optional)
+        const myDepts = deptManagers.filter(d => d.parent_manager_id === user.id);
         const myDirectEmps = employees.filter(e => e.parent_manager_id === user.id);
 
         return (
@@ -332,10 +336,8 @@ const TeamTab = ({ token, t, user, lang }) => {
 
     // ─── View for SUPERVISOR (DeptManager) viewer ──────────────────────────────
     const renderDeptManagerView = () => {
-        const myEmps = employees.filter(e => e.parent_manager_id === user.id || (e.area_id && e.area_id === user.area_id && e.role === 'EMPLOYEE'));
-        // Deduplicate
-        const seen = new Set();
-        const uniqueEmps = myEmps.filter(e => { if (seen.has(e.id)) return false; seen.add(e.id); return true; });
+        // Only show employees that directly report to this DeptManager
+        const uniqueEmps = employees.filter(e => e.parent_manager_id === user.id);
         return (
             <>
                 {uniqueEmps.length === 0 && (
@@ -540,7 +542,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                             <p className="text-xs text-gray-500 mb-1">
                                                 {addForm.role === 'SUPERVISOR'
                                                     ? (t.role_area_manager || 'Area Manager') + ' (parent)'
-                                                    : t.select_manager || "Select Manager..."}
+                                                    : (t.select_manager || 'Select Manager') + ' (' + (t.optional || 'Optional — leave blank for direct Area Manager') + ')'}
                                             </p>
                                             <button
                                                 type="button"
