@@ -114,6 +114,12 @@ function App() {
       localStorage.setItem('appActiveTab', activeTab);
   }, [activeTab]);
 
+  // Reset to Tasks tab on login so a stale tab (e.g. Settings saved by a
+  // previous session) never lands the new user on a blank screen.
+  useEffect(() => {
+      if (user) setActiveTab(1);
+  }, [user?.id]);
+
   // מודאלים
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
 
