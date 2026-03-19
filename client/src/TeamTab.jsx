@@ -67,6 +67,11 @@ const TeamTab = ({ token, t, user, lang }) => {
         parent_manager_id: '', preferred_language: 'he', line_user_id: ''
     });
 
+    // Employee assignment for DeptManager (edit modal)
+    const [assignedEmployeeIds, setAssignedEmployeeIds] = useState(new Set());
+    // Employee assignment for DeptManager (add modal)
+    const [addAssignedEmployeeIds, setAddAssignedEmployeeIds] = useState(new Set());
+
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
     const [selectedMember, setSelectedMember] = useState(null);
     const [memberTasks, setMemberTasks] = useState([]);
@@ -147,6 +152,15 @@ const TeamTab = ({ token, t, user, lang }) => {
             password: '',
             line_user_id: member.line_user_id || ''
         });
+        // Pre-load employees already assigned to this DeptManager
+        if (member.role === 'SUPERVISOR') {
+            const assigned = (Array.isArray(team) ? team : [])
+                .filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === member.id)
+                .map(u => u.id);
+            setAssignedEmployeeIds(new Set(assigned));
+        } else {
+            setAssignedEmployeeIds(new Set());
+        }
         setShowEditModal(true);
     };
 
@@ -159,8 +173,20 @@ const TeamTab = ({ token, t, user, lang }) => {
                 body: JSON.stringify(editForm)
             });
             const data = await res.json();
-            if (res.ok) { setShowEditModal(false); fetchTeam(); }
-            else alert(data.error === "Email already exists" ? (t.error_email_exists || "Email already exists") : "Error updating user");
+            if (res.ok) {
+                // For DeptManagers, persist the employee assignment in the same save
+                if (editMember.role === 'SUPERVISOR') {
+                    await fetch(`https://maintenance-app-h84v.onrender.com/users/${editMember.id}/assign-employees`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ employeeIds: Array.from(assignedEmployeeIds) })
+                    });
+                }
+                setShowEditModal(false);
+                fetchTeam();
+            } else {
+                alert(data.error === "Email already exists" ? (t.error_email_exists || "Email already exists") : "Error updating user");
+            }
         } catch (e) { alert("Server error"); }
     };
 
@@ -181,8 +207,17 @@ const TeamTab = ({ token, t, user, lang }) => {
             });
             const data = await res.json();
             if (res.ok) {
+                // If creating a DeptManager with employees selected, assign them now
+                if (payload.role === 'SUPERVISOR' && addAssignedEmployeeIds.size > 0) {
+                    await fetch(`https://maintenance-app-h84v.onrender.com/users/${data.id}/assign-employees`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ employeeIds: Array.from(addAssignedEmployeeIds) })
+                    });
+                }
                 setShowAddModal(false);
                 setAddForm({ full_name: '', full_name_he: '', full_name_en: '', full_name_th: '', email: '', password: '', phone: '', role: 'EMPLOYEE', parent_manager_id: '', preferred_language: 'he', line_user_id: '' });
+                setAddAssignedEmployeeIds(new Set());
                 fetchTeam();
             } else {
                 alert(data.error === "Email already exists"
@@ -520,6 +555,43 @@ const TeamTab = ({ token, t, user, lang }) => {
                                     {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
                                 </button>
                             </div>
+
+                            {/* ── Assign Employees (DeptManager only) ─────────────── */}
+                            {editMember?.role === 'SUPERVISOR' && (() => {
+                                const areaEmps = safeTeam.filter(u => u.role === 'EMPLOYEE' && u.area_id === editMember.area_id);
+                                return (
+                                    <div>
+                                        <label className="text-sm font-bold text-gray-700 block mb-1">
+                                            {t?.assign_employees_to_dept || 'Assign Employees to Department'}
+                                        </label>
+                                        <div className="max-h-40 overflow-y-auto border rounded-xl divide-y bg-white">
+                                            {areaEmps.length === 0 ? (
+                                                <p className="text-sm text-gray-400 text-center py-3">
+                                                    {t?.no_employees_in_area || 'No employees in this area'}
+                                                </p>
+                                            ) : areaEmps.map(emp => {
+                                                const name = emp['full_name_' + lang] || emp.full_name_en || emp.full_name || '?';
+                                                return (
+                                                    <label key={emp.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-slate-50">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={assignedEmployeeIds.has(emp.id)}
+                                                            onChange={() => setAssignedEmployeeIds(prev => {
+                                                                const next = new Set(prev);
+                                                                next.has(emp.id) ? next.delete(emp.id) : next.add(emp.id);
+                                                                return next;
+                                                            })}
+                                                            className="rounded accent-[#714B67]"
+                                                        />
+                                                        <span className="text-sm text-gray-700">{name}</span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
                             <div className="flex gap-2 mt-4">
                                 <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 py-2 border rounded">{t.cancel}</button>
                                 <button type="submit" className="flex-1 py-2 bg-[#714B67] text-white rounded font-bold hover:bg-[#5a3b52] transition">{t.save}</button>
@@ -564,7 +636,10 @@ const TeamTab = ({ token, t, user, lang }) => {
                                     <select
                                         className="w-full p-3 border rounded-xl bg-white"
                                         value={addForm.role}
-                                        onChange={e => setAddForm({ ...addForm, role: e.target.value, parent_manager_id: '' })}
+                                        onChange={e => {
+                                            setAddForm({ ...addForm, role: e.target.value, parent_manager_id: '' });
+                                            setAddAssignedEmployeeIds(new Set());
+                                        }}
                                     >
                                         <option value="EMPLOYEE">{t.role_employee || "Employee"}</option>
                                         <option value="SUPERVISOR">{t.role_dept_manager || "Dept Manager"}</option>
@@ -605,7 +680,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                                         .map(m => (
                                                         <div
                                                             key={m.id}
-                                                            onClick={() => { setAddForm({...addForm, parent_manager_id: m.id}); setManagerDropdownOpen(false); }}
+                                                            onClick={() => { setAddForm({...addForm, parent_manager_id: m.id}); setManagerDropdownOpen(false); setAddAssignedEmployeeIds(new Set()); }}
                                                             className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[#fdf4ff] transition ${String(addForm.parent_manager_id) === String(m.id) ? 'bg-[#fdf4ff]' : ''}`}
                                                         >
                                                             <span className="w-7 h-7 rounded-full overflow-hidden shrink-0 bg-[#714B67]/10 border border-[#714B67]/20 flex items-center justify-center">
@@ -625,6 +700,43 @@ const TeamTab = ({ token, t, user, lang }) => {
                                             )}
                                         </div>
                                     )}
+
+                                    {/* ── Assign Employees to new DeptManager ──────── */}
+                                    {addForm.role === 'SUPERVISOR' && addForm.parent_manager_id && (() => {
+                                        const parentId = parseInt(addForm.parent_manager_id);
+                                        const addAreaEmps = safeTeam.filter(u => u.role === 'EMPLOYEE' && u.area_id === parentId);
+                                        return (
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-500 mb-1">
+                                                    {t?.assign_employees_to_dept || 'Assign Employees to Department'}
+                                                </p>
+                                                <div className="max-h-40 overflow-y-auto border rounded-xl divide-y bg-white">
+                                                    {addAreaEmps.length === 0 ? (
+                                                        <p className="text-sm text-gray-400 text-center py-3">
+                                                            {t?.no_employees_in_area || 'No employees in this area'}
+                                                        </p>
+                                                    ) : addAreaEmps.map(emp => {
+                                                        const name = emp['full_name_' + lang] || emp.full_name_en || emp.full_name || '?';
+                                                        return (
+                                                            <label key={emp.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-slate-50">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={addAssignedEmployeeIds.has(emp.id)}
+                                                                    onChange={() => setAddAssignedEmployeeIds(prev => {
+                                                                        const next = new Set(prev);
+                                                                        next.has(emp.id) ? next.delete(emp.id) : next.add(emp.id);
+                                                                        return next;
+                                                                    })}
+                                                                    className="rounded accent-[#714B67]"
+                                                                />
+                                                                <span className="text-sm text-gray-700">{name}</span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             )}
 

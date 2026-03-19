@@ -898,6 +898,76 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// PUT /users/:id/assign-employees
+// Assigns a set of Employees (by ID) to report to a DeptManager (SUPERVISOR).
+// • Only employees with the SAME area_id as the DeptManager are eligible.
+// • Employees previously assigned to this DeptManager but omitted from the new
+//   list are moved back to the parent AreaManager (area_id = MANAGER's id).
+app.put('/users/:id/assign-employees', authenticateToken, async (req, res) => {
+    try {
+        const deptMgrId = parseInt(req.params.id);
+        if (isNaN(deptMgrId)) return res.status(400).json({ error: 'Invalid ID' });
+
+        if (req.user.role === 'EMPLOYEE') return res.status(403).json({ error: 'Unauthorized' });
+
+        const deptMgrRes = await pool.query(
+            `SELECT id, area_id FROM users WHERE id = $1 AND role = 'SUPERVISOR'`,
+            [deptMgrId]
+        );
+        if (deptMgrRes.rows.length === 0) return res.status(404).json({ error: 'Dept Manager not found' });
+        const deptMgr = deptMgrRes.rows[0];
+
+        // MANAGER can only manage within their own area
+        if (req.user.role === 'MANAGER' && deptMgr.area_id !== req.user.id) {
+            return res.status(403).json({ error: 'Unauthorized: outside your area' });
+        }
+        // SUPERVISOR can only manage their own assignment
+        if (req.user.role === 'SUPERVISOR' && deptMgr.id !== req.user.id) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const rawIds = req.body.employeeIds;
+        const employeeIds = Array.isArray(rawIds)
+            ? rawIds.map(Number).filter(n => Number.isInteger(n) && n > 0)
+            : [];
+
+        // MANAGER's area_id === their own id — use it as the fallback parent
+        const areaManagerId = deptMgr.area_id;
+
+        if (employeeIds.length > 0) {
+            // Assign selected employees — must be EMPLOYEE role in the same area
+            await pool.query(
+                `UPDATE users SET parent_manager_id = $1
+                 WHERE id = ANY($2::int[]) AND role = 'EMPLOYEE' AND area_id = $3`,
+                [deptMgrId, employeeIds, deptMgr.area_id]
+            );
+            // Unassign removed employees → back to AreaManager
+            if (areaManagerId) {
+                await pool.query(
+                    `UPDATE users SET parent_manager_id = $1
+                     WHERE parent_manager_id = $2 AND role = 'EMPLOYEE'
+                       AND NOT (id = ANY($3::int[]))`,
+                    [areaManagerId, deptMgrId, employeeIds]
+                );
+            }
+        } else {
+            // No employees selected → unassign everyone from this DeptManager
+            if (areaManagerId) {
+                await pool.query(
+                    `UPDATE users SET parent_manager_id = $1
+                     WHERE parent_manager_id = $2 AND role = 'EMPLOYEE'`,
+                    [areaManagerId, deptMgrId]
+                );
+            }
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ PUT /users/:id/assign-employees error:', err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 app.delete('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     try {
