@@ -507,8 +507,8 @@ const TeamTab = ({ token, t, user, lang }) => {
 
             {/* Edit User Modal */}
             {showEditModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-                    <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl border border-gray-200">
+                <div className="fixed inset-0 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl border border-gray-200">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold">{t.edit || "Edit"}</h3>
                             <button onClick={() => setShowEditModal(false)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400"><X size={18}/></button>
@@ -529,7 +529,6 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         onChange={e => setEditForm({...editForm, role: e.target.value})}
                                     >
                                         <option value="EMPLOYEE">{t.role_employee || 'Employee'}</option>
-                                        <option value="SUPERVISOR">{t.role_dept_manager || 'Dept Manager'}</option>
                                         <option value="MANAGER">{t.role_area_manager || 'Area Manager'}</option>
                                     </select>
                                 </div>
@@ -607,8 +606,8 @@ const TeamTab = ({ token, t, user, lang }) => {
 
             {/* Add User Modal */}
             {showAddModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl border border-gray-200 animate-scale-in">
+                <div className="fixed inset-0 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-5 w-full max-w-lg shadow-xl border border-gray-200 animate-scale-in">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-slate-800">{t.add_team_member || "Add User"}</h3>
                             <button onClick={() => setShowAddModal(false)}><X size={20} className="text-gray-400"/></button>
@@ -646,7 +645,6 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         }}
                                     >
                                         <option value="EMPLOYEE">{t.role_employee || "Employee"}</option>
-                                        <option value="SUPERVISOR">{t.role_dept_manager || "Dept Manager"}</option>
                                         <option value="MANAGER">{t.role_area_manager || "Area Manager"}</option>
                                     </select>
 

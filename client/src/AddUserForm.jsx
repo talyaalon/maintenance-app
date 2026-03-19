@@ -69,8 +69,8 @@ const AddUserForm = ({ currentUser, onClose, t }) => {
   const labelClass = "block text-sm font-bold text-gray-600 mb-1.5";
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-      <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-md shadow-2xl">
+    <div className="fixed inset-0 flex justify-center items-center p-4 z-50">
+      <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-lg shadow-2xl">
 
         {/* Header */}
         <div className="flex justify-between items-center mb-5">

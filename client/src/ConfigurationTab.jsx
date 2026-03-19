@@ -12,9 +12,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
   const [categories, setCategories] = useState([]);
   const [assets, setAssets] = useState([]);
-  const [locations, setLocations] = useState([]); 
-  const [globalFields, setGlobalFields] = useState([]); 
-  const [managers, setManagers] = useState([]); 
+  const [locations, setLocations] = useState([]);
+  const [globalFields, setGlobalFields] = useState([]);
+  const [managers, setManagers] = useState([]);
+  const [companies, setCompanies] = useState([]);
 
   // Top-level tab for Big Boss: 'workspaces' | 'permissions'
   const [bossMainTab, setBossMainTab] = useState('workspaces');
@@ -41,9 +42,9 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   const [dynamicFiles, setDynamicFiles] = useState({});
   const [newField, setNewField] = useState({ name_he: '', name_en: '', name_th: '', type: 'text' });
 
-  useEffect(() => { 
-      fetchData(); 
-      if (user?.role === 'BIG_BOSS') fetchManagers();
+  useEffect(() => {
+      fetchData();
+      if (user?.role === 'BIG_BOSS') { fetchManagers(); fetchCompanies(); }
   }, [user]);
 
   const fetchData = async () => {
@@ -66,6 +67,13 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       try {
           const res = await fetch('https://maintenance-app-staging.onrender.com/managers', { headers: { 'Authorization': `Bearer ${token}` } });
           if (res.ok) { const d = await res.json(); setManagers(Array.isArray(d) ? d : []); }
+      } catch (e) { console.error(e); }
+  };
+
+  const fetchCompanies = async () => {
+      try {
+          const res = await fetch('https://maintenance-app-staging.onrender.com/companies', { headers: { 'Authorization': `Bearer ${token}` } });
+          if (res.ok) { const d = await res.json(); setCompanies(Array.isArray(d) ? d : []); }
       } catch (e) { console.error(e); }
   };
 
@@ -506,8 +514,8 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                       </div>
 
                       {showFieldsSettingsModal && (
-                          <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-                              <div className="bg-white rounded-2xl w-full max-w-md shadow-xl border border-gray-200 p-5 animate-scale-in">
+                          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                              <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl border border-gray-200 p-5 animate-scale-in">
                                   <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-3">
                                       <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Settings size={20} className="text-gray-500"/> {t.custom_fields_title || 'שדות מיקום מותאמים'}</h3>
                                       <button onClick={() => setShowFieldsSettingsModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={20}/></button>
@@ -573,74 +581,94 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
               {/* ── Permissions / General panel ── */}
               {bossMainTab === 'permissions' && (
-                  <div className="space-y-4 animate-fade-in">
-                      <p className="text-sm text-gray-500">{t.permissions_desc || 'Manage field-level permissions and task behaviour for each manager.'}</p>
-                      {(Array.isArray(managers) ? managers : []).length === 0 && <p className="text-center text-gray-400 py-6">No managers found.</p>}
-                      {(Array.isArray(managers) ? managers : []).map(manager => {
-                          const initial = (manager.full_name || '?').charAt(0).toUpperCase();
+                  <div className="space-y-6 animate-fade-in">
+                      <p className="text-sm text-gray-500">{t.permissions_desc || 'Manage field-level permissions and task behaviour for each manager, grouped by company.'}</p>
+                      {(Array.isArray(companies) ? companies : []).length === 0 && <p className="text-center text-gray-400 py-6">No companies found.</p>}
+                      {(Array.isArray(companies) ? companies : []).map(company => {
+                          const companyManagers = (Array.isArray(managers) ? managers : []).filter(m => m.company_id === company.id);
+                          if (companyManagers.length === 0) return null;
                           return (
-                              <div key={manager.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                                  {/* Manager header */}
-                                  <div className="flex items-center gap-3 p-4 bg-slate-50 border-b border-gray-200">
-                                      <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-200 bg-slate-50 flex items-center justify-center">
-                                          {manager.profile_picture_url ? (
-                                              <img src={manager.profile_picture_url} alt={manager.full_name} className="w-full h-full object-cover" />
-                                          ) : (
-                                              <span className="text-sm font-bold text-[#714B67]">{initial}</span>
-                                          )}
-                                      </div>
-                                      <div className="flex-1">
-                                          <p className="font-bold text-gray-800">{manager.full_name}</p>
-                                          <p className="text-xs text-gray-400">{manager.email}</p>
-                                      </div>
-                                      <button
-                                          onClick={() => handleSendReport(manager.id)}
-                                          disabled={sendingReportId === manager.id}
-                                          className="bg-[#714B67] text-white text-xs px-3 py-1.5 rounded flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-                                      >
-                                          {sendingReportId === manager.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                                          {t.btn_send_report || 'Send Daily Report'}
-                                      </button>
+                              <div key={company.id} className="space-y-3">
+                                  {/* Company header */}
+                                  <div className="flex items-center gap-2 px-1 pb-1 border-b border-gray-200">
+                                      {company.profile_image_url ? (
+                                          <img src={company.profile_image_url} alt={company.name} className="w-7 h-7 rounded-lg object-cover border border-gray-200 shrink-0" />
+                                      ) : (
+                                          <div className="w-7 h-7 rounded-lg bg-[#714B67]/10 flex items-center justify-center shrink-0">
+                                              <Settings size={14} className="text-[#714B67]" />
+                                          </div>
+                                      )}
+                                      <h3 className="font-bold text-[#714B67] text-sm">{company.name}</h3>
                                   </div>
-                                  {/* Toggle rows */}
-                                  <div className="px-4 py-2">
-                                      <PermissionToggle
-                                          label={t.perm_can_manage_fields || 'Field Settings Permission'}
-                                          hint={t.perm_can_manage_fields_hint || 'Allow this manager to create/edit custom location fields'}
-                                          value={manager.can_manage_fields !== false}
-                                          onToggle={() => handleTogglePermission(manager, 'can_manage_fields')}
-                                      />
-                                      <PermissionToggle
-                                          label={t.perm_auto_approve || 'Auto-Approve Tasks'}
-                                          hint={t.perm_auto_approve_hint || "Skip 'Waiting Approval' — tasks complete instantly when workers submit"}
-                                          value={!!manager.auto_approve_tasks}
-                                          onToggle={() => handleTogglePermission(manager, 'auto_approve_tasks')}
-                                      />
-                                      <PermissionToggle
-                                          label={t.perm_stuck_skip_approval || 'Stuck Tasks Skip Approval'}
-                                          hint={t.perm_stuck_skip_approval_hint || "When ON, stuck tasks go directly to History instead of Pending Approval"}
-                                          value={!!manager.stuck_skip_approval}
-                                          onToggle={() => handleTogglePermission(manager, 'stuck_skip_approval')}
-                                      />
-                                      <PermissionToggle
-                                          label={t.perm_lang_he || 'Allow Hebrew (HE)'}
-                                          hint={t.perm_lang_he_hint || 'Allow this manager and their employees to use the Hebrew interface'}
-                                          value={manager.allowed_lang_he !== false}
-                                          onToggle={() => handleTogglePermission(manager, 'allowed_lang_he')}
-                                      />
-                                      <PermissionToggle
-                                          label={t.perm_lang_en || 'Allow English (EN)'}
-                                          hint={t.perm_lang_en_hint || 'Allow this manager and their employees to use the English interface'}
-                                          value={manager.allowed_lang_en !== false}
-                                          onToggle={() => handleTogglePermission(manager, 'allowed_lang_en')}
-                                      />
-                                      <PermissionToggle
-                                          label={t.perm_lang_th || 'Allow Thai (TH)'}
-                                          hint={t.perm_lang_th_hint || 'Allow this manager and their employees to use the Thai interface'}
-                                          value={manager.allowed_lang_th !== false}
-                                          onToggle={() => handleTogglePermission(manager, 'allowed_lang_th')}
-                                      />
-                                  </div>
+                                  {/* Managers in this company */}
+                                  {companyManagers.map(manager => {
+                                      const initial = (manager.full_name || '?').charAt(0).toUpperCase();
+                                      return (
+                                          <div key={manager.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                                              {/* Manager header */}
+                                              <div className="flex items-center gap-3 p-4 bg-slate-50 border-b border-gray-200">
+                                                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-200 bg-slate-50 flex items-center justify-center">
+                                                      {manager.profile_picture_url ? (
+                                                          <img src={manager.profile_picture_url} alt={manager.full_name} className="w-full h-full object-cover" />
+                                                      ) : (
+                                                          <span className="text-sm font-bold text-[#714B67]">{initial}</span>
+                                                      )}
+                                                  </div>
+                                                  <div className="flex-1">
+                                                      <p className="font-bold text-gray-800">{manager.full_name}</p>
+                                                      <p className="text-xs text-gray-400">{manager.email}</p>
+                                                  </div>
+                                                  <button
+                                                      onClick={() => handleSendReport(manager.id)}
+                                                      disabled={sendingReportId === manager.id}
+                                                      className="bg-[#714B67] text-white text-xs px-3 py-1.5 rounded flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+                                                  >
+                                                      {sendingReportId === manager.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                                                      {t.btn_send_report || 'Send Daily Report'}
+                                                  </button>
+                                              </div>
+                                              {/* Toggle rows */}
+                                              <div className="px-4 py-2">
+                                                  <PermissionToggle
+                                                      label={t.perm_can_manage_fields || 'Field Settings Permission'}
+                                                      hint={t.perm_can_manage_fields_hint || 'Allow this manager to create/edit custom location fields'}
+                                                      value={manager.can_manage_fields !== false}
+                                                      onToggle={() => handleTogglePermission(manager, 'can_manage_fields')}
+                                                  />
+                                                  <PermissionToggle
+                                                      label={t.perm_auto_approve || 'Auto-Approve Tasks'}
+                                                      hint={t.perm_auto_approve_hint || "Skip 'Waiting Approval' — tasks complete instantly when workers submit"}
+                                                      value={!!manager.auto_approve_tasks}
+                                                      onToggle={() => handleTogglePermission(manager, 'auto_approve_tasks')}
+                                                  />
+                                                  <PermissionToggle
+                                                      label={t.perm_stuck_skip_approval || 'Stuck Tasks Skip Approval'}
+                                                      hint={t.perm_stuck_skip_approval_hint || "When ON, stuck tasks go directly to History instead of Pending Approval"}
+                                                      value={!!manager.stuck_skip_approval}
+                                                      onToggle={() => handleTogglePermission(manager, 'stuck_skip_approval')}
+                                                  />
+                                                  <PermissionToggle
+                                                      label={t.perm_lang_he || 'Allow Hebrew (HE)'}
+                                                      hint={t.perm_lang_he_hint || 'Allow this manager and their employees to use the Hebrew interface'}
+                                                      value={manager.allowed_lang_he !== false}
+                                                      onToggle={() => handleTogglePermission(manager, 'allowed_lang_he')}
+                                                  />
+                                                  <PermissionToggle
+                                                      label={t.perm_lang_en || 'Allow English (EN)'}
+                                                      hint={t.perm_lang_en_hint || 'Allow this manager and their employees to use the English interface'}
+                                                      value={manager.allowed_lang_en !== false}
+                                                      onToggle={() => handleTogglePermission(manager, 'allowed_lang_en')}
+                                                  />
+                                                  <PermissionToggle
+                                                      label={t.perm_lang_th || 'Allow Thai (TH)'}
+                                                      hint={t.perm_lang_th_hint || 'Allow this manager and their employees to use the Thai interface'}
+                                                      value={manager.allowed_lang_th !== false}
+                                                      onToggle={() => handleTogglePermission(manager, 'allowed_lang_th')}
+                                                  />
+                                              </div>
+                                          </div>
+                                      );
+                                  })}
                               </div>
                           );
                       })}
@@ -675,8 +703,8 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       )}
 
       {showTreeModal && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl w-full max-w-md shadow-xl border border-gray-200 p-5 animate-scale-in">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl border border-gray-200 p-5 animate-scale-in">
                   <div className="flex justify-between mb-4 border-b border-gray-200 pb-2"><h3 className="font-bold text-base text-slate-800">{treeNodeType === 'category' ? (categoryForm.id ? (t.category_modal_title_edit || 'עריכת קטגוריה') : (t.category_modal_title_add || 'הגדרת קטגוריה')) : (assetForm.id ? (t.asset_modal_title_edit || 'עריכת נכס') : (t.asset_modal_title_add || 'הגדרת נכס'))}</h3><button onClick={() => setShowTreeModal(false)} className="hover:bg-gray-100 p-1 rounded-full"><X/></button></div>
                   <form onSubmit={handleSaveTreeItem} className="space-y-4">
                       {treeNodeType === 'category' ? (
@@ -709,8 +737,8 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       )}
 
       {showLocationModal && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl border border-gray-200 flex flex-col max-h-[90vh] animate-scale-in">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl w-full max-w-xl shadow-xl border border-gray-200 flex flex-col max-h-[90vh] animate-scale-in">
                   <div className="px-4 py-3.5 border-b border-gray-200 flex justify-between items-center bg-white rounded-t-2xl"><h3 className="font-bold text-base text-slate-800">{t.location_modal_title || 'כרטיסיית מיקום'}</h3><button onClick={() => setShowLocationModal(false)} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition"><X size={18}/></button></div>
                   <div className="p-6 overflow-y-auto space-y-5">
                       

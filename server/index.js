@@ -2921,6 +2921,9 @@ app.listen(port, async () => {
             ON CONFLICT DO NOTHING
         `);
 
+        // ── Retire SUPERVISOR role: migrate all SUPERVISORs to EMPLOYEE (idempotent) ──
+        await pool.query("UPDATE users SET role = 'EMPLOYEE' WHERE role = 'SUPERVISOR'");
+
         console.log("✅ DB columns verified.");
     } catch (e) {
         console.error("⚠️ Startup migration warning:", e.message);

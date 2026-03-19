@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, Plus, ChevronRight, Users, MapPin, Tag, Box, Shield, Lock, X, Pencil, Trash2, ArrowLeft, Loader2 } from 'lucide-react';
+import { Building2, Plus, ChevronRight, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2 } from 'lucide-react';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -100,8 +100,8 @@ const UserModal = ({ editUser, role, parentManagerId, token, t, onClose, onSaved
 
     const roleLabel = role === 'SUPERVISOR' ? 'Manager' : 'Employee';
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+        <div className="fixed inset-0 flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-200 animate-scale-in">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-base font-bold text-slate-800">{isEdit ? `Edit ${roleLabel}` : `Add ${roleLabel}`}</h3>
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
@@ -191,8 +191,8 @@ const LocationModal = ({ editLocation, createdBy, token, t, onClose, onSaved }) 
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+        <div className="fixed inset-0 flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-200 animate-scale-in">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-base font-bold text-slate-800">{isEdit ? 'Edit Location' : 'Add Location'}</h3>
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
@@ -267,8 +267,8 @@ const CategoryModal = ({ editCategory, createdBy, token, t, onClose, onSaved }) 
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+        <div className="fixed inset-0 flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-200 animate-scale-in">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-base font-bold text-slate-800">{isEdit ? 'Edit Category' : 'Add Category'}</h3>
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
@@ -342,8 +342,8 @@ const AssetModal = ({ editAsset, createdBy, categories, locations, token, t, onC
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+        <div className="fixed inset-0 flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-200 animate-scale-in">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-base font-bold text-slate-800">{isEdit ? 'Edit Asset' : 'Add Asset'}</h3>
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
@@ -457,34 +457,6 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
         setDeleteConfirm(null);
     };
 
-    // Inline permission toggle for managers in Permissions section
-    const handleTogglePermission = async (mgr, field) => {
-        const defaultTrueFields = ['can_manage_fields', 'allowed_lang_he', 'allowed_lang_en', 'allowed_lang_th'];
-        const currentValue = defaultTrueFields.includes(field) ? mgr[field] !== false : !!mgr[field];
-        const newValue = !currentValue;
-
-        // Optimistic update
-        setUsers(prev => prev.map(u => u.id === mgr.id ? { ...u, [field]: newValue } : u));
-        try {
-            const res = await fetch(`${BASE}/users/${mgr.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                    full_name: mgr.full_name, email: mgr.email,
-                    phone: mgr.phone || '', role: mgr.role,
-                    preferred_language: mgr.preferred_language || 'he',
-                    [field]: newValue,
-                }),
-            });
-            if (!res.ok) {
-                setUsers(prev => prev.map(u => u.id === mgr.id ? { ...u, [field]: currentValue } : u));
-                alert('Error updating permission');
-            }
-        } catch {
-            setUsers(prev => prev.map(u => u.id === mgr.id ? { ...u, [field]: currentValue } : u));
-        }
-    };
-
     // Row action buttons (Edit + Delete)
     const RowActions = ({ onEdit, onDelete }) => (
         <div className="ml-auto flex items-center gap-1 shrink-0">
@@ -596,59 +568,6 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                         </div>
                     )}
                 />
-
-                {/* ── Permissions (manager language access + toggles) ── */}
-                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-slate-50">
-                        <Lock size={16} className="text-[#714B67]" />
-                        <h3 className="text-sm font-bold text-slate-700">{t?.permissions_label || 'Permissions'}</h3>
-                        <span className="ml-auto text-xs font-semibold text-[#714B67] bg-[#714B67]/10 px-2 py-0.5 rounded-full">
-                            {managers.length}
-                        </span>
-                    </div>
-                    <div className="divide-y divide-gray-100">
-                        {managers.length === 0 ? (
-                            <p className="px-4 py-3 text-xs text-gray-400 italic">{t?.no_managers || 'No managers assigned'}</p>
-                        ) : managers.map((mgr, idx) => (
-                            <div key={mgr?.id ?? idx} className="px-4 py-3">
-                                <p className="text-sm font-semibold text-slate-700 mb-2">{userName(mgr)}</p>
-                                <div className="flex gap-2 flex-wrap">
-                                    {[
-                                        { key: 'allowed_lang_he', label: '🇮🇱 HE' },
-                                        { key: 'allowed_lang_en', label: '🇺🇸 EN' },
-                                        { key: 'allowed_lang_th', label: '🇹🇭 TH' },
-                                    ].map(({ key, label }) => (
-                                        <button
-                                            key={key}
-                                            onClick={() => handleTogglePermission(mgr, key)}
-                                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition cursor-pointer ${
-                                                mgr?.[key] !== false
-                                                    ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                                                    : 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200 line-through'
-                                            }`}
-                                        >{label}</button>
-                                    ))}
-                                    <button
-                                        onClick={() => handleTogglePermission(mgr, 'auto_approve_tasks')}
-                                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition cursor-pointer ${
-                                            mgr?.auto_approve_tasks
-                                                ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-                                                : 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200'
-                                        }`}
-                                    >{t?.auto_approve_label || 'Auto-Approve'}</button>
-                                    <button
-                                        onClick={() => handleTogglePermission(mgr, 'can_manage_fields')}
-                                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition cursor-pointer ${
-                                            mgr?.can_manage_fields !== false
-                                                ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
-                                                : 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200 line-through'
-                                        }`}
-                                    >Field Settings</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
 
                 {/* ── Locations ── */}
                 <SectionCard
