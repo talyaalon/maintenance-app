@@ -197,6 +197,8 @@ function App() {
   }
 
   const isEmployee = user.role === 'EMPLOYEE';
+  // Settings tab is only for Admin (BIG_BOSS) and legacy MANAGER accounts; SUPERVISOR cannot access it
+  const canAccessSettings = user.role === 'BIG_BOSS' || user.role === 'MANAGER';
 
   const renderContent = () => {
       const token = localStorage.getItem('token');
@@ -213,8 +215,8 @@ function App() {
                         onAddUser={() => setIsUserFormOpen(true)}
                         refreshTrigger={refreshTrigger}
                     />;
-          case 3: 
-            if (isEmployee) return null;
+          case 3:
+            if (!canAccessSettings) return null;
             return <ConfigurationTab token={token} t={t} user={user} lang={lang} />;
           case 4: 
             return <ProfileTab 
@@ -309,11 +311,10 @@ function App() {
                 </button>
             )}
 
-            {!isEmployee && (
+            {canAccessSettings && (
                 <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#714B67]' : 'text-gray-400'}`}>
                     <Settings size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
-                    {/* תרגום: הגדרות */}
-                    <span className="text-[10px] mt-1 font-medium">{t.nav_config}</span> 
+                    <span className="text-[10px] mt-1 font-medium">{t.nav_config}</span>
                 </button>
             )}
 

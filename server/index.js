@@ -315,6 +315,14 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Only BIG_BOSS (Admin) may mutate locations, categories, assets, and location fields
+const requireAdmin = (req, res, next) => {
+  if (req.user.role !== 'BIG_BOSS') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
 app.get('/fix-db', async (req, res) => {
     try {
         const client = await pool.connect();
@@ -588,6 +596,10 @@ app.get('/users', authenticateToken, async (req, res) => {
         if (req.user.role === 'MANAGER') {
             query += ` WHERE u.id = $1 OR u.parent_manager_id = $1`;
             params.push(req.user.id);
+        } else if (req.user.role === 'SUPERVISOR') {
+            // Supervisors operate on a shared employee pool — they see themselves + ALL employees
+            query += ` WHERE u.id = $1 OR u.role = 'EMPLOYEE'`;
+            params.push(req.user.id);
         } else if (req.user.role === 'EMPLOYEE') {
              query += ` WHERE u.id = $1`;
              params.push(req.user.id);
@@ -621,7 +633,7 @@ app.post('/users', authenticateToken, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     
     let assignedManager = parent_manager_id;
-    if (!assignedManager && req.user.role === 'MANAGER') {
+    if (!assignedManager && (req.user.role === 'MANAGER' || req.user.role === 'SUPERVISOR')) {
         assignedManager = req.user.id;
     }
 
@@ -668,11 +680,13 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
     const oldUser = oldUserRes.rows[0];
 
+    // Only BIG_BOSS can change a user's role
+    const effectiveRole = (role !== undefined && req.user.role === 'BIG_BOSS') ? role : oldUser.role;
+
     // Compute effective values BEFORE the Firebase call so displayName/email are never undefined
     const effectiveName  = full_name || full_name_en || oldUser.full_name;
     const effectiveEmail = email !== undefined ? email : oldUser.email;
     const effectivePhone = phone !== undefined ? phone : (oldUser.phone || null);
-    const effectiveRole  = role  !== undefined ? role  : oldUser.role;
     const lang           = preferred_language !== undefined ? preferred_language : (oldUser.preferred_language || 'he');
 
     const firebaseUpdateData = { displayName: effectiveName, email: effectiveEmail };
@@ -828,7 +842,7 @@ app.get('/location-fields', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error'); }
 });
 
-app.post('/location-fields', authenticateToken, async (req, res) => {
+app.post('/location-fields', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name, type, created_by } = req.body;
         const ownerId = created_by || req.user.id;
@@ -840,7 +854,7 @@ app.post('/location-fields', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error adding field'); }
 });
 
-app.delete('/location-fields/:id', authenticateToken, async (req, res) => {
+app.delete('/location-fields/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         await pool.query('DELETE FROM location_fields WHERE id = $1', [req.params.id]);
         res.json({ success: true });
@@ -875,7 +889,7 @@ app.get('/locations', authenticateToken, async (req, res) => {
 // ==========================================
 // ניהול מיקומים - חסין תקלות (כולל מפענח עברית לענן!)
 // ==========================================
-app.post('/locations', authenticateToken, (req, res) => {
+app.post('/locations', authenticateToken, requireAdmin, (req, res) => {
     upload.any()(req, res, async (uploadErr) => {
         if (uploadErr) return res.status(500).json({ error: "שגיאת קובץ: " + uploadErr.message });
         
@@ -920,7 +934,7 @@ app.post('/locations', authenticateToken, (req, res) => {
     });
 });
 
-app.put('/locations/:id', authenticateToken, (req, res) => {
+app.put('/locations/:id', authenticateToken, requireAdmin, (req, res) => {
     upload.any()(req, res, async (uploadErr) => {
         if (uploadErr) return res.status(500).json({ error: "שגיאת קובץ: " + uploadErr.message });
         try {
@@ -975,7 +989,7 @@ app.get('/categories', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error'); }
 });
 
-app.post('/categories', authenticateToken, async (req, res) => {
+app.post('/categories', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name, name_he, name_en, name_th, code, created_by } = req.body;
         const ownerId = created_by || req.user.id;
@@ -995,7 +1009,7 @@ app.post('/categories', authenticateToken, async (req, res) => {
     }
 });
 
-app.put('/categories/:id', authenticateToken, async (req, res) => {
+app.put('/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { name, name_he, name_en, name_th, code } = req.body;
@@ -1036,7 +1050,7 @@ app.get('/assets', authenticateToken, async (req, res) => {
     } catch (err) { res.status(500).send('Error'); }
 });
 
-app.post('/assets', authenticateToken, async (req, res) => {
+app.post('/assets', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name, name_he, name_en, name_th, code, category_id, location_id, created_by } = req.body;
         const ownerId = created_by || req.user.id;
@@ -1081,7 +1095,7 @@ app.post('/assets', authenticateToken, async (req, res) => {
     }
 });
 
-app.put('/assets/:id', authenticateToken, async (req, res) => {
+app.put('/assets/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { name, name_he, name_en, name_th, category_id, location_id } = req.body;
@@ -1098,9 +1112,9 @@ const deleteItem = async (table, id, res) => {
     try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); } 
     catch (e) { res.status(400).json({ error: "Cannot delete: Item is in use." }); }
 };
-app.delete('/locations/:id', authenticateToken, (req, res) => deleteItem('locations', req.params.id, res));
-app.delete('/categories/:id', authenticateToken, (req, res) => deleteItem('categories', req.params.id, res));
-app.delete('/assets/:id', authenticateToken, (req, res) => deleteItem('assets', req.params.id, res));
+app.delete('/locations/:id', authenticateToken, requireAdmin, (req, res) => deleteItem('locations', req.params.id, res));
+app.delete('/categories/:id', authenticateToken, requireAdmin, (req, res) => deleteItem('categories', req.params.id, res));
+app.delete('/assets/:id', authenticateToken, requireAdmin, (req, res) => deleteItem('assets', req.params.id, res));
 
 app.get('/tasks', authenticateToken, async (req, res) => {
     try {
@@ -1136,6 +1150,13 @@ app.get('/tasks', authenticateToken, async (req, res) => {
         
         if (role === 'MANAGER') {
             query += ` WHERE t.worker_id = $1 OR t.worker_id IN (SELECT id FROM users WHERE parent_manager_id = $1)`;
+            const result = await pool.query(query + ` ORDER BY t.due_date ASC`, [id]);
+            return res.json(result.rows);
+        }
+
+        if (role === 'SUPERVISOR') {
+            // Supervisors use a shared employee pool — see tasks for themselves + ALL employees
+            query += ` WHERE t.worker_id = $1 OR t.worker_id IN (SELECT id FROM users WHERE role = 'EMPLOYEE')`;
             const result = await pool.query(query + ` ORDER BY t.due_date ASC`, [id]);
             return res.json(result.rows);
         }

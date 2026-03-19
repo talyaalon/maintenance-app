@@ -57,16 +57,16 @@ const TeamTab = ({ token, t, user, lang }) => {
     // Branded confirm-delete state
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
-    const activeManagers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS');
+    const activeManagers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS' || u.role === 'SUPERVISOR');
 
     const handleAddUser = async (e) => {
         e.preventDefault();
         let payload = { ...addForm };
-        if (user.role === 'MANAGER') {
+        if (user.role === 'MANAGER' || user.role === 'SUPERVISOR') {
             payload.parent_manager_id = user.id;
             payload.role = 'EMPLOYEE';
         }
-        if (payload.role === 'MANAGER') payload.parent_manager_id = null;
+        if (payload.role === 'MANAGER' || payload.role === 'SUPERVISOR') payload.parent_manager_id = null;
 
         try {
             const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
@@ -101,7 +101,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             if (res.ok) {
                 const data = await res.json();
                 setTeam(data);
-                const managerIds = data.filter(u => u.role === 'MANAGER').map(u => u.id);
+                const managerIds = data.filter(u => u.role === 'MANAGER' || u.role === 'SUPERVISOR').map(u => u.id);
                 setExpandedManagers(new Set(managerIds));
             }
         } catch (e) { console.error(e); }
@@ -186,7 +186,6 @@ const TeamTab = ({ token, t, user, lang }) => {
     };
 
     const renderMemberRow = (member, isSub = false) => {
-        const isManagerRole = member.role === 'MANAGER' || member.role === 'BIG_BOSS';
         const displayName = member['full_name_' + lang] || member.full_name_en || member.full_name || '?';
         const initial = displayName.charAt(0).toUpperCase();
 
@@ -215,19 +214,21 @@ const TeamTab = ({ token, t, user, lang }) => {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                    {isManagerRole && (
-                        <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-semibold">
-                            {member.role}
-                        </span>
+                    {member.role === 'BIG_BOSS' && (
+                        <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-semibold">Admin</span>
+                    )}
+                    {member.role === 'MANAGER' && (
+                        <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-semibold">{t.role_manager || 'Manager'}</span>
+                    )}
+                    {member.role === 'SUPERVISOR' && (
+                        <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-semibold">{t.role_supervisor || 'Supervisor'}</span>
                     )}
                     {member.role === 'EMPLOYEE' && (
-                        <span className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-semibold">
-                            {t.role_employee || 'Employee'}
-                        </span>
+                        <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-semibold">{t.role_employee || 'Employee'}</span>
                     )}
                     <button onClick={() => openEditModal(member)} className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-[#fdf4ff] rounded-full transition"><Edit2 size={16}/></button>
                     <button onClick={() => setDeleteConfirmId(member.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition"><Trash2 size={16}/></button>
-                    {member.role === 'MANAGER' && (
+                    {(member.role === 'MANAGER' || member.role === 'SUPERVISOR') && (
                         <button onClick={() => toggleManager(member.id)} className="p-1 text-gray-400 hover:text-[#714B67] transition">
                             {expandedManagers.has(member.id) ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
                         </button>
@@ -237,9 +238,14 @@ const TeamTab = ({ token, t, user, lang }) => {
         );
     };
 
+    const isSupervisorViewer = user.role === 'SUPERVISOR';
     const bigBosses = team.filter(u => u.role === 'BIG_BOSS');
-    const regularManagers = team.filter(u => u.role === 'MANAGER');
-    const directEmployees = team.filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === user.id);
+    // Exclude self from the manager list so a SUPERVISOR doesn't appear twice
+    const regularManagers = team.filter(u => (u.role === 'MANAGER' || u.role === 'SUPERVISOR') && u.id !== user.id);
+    // Supervisors see the full shared employee pool; others see only their direct reports
+    const directEmployees = isSupervisorViewer
+        ? team.filter(u => u.role === 'EMPLOYEE')
+        : team.filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === user.id);
 
     return (
         <div className="px-3 sm:px-4 pt-3 pb-24 min-h-screen bg-slate-50">
@@ -292,7 +298,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         );
                                     })}
                                     {regularManagers.length === 0 && (
-                                        <p className="text-sm text-gray-400 text-center py-2">{t.no_managers_assigned || "No managers assigned"}</p>
+                                        <p className="text-sm text-gray-400 text-center py-2">{t.no_managers_assigned || "No supervisors or managers assigned"}</p>
                                     )}
                                 </div>
                             </div>
@@ -313,7 +319,15 @@ const TeamTab = ({ token, t, user, lang }) => {
                             );
                         })}
 
-                        {bigBosses.length === 0 && regularManagers.length === 0 && directEmployees.length > 0 && (
+                        {isSupervisorViewer && (
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-bold text-gray-500 mb-2">{t.shared_employee_pool || "Shared Employee Pool"}</h3>
+                                {directEmployees.length === 0 && <p className="text-sm text-gray-400 text-center py-2">{t.no_employees_assigned || "No employees found"}</p>}
+                                {directEmployees.map(emp => renderMemberRow(emp))}
+                            </div>
+                        )}
+
+                        {!isSupervisorViewer && bigBosses.length === 0 && regularManagers.length === 0 && directEmployees.length > 0 && (
                             <>
                                 <h3 className="text-sm font-bold text-gray-500 mt-6 mb-2">{t.direct_employees || "Direct Employees"}</h3>
                                 {directEmployees.map(emp => renderMemberRow(emp))}
@@ -375,6 +389,20 @@ const TeamTab = ({ token, t, user, lang }) => {
                                 <input dir="ltr" className="w-full p-2 border rounded text-sm" placeholder="Name in English" required value={editForm.full_name_en} onChange={e => setEditForm({...editForm, full_name_en: e.target.value, full_name: e.target.value})} />
                                 <input dir="ltr" className="w-full p-2 border rounded text-sm" placeholder="ชื่อภาษาไทย" value={editForm.full_name_th} onChange={e => setEditForm({...editForm, full_name_th: e.target.value})} />
                             </div>
+                            {user.role === 'BIG_BOSS' && editMember && editMember.role !== 'BIG_BOSS' && (
+                                <div>
+                                    <label className="text-sm font-bold text-gray-700">{t.role_label || 'Role'}</label>
+                                    <select
+                                        className="w-full p-2 border rounded bg-white"
+                                        value={editForm.role}
+                                        onChange={e => setEditForm({...editForm, role: e.target.value})}
+                                    >
+                                        <option value="EMPLOYEE">{t.role_employee || 'Employee'}</option>
+                                        <option value="SUPERVISOR">{t.role_supervisor || 'Supervisor'}</option>
+                                        <option value="MANAGER">{t.role_manager || 'Manager'}</option>
+                                    </select>
+                                </div>
+                            )}
                             <div>
                                 <label className="text-sm font-bold text-gray-700">{t.email_label}</label>
                                 <input className="w-full p-2 border rounded" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} required />
@@ -447,6 +475,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         onChange={e => setAddForm({ ...addForm, role: e.target.value, parent_manager_id: '' })}
                                     >
                                         <option value="EMPLOYEE">{t.role_employee || "Employee"}</option>
+                                        <option value="SUPERVISOR">{t.role_supervisor || "Supervisor"}</option>
                                         <option value="MANAGER">{t.role_manager || "Manager"}</option>
                                     </select>
 

@@ -159,6 +159,7 @@ export const translations = {
     password_label: "Initial Password",
     role_label: "Role",
     role_employee: "Employee",
+    role_supervisor: "Supervisor",
     role_manager: "Manager",
     select_manager: "Select Manager",
     create_btn: "Create User",
@@ -304,6 +305,7 @@ export const translations = {
     no_employees_assigned: "No employees assigned",
     no_managers_assigned: "No managers assigned",
     direct_employees: "Direct Employees",
+    shared_employee_pool: "Shared Employee Pool",
     my_team_title: "My Team",
 
     // --- Create Task Alerts ---
@@ -570,6 +572,7 @@ export const translations = {
     password_label: "סיסמה ראשונית",
     role_label: "תפקיד",
     role_employee: "עובד רגיל",
+    role_supervisor: "מנהל מחלקה",
     role_manager: "מנהל אזור",
     select_manager: "בחר מנהל",
     create_btn: "צור משתמש",
@@ -715,6 +718,7 @@ export const translations = {
     no_employees_assigned: "אין עובדים משויכים",
     no_managers_assigned: "אין מנהלים משויכים",
     direct_employees: "עובדים ישירים",
+    shared_employee_pool: "מאגר עובדים משותף",
     my_team_title: "הצוות שלי",
 
     // --- Create Task Alerts ---
@@ -981,6 +985,7 @@ export const translations = {
     password_label: "รหัสผ่านเริ่มต้น",
     role_label: "บทบาท",
     role_employee: "พนักงาน",
+    role_supervisor: "หัวหน้างาน",
     role_manager: "ผู้จัดการ",
     select_manager: "เลือกผู้จัดการ",
     create_btn: "สร้างผู้ใช้",
@@ -1164,6 +1169,7 @@ export const translations = {
     no_employees_assigned: "ไม่มีพนักงานที่มอบหมาย",
     no_managers_assigned: "ไม่มีผู้จัดการที่มอบหมาย",
     direct_employees: "พนักงานตรง",
+    shared_employee_pool: "กลุ่มพนักงานร่วม",
     my_team_title: "ทีมของฉัน",
 
     // --- Create Task Alerts ---
