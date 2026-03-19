@@ -49,23 +49,24 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   const fetchData = async () => {
     try {
       const headers = { 'Authorization': `Bearer ${token}` };
-      const catRes = await fetch('https://maintenance-app-h84v.onrender.com/categories', { headers });
-      const assetRes = await fetch('https://maintenance-app-h84v.onrender.com/assets', { headers });
-      const locRes = await fetch('https://maintenance-app-h84v.onrender.com/locations', { headers }); 
-      const fieldsRes = await fetch('https://maintenance-app-h84v.onrender.com/location-fields', { headers }); 
-      
-      if (catRes.ok) setCategories(await catRes.json());
-      if (assetRes.ok) setAssets(await assetRes.json());
-      if (locRes.ok) setLocations(await locRes.json());
-      if (fieldsRes.ok) setGlobalFields(await fieldsRes.json());
+      const [catRes, assetRes, locRes, fieldsRes] = await Promise.all([
+        fetch('https://maintenance-app-h84v.onrender.com/categories', { headers }),
+        fetch('https://maintenance-app-h84v.onrender.com/assets', { headers }),
+        fetch('https://maintenance-app-h84v.onrender.com/locations', { headers }),
+        fetch('https://maintenance-app-h84v.onrender.com/location-fields', { headers }),
+      ]);
+      if (catRes.ok)    { const d = await catRes.json();    setCategories(Array.isArray(d) ? d : []); }
+      if (assetRes.ok)  { const d = await assetRes.json();  setAssets(Array.isArray(d) ? d : []); }
+      if (locRes.ok)    { const d = await locRes.json();    setLocations(Array.isArray(d) ? d : []); }
+      if (fieldsRes.ok) { const d = await fieldsRes.json(); setGlobalFields(Array.isArray(d) ? d : []); }
     } catch (e) { console.error(e); }
   };
 
   const fetchManagers = async () => {
       try {
           const res = await fetch('https://maintenance-app-h84v.onrender.com/managers', { headers: { 'Authorization': `Bearer ${token}` } });
-          if (res.ok) setManagers(await res.json());
-      } catch (e) {}
+          if (res.ok) { const d = await res.json(); setManagers(Array.isArray(d) ? d : []); }
+      } catch (e) { console.error(e); }
   };
 
   // ── Google Maps: load script once ────────────────────────────────────────
@@ -379,10 +380,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   const renderWorkspace = (targetManagerId) => {
       // MANAGER with can_manage_fields explicitly set to false loses access to Field Settings
       const canManageFields = !(user?.role === 'MANAGER' && user?.can_manage_fields === false);
-      const wCategories = categories.filter(c => c.created_by === targetManagerId);
-      const wAssets = assets.filter(a => a.created_by === targetManagerId);
-      const wLocations = locations.filter(l => l.created_by === targetManagerId);
-      const mFields = globalFields.filter(f => f.created_by === targetManagerId);
+      const wCategories = (Array.isArray(categories) ? categories : []).filter(c => c?.created_by === targetManagerId);
+      const wAssets     = (Array.isArray(assets) ? assets : []).filter(a => a?.created_by === targetManagerId);
+      const wLocations  = (Array.isArray(locations) ? locations : []).filter(l => l?.created_by === targetManagerId);
+      const mFields     = (Array.isArray(globalFields) ? globalFields : []).filter(f => f?.created_by === targetManagerId);
 
       return (
           <div className="space-y-6 mt-4 border-t pt-4">
@@ -574,8 +575,8 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
               {bossMainTab === 'permissions' && (
                   <div className="space-y-4 animate-fade-in">
                       <p className="text-sm text-gray-500">{t.permissions_desc || 'Manage field-level permissions and task behaviour for each manager.'}</p>
-                      {managers.length === 0 && <p className="text-center text-gray-400 py-6">No managers found.</p>}
-                      {managers.map(manager => {
+                      {(Array.isArray(managers) ? managers : []).length === 0 && <p className="text-center text-gray-400 py-6">No managers found.</p>}
+                      {(Array.isArray(managers) ? managers : []).map(manager => {
                           const initial = (manager.full_name || '?').charAt(0).toUpperCase();
                           return (
                               <div key={manager.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
@@ -647,7 +648,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
               )}
 
               {/* ── Workspaces panel (existing) ── */}
-              {bossMainTab === 'workspaces' && managers.map(manager => {
+              {bossMainTab === 'workspaces' && (Array.isArray(managers) ? managers : []).map(manager => {
                   const isExpanded = expandedBossManager === manager.id;
                   return (
                       <div key={manager.id} className={`bg-white rounded-2xl border border-gray-200 overflow-hidden transition-all ${isExpanded ? 'ring-1 ring-[#714B67]/30' : ''}`}>
@@ -773,10 +774,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           )}
                       </div>
 
-                      {globalFields.filter(f => f.created_by === locationForm.created_by).length > 0 && (
+                      {(Array.isArray(globalFields) ? globalFields : []).filter(f => f?.created_by === locationForm.created_by).length > 0 && (
                           <div className="border-t pt-5 mt-2 space-y-4">
                               <h4 className="font-bold text-[#714B67] text-sm flex items-center gap-1"><Layers size={18}/> נתונים ומסמכים נוספים</h4>
-                              {globalFields.filter(f => f.created_by === locationForm.created_by).map(field => {
+                              {(Array.isArray(globalFields) ? globalFields : []).filter(f => f?.created_by === locationForm.created_by).map(field => {
                                   const key = field.id; 
                                   return (
                                       <div key={key} className="bg-gray-50 p-3 rounded-xl border">

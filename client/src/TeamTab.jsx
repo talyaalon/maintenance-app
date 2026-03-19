@@ -73,7 +73,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const [isLoadingTasks, setIsLoadingTasks] = useState(false);
 
     // All managers/supervisors visible to the viewer (for parent dropdown)
-    const activeManagers = team.filter(u => u.role === 'MANAGER' || u.role === 'BIG_BOSS' || u.role === 'SUPERVISOR');
+    const activeManagers = (Array.isArray(team) ? team : []).filter(u => u?.role === 'MANAGER' || u?.role === 'BIG_BOSS' || u?.role === 'SUPERVISOR');
 
     useEffect(() => { fetchTeam(); }, []);
 
@@ -84,11 +84,12 @@ const TeamTab = ({ token, t, user, lang }) => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
-                const data = await res.json();
+                const raw = await res.json();
+                const data = Array.isArray(raw) ? raw : [];
                 setTeam(data);
                 // Auto-expand all area managers and dept managers
                 const toExpand = data
-                    .filter(u => u.role === 'MANAGER' || u.role === 'SUPERVISOR')
+                    .filter(u => u?.role === 'MANAGER' || u?.role === 'SUPERVISOR')
                     .map(u => u.id);
                 setExpandedNodes(new Set(toExpand));
             }
@@ -236,10 +237,11 @@ const TeamTab = ({ token, t, user, lang }) => {
     };
 
     // ─── 4-tier hierarchy builders ─────────────────────────────────────────────
-    const bigBosses    = team.filter(u => u.role === 'BIG_BOSS');
-    const areaManagers = team.filter(u => u.role === 'MANAGER');
-    const deptManagers = team.filter(u => u.role === 'SUPERVISOR');
-    const employees    = team.filter(u => u.role === 'EMPLOYEE');
+    const safeTeam     = Array.isArray(team) ? team : [];
+    const bigBosses    = safeTeam.filter(u => u?.role === 'BIG_BOSS');
+    const areaManagers = safeTeam.filter(u => u?.role === 'MANAGER');
+    const deptManagers = safeTeam.filter(u => u?.role === 'SUPERVISOR');
+    const employees    = safeTeam.filter(u => u?.role === 'EMPLOYEE');
 
     // Render Employees under a given parent id
     const renderEmployees = (parentId) => {
@@ -283,9 +285,40 @@ const TeamTab = ({ token, t, user, lang }) => {
         );
     };
 
+    // ─── Unassigned / Legacy: users not connected to any manager in the tree ──
+    const renderUnassignedSection = () => {
+        // Build the set of user IDs that WILL be rendered in the main hierarchy
+        const renderedIds = new Set();
+        bigBosses.forEach(b => renderedIds.add(b.id));
+        areaManagers.forEach(am => {
+            renderedIds.add(am.id);
+            deptManagers
+                .filter(d => d?.parent_manager_id === am.id)
+                .forEach(d => {
+                    renderedIds.add(d.id);
+                    employees
+                        .filter(e => e?.parent_manager_id === d.id)
+                        .forEach(e => renderedIds.add(e.id));
+                });
+            employees
+                .filter(e => e?.parent_manager_id === am.id)
+                .forEach(e => renderedIds.add(e.id));
+        });
+        const orphans = safeTeam.filter(u => u?.role !== 'BIG_BOSS' && u?.role !== 'MANAGER' && !renderedIds.has(u?.id));
+        if (orphans.length === 0) return null;
+        return (
+            <div className="mt-4">
+                <p className="text-xs text-amber-600 font-semibold mb-2 px-1">⚠️ {t?.unassigned_legacy || 'Unassigned / Legacy'}</p>
+                <div className="space-y-1">
+                    {orphans.map(u => renderMemberRow(u, 0))}
+                </div>
+            </div>
+        );
+    };
+
     // ─── View for BIG_BOSS or MANAGER (AreaManager) viewers ───────────────────
     const renderFullHierarchy = () => {
-        const isBigBoss = user.role === 'BIG_BOSS';
+        const isBigBoss = user?.role === 'BIG_BOSS';
 
         if (isBigBoss) {
             return (
@@ -304,13 +337,14 @@ const TeamTab = ({ token, t, user, lang }) => {
                             )}
                         </div>
                     ))}
+                    {renderUnassignedSection()}
                 </>
             );
         }
 
         // MANAGER (AreaManager) viewer: sees DeptManagers + direct Employees (DeptManager is optional)
-        const myDepts = deptManagers.filter(d => d.parent_manager_id === user.id);
-        const myDirectEmps = employees.filter(e => e.parent_manager_id === user.id);
+        const myDepts = deptManagers.filter(d => d?.parent_manager_id === user?.id);
+        const myDirectEmps = employees.filter(e => e?.parent_manager_id === user?.id);
 
         return (
             <>
@@ -337,7 +371,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     // ─── View for SUPERVISOR (DeptManager) viewer ──────────────────────────────
     const renderDeptManagerView = () => {
         // Only show employees that directly report to this DeptManager
-        const uniqueEmps = employees.filter(e => e.parent_manager_id === user.id);
+        const uniqueEmps = employees.filter(e => e?.parent_manager_id === user?.id);
         return (
             <>
                 {uniqueEmps.length === 0 && (
@@ -371,9 +405,9 @@ const TeamTab = ({ token, t, user, lang }) => {
             </div>
 
             {/* Hierarchy Legend (Admin/AreaManager viewers only) */}
-            {(user.role === 'BIG_BOSS' || user.role === 'MANAGER') && (
+            {(user?.role === 'BIG_BOSS' || user?.role === 'MANAGER') && (
                 <div className="flex gap-3 mb-4 flex-wrap text-xs text-gray-500">
-                    {user.role === 'BIG_BOSS' && <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-400 inline-block"/> Admin</span>}
+                    {user?.role === 'BIG_BOSS' && <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-400 inline-block"/> Admin</span>}
                     <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-indigo-400 inline-block"/> {t.role_area_manager || 'Area Manager'}</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-400 inline-block"/> {t.role_dept_manager || 'Dept Manager'}</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-400 inline-block"/> {t.role_employee || 'Employee'}</span>
@@ -389,7 +423,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                         <SkeletonRow indent />
                     </>
                 ) : (
-                    user.role === 'SUPERVISOR'
+                    user?.role === 'SUPERVISOR'
                         ? renderDeptManagerView()
                         : renderFullHierarchy()
                 )}

@@ -673,7 +673,7 @@ app.get('/users', authenticateToken, async (req, res) => {
         query += ` ORDER BY u.role, u.full_name`;
         const result = await pool.query(query, params);
         res.json(result.rows);
-    } catch (err) { console.error("❌ GET /users error:", err.message); res.status(500).send('Server Error'); }
+    } catch (err) { console.error("❌ GET /users error:", err.message); res.status(500).json({ error: err.message }); }
 });
 
 app.post('/users', authenticateToken, async (req, res) => {
@@ -911,9 +911,9 @@ app.delete('/users/:id', authenticateToken, async (req, res) => {
 
 app.get('/managers', authenticateToken, async (req, res) => {
   try {
-    const managers = await pool.query("SELECT id, full_name, email, phone, role, area_id, profile_picture_url, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th FROM users WHERE role IN ('MANAGER','SUPERVISOR','BIG_BOSS') ORDER BY role, full_name");
+    const managers = await pool.query("SELECT id, full_name, email, phone, role, area_id, profile_picture_url, can_manage_fields, auto_approve_tasks, stuck_skip_approval, allowed_lang_he, allowed_lang_en, allowed_lang_th FROM users WHERE role IN ('MANAGER','SUPERVISOR','BIG_BOSS') ORDER BY role, full_name");
     res.json(managers.rows);
-  } catch (err) { res.status(500).send('Server Error'); }
+  } catch (err) { console.error('GET /managers error:', err.message); res.status(500).json({ error: 'Server Error' }); }
 });
 
 // ==========================================
@@ -923,7 +923,7 @@ app.get('/location-fields', authenticateToken, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM location_fields ORDER BY id ASC');
         res.json(result.rows);
-    } catch (err) { res.status(500).send('Error'); }
+    } catch (err) { console.error('GET /location-fields error:', err.message); res.status(500).json({ error: err.message }); }
 });
 
 app.post('/location-fields', authenticateToken, requireAdmin, async (req, res) => {
@@ -976,7 +976,7 @@ app.get('/locations', authenticateToken, async (req, res) => {
         query += ` ORDER BY locations.name ASC`;
         const r = await pool.query(query, params);
         res.json(r.rows);
-    } catch (err) { res.status(500).send('Error'); }
+    } catch (err) { console.error('GET /locations error:', err.message); res.status(500).json({ error: err.message }); }
 });
 
 // ==========================================
@@ -1089,10 +1089,10 @@ app.get('/categories', authenticateToken, async (req, res) => {
             }
         }
         query += ` ORDER BY categories.name`;
-        
-        const result = await pool.query(query, params); 
-        res.json(result.rows); 
-    } catch (err) { res.status(500).send('Error'); }
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) { console.error('GET /categories error:', err.message); res.status(500).json({ error: err.message }); }
 });
 
 app.post('/categories', authenticateToken, requireAdmin, async (req, res) => {
@@ -1162,10 +1162,10 @@ app.get('/assets', authenticateToken, async (req, res) => {
             }
         }
         query += ` ORDER BY assets.code`;
-        
-        const result = await pool.query(query, params); 
-        res.json(result.rows); 
-    } catch (err) { res.status(500).send('Error'); }
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) { console.error('GET /assets error:', err.message); res.status(500).json({ error: err.message }); }
 });
 
 app.post('/assets', authenticateToken, requireAdmin, async (req, res) => {
