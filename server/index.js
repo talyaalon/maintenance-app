@@ -449,11 +449,75 @@ app.get('/fix-db', async (req, res) => {
             await client.query("UPDATE assets SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
             await client.query("UPDATE users SET full_name_en = full_name WHERE full_name_en IS NULL AND full_name IS NOT NULL");
 
+            // ── Multi-Tenant SaaS: companies table ──
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS companies (
+                    id                SERIAL PRIMARY KEY,
+                    name              VARCHAR(255) NOT NULL,
+                    profile_image_url TEXT,
+                    created_at        TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at        TIMESTAMPTZ DEFAULT NOW()
+                )
+            `);
+            await client.query('ALTER TABLE users      ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL');
+            await client.query('ALTER TABLE tasks      ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL');
+            await client.query('ALTER TABLE locations  ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL');
+            await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL');
+            await client.query('ALTER TABLE assets     ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL');
+
+            // ── M:M: employee ↔ manager junction table ──
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS employee_managers (
+                    id          SERIAL PRIMARY KEY,
+                    employee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    manager_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    created_at  TIMESTAMPTZ DEFAULT NOW(),
+                    UNIQUE(employee_id, manager_id)
+                )
+            `);
+
+            // ── Smart Migration: one Company per AreaManager without one ──
+            const unassignedMgrsResult = await client.query(
+                "SELECT id, area_id FROM users WHERE role = 'MANAGER' AND company_id IS NULL ORDER BY id"
+            );
+            let fixCoCounter = 1;
+            for (const mgr of unassignedMgrsResult.rows) {
+                const newCo = await client.query(
+                    'INSERT INTO companies (name) VALUES ($1) RETURNING id',
+                    [`Company ${fixCoCounter}`]
+                );
+                const coId = newCo.rows[0].id;
+                fixCoCounter++;
+
+                await client.query('UPDATE users SET company_id = $1 WHERE id = $2', [coId, mgr.id]);
+                await client.query(
+                    "UPDATE users SET company_id = $1 WHERE area_id = $2 AND role IN ('SUPERVISOR','EMPLOYEE') AND company_id IS NULL",
+                    [coId, mgr.area_id]
+                );
+                await client.query('UPDATE locations  SET company_id = $1 WHERE area_id = $2 AND company_id IS NULL', [coId, mgr.area_id]);
+                await client.query('UPDATE categories SET company_id = $1 WHERE area_id = $2 AND company_id IS NULL', [coId, mgr.area_id]);
+                await client.query('UPDATE assets     SET company_id = $1 WHERE area_id = $2 AND company_id IS NULL', [coId, mgr.area_id]);
+                await client.query(
+                    'UPDATE tasks SET company_id = $1 WHERE worker_id IN (SELECT id FROM users WHERE area_id = $2) AND company_id IS NULL',
+                    [coId, mgr.area_id]
+                );
+            }
+
+            // ── Migrate existing parent_manager_id → M:M junction table (idempotent) ──
+            await client.query(`
+                INSERT INTO employee_managers (employee_id, manager_id)
+                SELECT id, parent_manager_id
+                FROM users
+                WHERE parent_manager_id IS NOT NULL
+                  AND role IN ('EMPLOYEE', 'SUPERVISOR')
+                ON CONFLICT DO NOTHING
+            `);
+
             console.log("✅ DB Fix Completed!");
             res.send(`
                 <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
                     <h1 style="color: #166534;">✅ מסד הנתונים תוקן בהצלחה!</h1>
-                    <p>חוקי הכפילות הישנים הוסרו והתווספו הרשאות ניהול. המערכת עכשיו תומכת רשמית במספר מנהלים (Multi-Tenant).</p>
+                    <p>נוצרה טבלת חברות (companies), עמודות company_id, וטבלת M:M לקישור עובדים-מנהלים. חברה נוצרה אוטומטית לכל AreaManager קיים.</p>
                     <p>את יכולה לחזור לאפליקציה!</p>
                 </div>
             `);
@@ -731,15 +795,39 @@ app.post('/users', authenticateToken, async (req, res) => {
     }
     // For MANAGER (AreaManager): area_id = their own id — set after insert
 
+    // Determine company_id for the new user
+    let newUserCompanyId = null;
+    if (role === 'SUPERVISOR' || role === 'EMPLOYEE') {
+        // Inherit company from parent manager
+        if (assignedManager) {
+            const parentCoRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [assignedManager]);
+            newUserCompanyId = parentCoRes.rows[0]?.company_id || null;
+        }
+    }
+    // For MANAGER: company is created after insert (we need their id first)
+
     const newUser = await pool.query(
-      `INSERT INTO users (full_name, full_name_he, full_name_en, full_name_th, email, password, role, phone, parent_manager_id, preferred_language, line_user_id, area_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id, full_name, email, role, phone, preferred_language, line_user_id`,
-      [effectiveFullName, full_name_he || null, full_name_en || null, full_name_th || null, email, hashedPassword, role, phone, assignedManager, lang, line_user_id || null, newUserAreaId]
+      `INSERT INTO users (full_name, full_name_he, full_name_en, full_name_th, email, password, role, phone, parent_manager_id, preferred_language, line_user_id, area_id, company_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id, full_name, email, role, phone, preferred_language, line_user_id`,
+      [effectiveFullName, full_name_he || null, full_name_en || null, full_name_th || null, email, hashedPassword, role, phone, assignedManager, lang, line_user_id || null, newUserAreaId, newUserCompanyId]
     );
 
-    // For MANAGER (AreaManager), area_id = their own id
+    // For MANAGER (AreaManager), area_id = their own id, and auto-create a Company for them
     if (role === 'MANAGER') {
         await pool.query('UPDATE users SET area_id = id WHERE id = $1', [newUser.rows[0].id]);
+        const newCo = await pool.query(
+            'INSERT INTO companies (name) VALUES ($1) RETURNING id',
+            [`Company (${effectiveFullName})`]
+        );
+        await pool.query('UPDATE users SET company_id = $1 WHERE id = $2', [newCo.rows[0].id, newUser.rows[0].id]);
+    }
+
+    // Populate M:M junction table for SUPERVISOR/EMPLOYEE
+    if ((role === 'SUPERVISOR' || role === 'EMPLOYEE') && assignedManager) {
+        await pool.query(
+            'INSERT INTO employee_managers (employee_id, manager_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [newUser.rows[0].id, assignedManager]
+        );
     }
 
     try {
@@ -941,29 +1029,155 @@ app.put('/users/:id/assign-employees', authenticateToken, async (req, res) => {
                  WHERE id = ANY($2::int[]) AND role = 'EMPLOYEE' AND area_id = $3`,
                 [deptMgrId, employeeIds, deptMgr.area_id]
             );
+            // Sync M:M junction: add new assignments
+            for (const empId of employeeIds) {
+                await pool.query(
+                    'INSERT INTO employee_managers (employee_id, manager_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                    [empId, deptMgrId]
+                );
+            }
             // Unassign removed employees → back to AreaManager
             if (areaManagerId) {
+                // Get employees being removed from this DeptManager
+                const removedRes = await pool.query(
+                    `SELECT id FROM users WHERE parent_manager_id = $1 AND role = 'EMPLOYEE'
+                       AND NOT (id = ANY($2::int[]))`,
+                    [deptMgrId, employeeIds]
+                );
                 await pool.query(
                     `UPDATE users SET parent_manager_id = $1
                      WHERE parent_manager_id = $2 AND role = 'EMPLOYEE'
                        AND NOT (id = ANY($3::int[]))`,
                     [areaManagerId, deptMgrId, employeeIds]
                 );
+                // Remove from M:M junction for unassigned employees
+                for (const row of removedRes.rows) {
+                    await pool.query(
+                        'DELETE FROM employee_managers WHERE employee_id = $1 AND manager_id = $2',
+                        [row.id, deptMgrId]
+                    );
+                    // Re-link to AreaManager in junction table
+                    await pool.query(
+                        'INSERT INTO employee_managers (employee_id, manager_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                        [row.id, areaManagerId]
+                    );
+                }
             }
         } else {
             // No employees selected → unassign everyone from this DeptManager
             if (areaManagerId) {
+                const removedAllRes = await pool.query(
+                    `SELECT id FROM users WHERE parent_manager_id = $1 AND role = 'EMPLOYEE'`,
+                    [deptMgrId]
+                );
                 await pool.query(
                     `UPDATE users SET parent_manager_id = $1
                      WHERE parent_manager_id = $2 AND role = 'EMPLOYEE'`,
                     [areaManagerId, deptMgrId]
                 );
+                // Update M:M junction: remove from DeptMgr, re-link to AreaManager
+                for (const row of removedAllRes.rows) {
+                    await pool.query(
+                        'DELETE FROM employee_managers WHERE employee_id = $1 AND manager_id = $2',
+                        [row.id, deptMgrId]
+                    );
+                    await pool.query(
+                        'INSERT INTO employee_managers (employee_id, manager_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                        [row.id, areaManagerId]
+                    );
+                }
             }
         }
 
         res.json({ success: true });
     } catch (err) {
         console.error('❌ PUT /users/:id/assign-employees error:', err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// ==========================================
+// 🏢 Company CRUD Endpoints (Multi-Tenant)
+// ==========================================
+
+// GET /companies — BIG_BOSS sees all; others see only their own company
+app.get('/companies', authenticateToken, async (req, res) => {
+    try {
+        let result;
+        if (req.user.role === 'BIG_BOSS') {
+            result = await pool.query('SELECT * FROM companies ORDER BY id ASC');
+        } else {
+            // Any other role: return the company linked to the calling user
+            const userRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [req.user.id]);
+            const companyId = userRes.rows[0]?.company_id;
+            if (!companyId) return res.json([]);
+            result = await pool.query('SELECT * FROM companies WHERE id = $1', [companyId]);
+        }
+        res.json(result.rows ?? []);
+    } catch (err) {
+        console.error('GET /companies error:', err.message);
+        res.json([]);
+    }
+});
+
+// POST /companies — BIG_BOSS only; optionally attach profile image
+app.post('/companies', authenticateToken, upload.single('profile_image'), async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'BIG_BOSS only' });
+    try {
+        const { name } = req.body;
+        if (!name) return res.status(400).json({ error: 'Company name is required' });
+        const imageUrl = req.file ? (req.file.path || req.file.secure_url || null) : null;
+        const result = await pool.query(
+            'INSERT INTO companies (name, profile_image_url) VALUES ($1, $2) RETURNING *',
+            [name, imageUrl]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('POST /companies error:', err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// PUT /companies/:id — BIG_BOSS only; update name and/or profile image
+app.put('/companies/:id', authenticateToken, upload.single('profile_image'), async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'BIG_BOSS only' });
+    try {
+        const { id } = req.params;
+        const { name } = req.body;
+        const existing = await pool.query('SELECT * FROM companies WHERE id = $1', [id]);
+        if (existing.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
+
+        const newName = name || existing.rows[0].name;
+        const newImage = req.file
+            ? (req.file.path || req.file.secure_url || null)
+            : (req.body.existing_image || existing.rows[0].profile_image_url);
+
+        const result = await pool.query(
+            'UPDATE companies SET name = $1, profile_image_url = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+            [newName, newImage, id]
+        );
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('PUT /companies/:id error:', err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// DELETE /companies/:id — BIG_BOSS only; nullifies company_id on all linked records
+app.delete('/companies/:id', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'BIG_BOSS only' });
+    try {
+        const { id } = req.params;
+        // Nullify FK references before deleting (ON DELETE SET NULL handles this too, but be explicit)
+        await pool.query('UPDATE users      SET company_id = NULL WHERE company_id = $1', [id]);
+        await pool.query('UPDATE tasks      SET company_id = NULL WHERE company_id = $1', [id]);
+        await pool.query('UPDATE locations  SET company_id = NULL WHERE company_id = $1', [id]);
+        await pool.query('UPDATE categories SET company_id = NULL WHERE company_id = $1', [id]);
+        await pool.query('UPDATE assets     SET company_id = NULL WHERE company_id = $1', [id]);
+        await pool.query('DELETE FROM companies WHERE id = $1', [id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('DELETE /companies/:id error:', err.message);
         res.status(500).json({ error: 'Server error' });
     }
 });
@@ -2594,6 +2808,79 @@ app.listen(port, async () => {
         await pool.query("UPDATE categories SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
         await pool.query("UPDATE assets     SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
         await pool.query("UPDATE users SET full_name_en = full_name WHERE full_name_en IS NULL AND full_name IS NOT NULL");
+
+        // ── Multi-Tenant SaaS: companies table ──
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS companies (
+                id                SERIAL PRIMARY KEY,
+                name              VARCHAR(255) NOT NULL,
+                profile_image_url TEXT,
+                created_at        TIMESTAMPTZ DEFAULT NOW(),
+                updated_at        TIMESTAMPTZ DEFAULT NOW()
+            )
+        `);
+
+        // ── Add company_id FK to all tenant-scoped tables ──
+        await pool.query('ALTER TABLE users      ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL');
+        await pool.query('ALTER TABLE tasks      ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL');
+        await pool.query('ALTER TABLE locations  ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL');
+        await pool.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL');
+        await pool.query('ALTER TABLE assets     ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL');
+
+        // ── M:M: employee ↔ manager junction table ──
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS employee_managers (
+                id          SERIAL PRIMARY KEY,
+                employee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                manager_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at  TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(employee_id, manager_id)
+            )
+        `);
+
+        // ── Smart Migration: one Company per AreaManager that has no company yet ──
+        const unassignedMgrs = await pool.query(
+            "SELECT id, area_id FROM users WHERE role = 'MANAGER' AND company_id IS NULL ORDER BY id"
+        );
+        let coCounter = 1;
+        for (const mgr of unassignedMgrs.rows) {
+            const newCo = await pool.query(
+                'INSERT INTO companies (name) VALUES ($1) RETURNING id',
+                [`Company ${coCounter}`]
+            );
+            const coId = newCo.rows[0].id;
+            coCounter++;
+
+            // Link the AreaManager to their new company
+            await pool.query('UPDATE users SET company_id = $1 WHERE id = $2', [coId, mgr.id]);
+
+            // Link all SUPERVISORs and EMPLOYEEs in the same area
+            await pool.query(
+                "UPDATE users SET company_id = $1 WHERE area_id = $2 AND role IN ('SUPERVISOR','EMPLOYEE') AND company_id IS NULL",
+                [coId, mgr.area_id]
+            );
+
+            // Link all Locations, Categories, Assets in the same area
+            await pool.query('UPDATE locations  SET company_id = $1 WHERE area_id = $2 AND company_id IS NULL', [coId, mgr.area_id]);
+            await pool.query('UPDATE categories SET company_id = $1 WHERE area_id = $2 AND company_id IS NULL', [coId, mgr.area_id]);
+            await pool.query('UPDATE assets     SET company_id = $1 WHERE area_id = $2 AND company_id IS NULL', [coId, mgr.area_id]);
+
+            // Link Tasks whose worker belongs to this area
+            await pool.query(
+                'UPDATE tasks SET company_id = $1 WHERE worker_id IN (SELECT id FROM users WHERE area_id = $2) AND company_id IS NULL',
+                [coId, mgr.area_id]
+            );
+        }
+
+        // ── Migrate existing parent_manager_id → M:M junction table (idempotent) ──
+        await pool.query(`
+            INSERT INTO employee_managers (employee_id, manager_id)
+            SELECT id, parent_manager_id
+            FROM users
+            WHERE parent_manager_id IS NOT NULL
+              AND role IN ('EMPLOYEE', 'SUPERVISOR')
+            ON CONFLICT DO NOTHING
+        `);
 
         console.log("✅ DB columns verified.");
     } catch (e) {
