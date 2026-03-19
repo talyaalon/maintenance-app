@@ -54,17 +54,19 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   const currentYear = new Date().getFullYear();
 
   const isBigBoss = userRole === 'BIG_BOSS';
+  // company_id of the current user (for MANAGER / EMPLOYEE scoping)
+  const userCompanyId = currentUser?.company_id ?? null;
 
   useEffect(() => {
     const headers = { 'Authorization': `Bearer ${token}` };
 
     // Backend handles area-based filtering for all non-BIG_BOSS roles automatically
     fetch('https://maintenance-app-h84v.onrender.com/locations', { headers })
-        .then(res => res.json()).then(setLocations).catch(err => console.error("Error locations", err));
+        .then(res => res.json()).then(d => setLocations(Array.isArray(d) ? d : [])).catch(err => console.error("Error locations", err));
     fetch('https://maintenance-app-h84v.onrender.com/categories', { headers })
-        .then(res => res.json()).then(setCategories).catch(err => console.error("Error categories", err));
+        .then(res => res.json()).then(d => setCategories(Array.isArray(d) ? d : [])).catch(err => console.error("Error categories", err));
     fetch('https://maintenance-app-h84v.onrender.com/assets', { headers })
-        .then(res => res.json()).then(setAssets).catch(err => console.error("Error assets", err));
+        .then(res => res.json()).then(d => setAssets(Array.isArray(d) ? d : [])).catch(err => console.error("Error assets", err));
 
     if (isManager) {
         if (subordinates && subordinates.length > 0) {
@@ -72,42 +74,62 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         } else {
             fetch('https://maintenance-app-h84v.onrender.com/users', { headers })
                 .then(res => res.json())
-                .then(setTeamMembers)
+                .then(d => setTeamMembers(Array.isArray(d) ? d : []))
                 .catch(err => console.error("Error users", err));
         }
     }
   }, [token, isManager, subordinates]);
 
-  // For BIG_BOSS: filter by the selected worker's area_id so each area stays isolated
-  // For all other roles: backend already scoped the data to their area — show everything fetched
+  // ── Filtering logic ────────────────────────────────────────────────────────
+  // BIG_BOSS:  filter by selected worker's area_id (existing behaviour)
+  // MANAGER / EMPLOYEE: backend already scopes by area; additionally guard by company_id
   let targetAreaId = null;
+  let targetCompanyId = null;
   if (isBigBoss && formData.assigned_worker_id) {
-      const selectedWorker = teamMembers.find(u => String(u.id) === String(formData.assigned_worker_id));
-      targetAreaId = selectedWorker?.area_id || null;
+      const selectedWorker = (teamMembers ?? []).find(u => String(u?.id) === String(formData.assigned_worker_id));
+      targetAreaId    = selectedWorker?.area_id    ?? null;
+      targetCompanyId = selectedWorker?.company_id ?? null;
+  } else if (!isBigBoss && userCompanyId) {
+      targetCompanyId = userCompanyId;
   }
 
-  const filteredLocations = (isBigBoss && targetAreaId)
-      ? locations.filter(l => String(l.area_id) === String(targetAreaId) || !l.area_id)
-      : locations;
+  const filteredLocations = (() => {
+      let list = locations ?? [];
+      if (isBigBoss && targetAreaId)
+          list = list.filter(l => String(l?.area_id) === String(targetAreaId) || !l?.area_id);
+      else if (!isBigBoss && targetCompanyId)
+          list = list.filter(l => l?.company_id == null || String(l?.company_id) === String(targetCompanyId));
+      return list;
+  })();
 
-  const filteredCategories = (isBigBoss && targetAreaId)
-      ? categories.filter(c => String(c.area_id) === String(targetAreaId) || !c.area_id)
-      : categories;
+  const filteredCategories = (() => {
+      let list = categories ?? [];
+      if (isBigBoss && targetAreaId)
+          list = list.filter(c => String(c?.area_id) === String(targetAreaId) || !c?.area_id);
+      else if (!isBigBoss && targetCompanyId)
+          list = list.filter(c => c?.company_id == null || String(c?.company_id) === String(targetCompanyId));
+      return list;
+  })();
 
   const filteredAssets = selectedCategory
-      ? assets.filter(a => {
-          const categoryMatch = String(a.category_id) === String(selectedCategory);
-          const areaMatch = !isBigBoss || !targetAreaId || String(a.area_id) === String(targetAreaId) || !a.area_id;
+      ? (assets ?? []).filter(a => {
+          if (!a) return false;
+          const categoryMatch = String(a?.category_id) === String(selectedCategory);
+          let areaMatch = true;
+          if (isBigBoss && targetAreaId)
+              areaMatch = String(a?.area_id) === String(targetAreaId) || !a?.area_id;
+          else if (!isBigBoss && targetCompanyId)
+              areaMatch = a?.company_id == null || String(a?.company_id) === String(targetCompanyId);
           return categoryMatch && areaMatch;
       })
       : [];
 
-  const employeesOnly = teamMembers.filter(member => {
+  const employeesOnly = (teamMembers ?? []).filter(member => {
       const r = member?.role ? String(member.role).toUpperCase() : '';
       return r === 'EMPLOYEE' || r === 'WORKER' || r === 'עובד';
   });
 
-  const optionsToRender = employeesOnly.length > 0 ? employeesOnly : teamMembers;
+  const optionsToRender = employeesOnly.length > 0 ? employeesOnly : (teamMembers ?? []);
 
   const handleFrequencyChange = (newFreq) => {
     setFrequency(newFreq);
@@ -266,8 +288,22 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                             setSelectedCategory('');
                         }}>
                         <option value="">{t.select_worker || "Select Worker..."}</option>
-                        {optionsToRender.map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.role})</option>)}
+                        {(optionsToRender ?? []).map(u => (
+                            <option key={u?.id} value={u?.id}>{u?.full_name} ({u?.role})</option>
+                        ))}
                     </select>
+                </div>
+            )}
+
+            {/* EMPLOYEE: self-assign only — show locked read-only field */}
+            {isEmployee && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+                        {t.assign_to_label || "Assign To"}
+                    </label>
+                    <div className="w-full p-3 border rounded-lg bg-gray-100 text-gray-600 font-bold text-sm">
+                        {currentUser?.full_name || currentUser?.name || '—'} ({t.self_label || 'You'})
+                    </div>
                 </div>
             )}
 

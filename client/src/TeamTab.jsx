@@ -88,17 +88,16 @@ const TeamTab = ({ token, t, user, lang }) => {
             const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) {
-                const raw = await res.json();
-                const data = Array.isArray(raw) ? raw : [];
-                setTeam(data);
-                // Auto-expand all area managers and dept managers
-                const toExpand = data
-                    .filter(u => u?.role === 'MANAGER' || u?.role === 'SUPERVISOR')
-                    .map(u => u.id);
-                setExpandedNodes(new Set(toExpand));
-            }
-        } catch (e) { console.error(e); }
+            const raw = res.ok ? await res.json().catch(() => []) : [];
+            const data = Array.isArray(raw) ? raw : [];
+            setTeam(data);
+            // Auto-expand all managers and dept managers
+            const toExpand = (data ?? [])
+                .filter(u => u?.role === 'MANAGER' || u?.role === 'SUPERVISOR')
+                .map(u => u?.id)
+                .filter(Boolean);
+            setExpandedNodes(new Set(toExpand));
+        } catch (e) { console.error(e); setTeam([]); }
         finally { setIsLoadingTeam(false); }
     };
 
@@ -273,15 +272,15 @@ const TeamTab = ({ token, t, user, lang }) => {
 
     // ─── 4-tier hierarchy builders ─────────────────────────────────────────────
     const safeTeam     = Array.isArray(team) ? team : [];
-    const bigBosses    = safeTeam.filter(u => u?.role === 'BIG_BOSS');
-    const areaManagers = safeTeam.filter(u => u?.role === 'MANAGER');
-    const deptManagers = safeTeam.filter(u => u?.role === 'SUPERVISOR');
-    const employees    = safeTeam.filter(u => u?.role === 'EMPLOYEE');
+    const bigBosses    = (safeTeam ?? []).filter(u => u?.role === 'BIG_BOSS');
+    const areaManagers = (safeTeam ?? []).filter(u => u?.role === 'MANAGER');
+    const deptManagers = (safeTeam ?? []).filter(u => u?.role === 'SUPERVISOR');
+    const employees    = (safeTeam ?? []).filter(u => u?.role === 'EMPLOYEE');
 
     // Render Employees under a given parent id
     const renderEmployees = (parentId) => {
         if (parentId == null) return null;
-        const emps = employees.filter(e => e.parent_manager_id === parentId);
+        const emps = (employees ?? []).filter(e => e?.parent_manager_id === parentId);
         if (emps.length === 0) return null;
         return (
             <div className="space-y-1 mt-1">
@@ -377,27 +376,32 @@ const TeamTab = ({ token, t, user, lang }) => {
             );
         }
 
-        // MANAGER (AreaManager) viewer: sees DeptManagers + direct Employees (DeptManager is optional)
-        const myDepts = deptManagers.filter(d => d?.parent_manager_id === user?.id);
-        const myDirectEmps = employees.filter(e => e?.parent_manager_id === user?.id);
+        // MANAGER (AreaManager) viewer: shows ONLY employees assigned to this manager
+        // via parent_manager_id (M:M proxy seeded from the junction table migration)
+        const myDepts      = (deptManagers ?? []).filter(d => d?.parent_manager_id === user?.id);
+        const myDirectEmps = (employees    ?? []).filter(e => e?.parent_manager_id === user?.id);
 
         return (
             <>
-                {myDepts.map(dept => (
-                    <div key={dept.id}>
+                {/* M:M scope label */}
+                <p className="text-xs text-[#714B67] font-semibold mb-3 px-1">
+                    👥 {t?.team_assigned_to_you || 'Showing only employees assigned to you'}
+                </p>
+                {(myDepts ?? []).map(dept => (
+                    <div key={dept?.id}>
                         {renderMemberRow(dept, 0)}
-                        {expandedNodes.has(dept.id) && (
+                        {expandedNodes.has(dept?.id) && (
                             <div className="animate-fade-in">
-                                {renderEmployees(dept.id) || (
+                                {renderEmployees(dept?.id) || (
                                     <p className="text-sm text-gray-400 text-center py-2 ml-8">{t?.no_employees_assigned || 'No employees assigned'}</p>
                                 )}
                             </div>
                         )}
                     </div>
                 ))}
-                {myDirectEmps.map(emp => renderMemberRow(emp, 0))}
-                {myDepts.length === 0 && myDirectEmps.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-4">{t?.no_employees_assigned || 'No employees assigned'}</p>
+                {(myDirectEmps ?? []).map(emp => renderMemberRow(emp, 0))}
+                {(myDepts ?? []).length === 0 && (myDirectEmps ?? []).length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-4">{t?.no_employees_assigned || 'No employees assigned yet'}</p>
                 )}
             </>
         );

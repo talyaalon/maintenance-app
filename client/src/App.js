@@ -1,7 +1,7 @@
 import { requestForToken, onMessageListener } from './firebase';
 import { Toaster, toast } from 'react-hot-toast'; // אם אין לך react-hot-toast, תוכלי להשתמש ב-alert רגיל
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, UserCircle, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, UserCircle, Settings, Building2 } from 'lucide-react';
 import Login from './Login';
 import AddUserForm from './AddUserForm';
 import { translations } from './translations'; 
@@ -10,8 +10,9 @@ import logoImg from './app-logo.png';
 // ייבוא הטאבים
 import TasksTab from './TasksTab';
 import TeamTab from './TeamTab';
-import ProfileTab from './ProfileTab'; 
-import ConfigurationTab from './ConfigurationTab'; 
+import ProfileTab from './ProfileTab';
+import ConfigurationTab from './ConfigurationTab';
+import CompaniesTab from './CompaniesTab';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -196,37 +197,34 @@ function App() {
     );
   }
 
-  const isEmployee = user.role === 'EMPLOYEE';
-  // Settings tab is only for Admin (BIG_BOSS) and legacy MANAGER accounts; SUPERVISOR cannot access it
-  const canAccessSettings = user.role === 'BIG_BOSS' || user.role === 'MANAGER';
+  const isManager  = user.role === 'MANAGER';
+  const isBigBoss  = user.role === 'BIG_BOSS';
+
+  // Settings (Config) tab: BIG_BOSS only — Managers no longer have it in nav
+  const canAccessSettings = isBigBoss;
 
   const renderContent = () => {
       const token = localStorage.getItem('token');
       switch (activeTab) {
-          case 1: 
+          case 1:
             return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
-          case 2: 
-            if (isEmployee) return null;
-            return <TeamTab
-                        user={user}
-                        token={token}
-                        t={t}
-                        lang={lang}
-                        onAddUser={() => setIsUserFormOpen(true)}
-                        refreshTrigger={refreshTrigger}
-                    />;
+          case 2:
+            // BIG_BOSS → Companies tab; MANAGER → Team tab; EMPLOYEE → nothing
+            if (isBigBoss)  return <CompaniesTab token={token} t={t} user={user} lang={lang} />;
+            if (isManager)  return <TeamTab user={user} token={token} t={t} lang={lang} onAddUser={() => setIsUserFormOpen(true)} refreshTrigger={refreshTrigger} />;
+            return null;
           case 3:
             if (!canAccessSettings) return null;
             return <ConfigurationTab token={token} t={t} user={user} lang={lang} />;
-          case 4: 
-            return <ProfileTab 
-                        t={t} 
-                        user={user} 
+          case 4:
+            return <ProfileTab
+                        t={t}
+                        user={user}
                         token={token}
-                        onLogout={() => { setUser(null); localStorage.removeItem('token'); }} 
-                        onUpdateUser={handleUserUpdate} 
+                        onLogout={() => { setUser(null); localStorage.removeItem('token'); }}
+                        onUpdateUser={handleUserUpdate}
                     />;
-          default: 
+          default:
             return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
       }
   };
@@ -295,22 +293,31 @@ function App() {
         {renderContent()}
       </main>
 
-{/* תפריט ניווט תחתון */}
+{/* ─── Bottom navigation ─────────────────────────────────────────────────── */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
         <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
-            
+
+            {/* Tab 1 — Tasks (all roles) */}
             <button onClick={() => setActiveTab(1)} className={`flex flex-col items-center w-full ${activeTab === 1 ? 'text-[#714B67]' : 'text-gray-400'}`}>
                 <LayoutDashboard size={24} strokeWidth={activeTab === 1 ? 2.5 : 2} />
                 <span className="text-[10px] mt-1 font-medium">{t.nav_tasks}</span>
             </button>
 
-            {!isEmployee && (
+            {/* Tab 2 — Companies (BIG_BOSS) | Team (MANAGER) | hidden (EMPLOYEE) */}
+            {isBigBoss && (
+                <button onClick={() => setActiveTab(2)} className={`flex flex-col items-center w-full ${activeTab === 2 ? 'text-[#714B67]' : 'text-gray-400'}`}>
+                    <Building2 size={24} strokeWidth={activeTab === 2 ? 2.5 : 2} />
+                    <span className="text-[10px] mt-1 font-medium">{t.nav_companies || 'Companies'}</span>
+                </button>
+            )}
+            {isManager && (
                 <button onClick={() => setActiveTab(2)} className={`flex flex-col items-center w-full ${activeTab === 2 ? 'text-[#714B67]' : 'text-gray-400'}`}>
                     <Users size={24} strokeWidth={activeTab === 2 ? 2.5 : 2} />
                     <span className="text-[10px] mt-1 font-medium">{t.nav_team}</span>
                 </button>
             )}
 
+            {/* Tab 3 — Settings (BIG_BOSS only) */}
             {canAccessSettings && (
                 <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#714B67]' : 'text-gray-400'}`}>
                     <Settings size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
@@ -318,6 +325,7 @@ function App() {
                 </button>
             )}
 
+            {/* Tab 4 — Profile (all roles) */}
             <button onClick={() => setActiveTab(4)} className={`flex flex-col items-center w-full ${activeTab === 4 ? 'text-[#714B67]' : 'text-gray-400'}`}>
                 <UserCircle size={24} strokeWidth={activeTab === 4 ? 2.5 : 2} />
                 <span className="text-[10px] mt-1 font-medium">{t.nav_profile}</span>

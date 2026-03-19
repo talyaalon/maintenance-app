@@ -615,7 +615,8 @@ app.post('/login', async (req, res) => {
             manager_allowed_lang_th: managerAllowedLangTh,
             manager_stuck_skip_approval: managerStuckSkipApproval,
             parent_manager_id: user.parent_manager_id,
-            area_id: effectiveAreaId
+            area_id: effectiveAreaId,
+            company_id: user.company_id ?? null
         }
     });
   } catch (err) {
@@ -707,6 +708,7 @@ app.get('/users', authenticateToken, async (req, res) => {
             SELECT u.id, u.full_name, u.full_name_he, u.full_name_en, u.full_name_th,
                    u.email, u.phone, u.role, u.parent_manager_id,
                    COALESCE(u.area_id, NULL) AS area_id,
+                   u.company_id,
                    u.profile_picture_url, u.preferred_language,
                    COALESCE(u.can_manage_fields, TRUE)  AS can_manage_fields,
                    COALESCE(u.auto_approve_tasks, FALSE) AS auto_approve_tasks,
@@ -1212,6 +1214,7 @@ app.get('/managers', authenticateToken, async (req, res) => {
       SELECT id, full_name, full_name_he, full_name_en, full_name_th,
              email, phone, role,
              COALESCE(area_id, NULL)             AS area_id,
+             company_id,
              profile_picture_url,
              COALESCE(can_manage_fields, TRUE)   AS can_manage_fields,
              COALESCE(auto_approve_tasks, FALSE) AS auto_approve_tasks,
@@ -1278,7 +1281,7 @@ app.delete('/location-fields/:id', authenticateToken, requireAdmin, async (req, 
 app.get('/locations', authenticateToken, async (req, res) => {
     try {
         let query = `
-            SELECT locations.*, users.full_name as creator_name
+            SELECT locations.*, locations.company_id, users.full_name as creator_name
             FROM locations
             LEFT JOIN users ON locations.created_by = users.id
         `;
@@ -1403,8 +1406,8 @@ app.put('/locations/:id', authenticateToken, requireAdmin, (req, res) => {
 app.get('/categories', authenticateToken, async (req, res) => {
     try {
         let query = `
-            SELECT categories.*, users.full_name as creator_name 
-            FROM categories 
+            SELECT categories.*, categories.company_id, users.full_name as creator_name
+            FROM categories
             LEFT JOIN users ON categories.created_by = users.id
         `;
         let params = [];
@@ -1470,7 +1473,7 @@ app.put('/categories/:id', authenticateToken, requireAdmin, async (req, res) => 
 app.get('/assets', authenticateToken, async (req, res) => {
     try { 
         let query = `
-            SELECT assets.*,
+            SELECT assets.*, assets.company_id,
                    categories.name as category_name,
                    COALESCE(categories.name_en, categories.name) as category_name_en,
                    COALESCE(categories.name_he, categories.name) as category_name_he,
