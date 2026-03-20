@@ -3,7 +3,7 @@ import { Building2, Plus, ChevronRight, Users, MapPin, Tag, Box, Shield, X, Penc
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
-// ─── Confirm delete modal ─────────────────────────────────────────────────────
+// ─── Confirm delete modal (kept as modal — it's just a confirmation, not an edit form) ──
 const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
         <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
@@ -20,8 +20,8 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
     </div>
 );
 
-// ─── Section card with optional Add button ────────────────────────────────────
-const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd }) => (
+// ─── Section card with optional Add button + addPanel slot ────────────────────
+const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, addPanel }) => (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-slate-50">
             <Icon size={16} className="text-[#714B67]" />
@@ -39,7 +39,7 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd }
             )}
         </div>
         <div className="divide-y divide-gray-100">
-            {(items ?? []).length === 0 ? (
+            {(items ?? []).length === 0 && !addPanel ? (
                 <p className="px-4 py-3 text-xs text-gray-400 italic">{emptyLabel}</p>
             ) : (
                 (items ?? []).map((item, idx) => (
@@ -49,18 +49,34 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd }
                 ))
             )}
         </div>
+        {/* Add panel — rendered below all rows when the Add button is active */}
+        {addPanel && (
+            <div className="px-4 py-2.5 text-sm text-slate-700 border-t border-[#714B67]/10 bg-[#fdf4ff]/60">
+                {addPanel}
+            </div>
+        )}
     </div>
 );
 
-// ─── User Modal (Add / Edit) ──────────────────────────────────────────────────
-const UserModal = ({ editUser, role, parentManagerId, token, t, onClose, onSaved }) => {
+// ─── Shared inline accordion style helpers ────────────────────────────────────
+// Used for row-embedded edit/perm/team panels (extends full-width via -mx-4)
+const rowPanelCls = "mt-2 pt-3 border-t border-[#714B67]/10 space-y-2 animate-fade-in bg-[#fdf4ff]/60 rounded-b-xl -mx-4 px-4 pb-3";
+// Used for add-new panel inside SectionCard addPanel slot (no -mx-4 needed)
+const addPanelCls = "space-y-2 animate-fade-in";
+const inputCls  = "w-full p-2 border rounded-lg bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-xs transition";
+const labelCls  = "text-[10px] font-semibold text-slate-400 uppercase tracking-wide block mb-0.5";
+const saveBtnCls = "flex-1 py-1.5 text-xs bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-1";
+const cancelBtnCls = "flex-1 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition";
+
+// ─── Inline User Form (Edit or Add) ──────────────────────────────────────────
+const InlineUserForm = ({ editUser, role, parentManagerId, token, t, onClose, onSaved, isAddPanel = false }) => {
     const isEdit = !!editUser;
     const [form, setForm] = useState({
         full_name_en: editUser?.full_name_en || editUser?.full_name || '',
         full_name_he: editUser?.full_name_he || '',
-        email: editUser?.email || '',
-        password: '',
-        phone: editUser?.phone || '',
+        email:        editUser?.email || '',
+        password:     '',
+        phone:        editUser?.phone || '',
         preferred_language: editUser?.preferred_language || 'en',
         line_user_id: editUser?.line_user_id || '',
     });
@@ -73,20 +89,19 @@ const UserModal = ({ editUser, role, parentManagerId, token, t, onClose, onSaved
         setSaving(true);
         try {
             const payload = {
-                full_name: form.full_name_en,
+                full_name:    form.full_name_en,
                 full_name_en: form.full_name_en,
                 full_name_he: form.full_name_he || undefined,
-                email: form.email.toLowerCase(),
-                phone: form.phone || undefined,
+                email:        form.email.toLowerCase(),
+                phone:        form.phone || undefined,
                 preferred_language: form.preferred_language,
                 line_user_id: form.line_user_id || undefined,
                 role,
             };
             if (!isEdit) { payload.password = form.password; payload.parent_manager_id = parentManagerId; }
             if (form.password?.trim() && isEdit) payload.password = form.password;
-
             const method = isEdit ? 'PUT' : 'POST';
-            const url = isEdit ? `${BASE}/users/${editUser.id}` : `${BASE}/users`;
+            const url    = isEdit ? `${BASE}/users/${editUser.id}` : `${BASE}/users`;
             const res = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -98,59 +113,53 @@ const UserModal = ({ editUser, role, parentManagerId, token, t, onClose, onSaved
         finally { setSaving(false); }
     };
 
-    const roleLabel = role === 'SUPERVISOR' ? 'Manager' : 'Employee';
+    const roleLabel = role === 'SUPERVISOR' ? 'Manager' : role === 'COMPANY_MANAGER' ? 'Company Manager' : 'Employee';
     return (
-        <div className="fixed inset-0 flex items-center justify-center z-[200] p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-200 animate-scale-in">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-base font-bold text-slate-800">{isEdit ? `Edit ${roleLabel}` : `Add ${roleLabel}`}</h3>
-                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+        <div className={isAddPanel ? addPanelCls : rowPanelCls}>
+            <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
+                {isEdit ? `Edit ${roleLabel}` : `Add ${roleLabel}`}
+            </p>
+            {[
+                { label: 'Name (EN) *',                                     key: 'full_name_en', type: 'text' },
+                { label: 'Name (HE)',                                        key: 'full_name_he', type: 'text' },
+                { label: 'Email *',                                          key: 'email',        type: 'email' },
+                { label: isEdit ? 'Password (blank = keep)' : 'Password *', key: 'password',     type: 'password' },
+                { label: 'Phone',                                            key: 'phone',        type: 'text' },
+                { label: 'LINE User ID',                                     key: 'line_user_id', type: 'text' },
+            ].map(({ label, key, type }) => (
+                <div key={key}>
+                    <label className={labelCls}>{label}</label>
+                    <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} />
                 </div>
-                <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-                    {[
-                        { label: 'Name (EN) *', key: 'full_name_en', type: 'text' },
-                        { label: 'Name (HE)', key: 'full_name_he', type: 'text' },
-                        { label: 'Email *', key: 'email', type: 'email' },
-                        { label: isEdit ? 'Password (blank = keep current)' : 'Password *', key: 'password', type: 'password' },
-                        { label: 'Phone', key: 'phone', type: 'text' },
-                        { label: 'LINE User ID', key: 'line_user_id', type: 'text' },
-                    ].map(({ label, key, type }) => (
-                        <div key={key}>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">{label}</label>
-                            <input type={type} value={form[key]} onChange={e => set(key, e.target.value)}
-                                className="w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition" />
-                        </div>
-                    ))}
-                    <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Language</label>
-                        <select value={form.preferred_language} onChange={e => set('preferred_language', e.target.value)}
-                            className="w-full p-2.5 border rounded-xl bg-gray-50 text-sm outline-none focus:ring-1 focus:ring-[#714B67]">
-                            <option value="en">English</option>
-                            <option value="he">Hebrew</option>
-                            <option value="th">Thai</option>
-                        </select>
-                    </div>
-                </div>
-                <div className="flex gap-3 mt-5">
-                    <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">{t?.cancel || 'Cancel'}</button>
-                    <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-[#714B67] text-white rounded-xl font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-2">
-                        {saving && <Loader2 size={14} className="animate-spin" />}
-                        {t?.save || 'Save'}
-                    </button>
-                </div>
+            ))}
+            <div>
+                <label className={labelCls}>Language</label>
+                <select value={form.preferred_language} onChange={e => set('preferred_language', e.target.value)}
+                    className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]">
+                    <option value="en">English</option>
+                    <option value="he">Hebrew</option>
+                    <option value="th">Thai</option>
+                </select>
+            </div>
+            <div className="flex gap-2 pt-1">
+                <button onClick={onClose} className={cancelBtnCls}>{t?.cancel || 'Cancel'}</button>
+                <button onClick={handleSave} disabled={saving} className={saveBtnCls}>
+                    {saving && <Loader2 size={10} className="animate-spin" />}
+                    {t?.save || 'Save'}
+                </button>
             </div>
         </div>
     );
 };
 
-// ─── Location Modal ────────────────────────────────────────────────────────────
-const LocationModal = ({ editLocation, createdBy, token, t, onClose, onSaved }) => {
+// ─── Inline Location Form ─────────────────────────────────────────────────────
+const InlineLocationForm = ({ editLocation, createdBy, token, t, onClose, onSaved, isAddPanel = false }) => {
     const isEdit = !!editLocation;
     const [form, setForm] = useState({
-        name_en: editLocation?.name_en || editLocation?.name || '',
-        name_he: editLocation?.name_he || '',
-        name_th: editLocation?.name_th || '',
-        address: '',
+        name_en:  editLocation?.name_en || editLocation?.name || '',
+        name_he:  editLocation?.name_he || '',
+        name_th:  editLocation?.name_th || '',
+        address:  '',
     });
     const [imageFile, setImageFile] = useState(null);
     const [saving, setSaving] = useState(false);
@@ -180,9 +189,8 @@ const LocationModal = ({ editLocation, createdBy, token, t, onClose, onSaved }) 
             if (!isEdit) fd.append('created_by', createdBy);
             if (imageFile) fd.append('main_image', imageFile);
             else if (editLocation?.image_url) fd.append('existing_image', editLocation.image_url);
-
             const method = isEdit ? 'PUT' : 'POST';
-            const url = isEdit ? `${BASE}/locations/${editLocation.id}` : `${BASE}/locations`;
+            const url    = isEdit ? `${BASE}/locations/${editLocation.id}` : `${BASE}/locations`;
             const res = await fetch(url, { method, headers: { Authorization: `Bearer ${token}` }, body: fd });
             if (res.ok) { onSaved(); onClose(); }
             else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving location'); }
@@ -191,54 +199,48 @@ const LocationModal = ({ editLocation, createdBy, token, t, onClose, onSaved }) 
     };
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center z-[200] p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-200 animate-scale-in">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-base font-bold text-slate-800">{isEdit ? 'Edit Location' : 'Add Location'}</h3>
-                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+        <div className={isAddPanel ? addPanelCls : rowPanelCls}>
+            <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
+                {isEdit ? 'Edit Location' : 'Add Location'}
+            </p>
+            {[
+                { label: 'Name (EN) *',       key: 'name_en' },
+                { label: 'Name (HE)',          key: 'name_he' },
+                { label: 'Name (TH)',          key: 'name_th' },
+                { label: 'Address / Map Link', key: 'address' },
+            ].map(({ label, key }) => (
+                <div key={key}>
+                    <label className={labelCls}>{label}</label>
+                    <input type="text" value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} />
                 </div>
-                <div className="space-y-3">
-                    {[
-                        { label: 'Name (EN) *', key: 'name_en' },
-                        { label: 'Name (HE)', key: 'name_he' },
-                        { label: 'Name (TH)', key: 'name_th' },
-                        { label: 'Address / Map Link', key: 'address' },
-                    ].map(({ label, key }) => (
-                        <div key={key}>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">{label}</label>
-                            <input type="text" value={form[key]} onChange={e => set(key, e.target.value)}
-                                className="w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition" />
-                        </div>
-                    ))}
-                    <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Image (optional)</label>
-                        <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] ?? null)}
-                            className="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] cursor-pointer" />
-                        {editLocation?.image_url && !imageFile && (
-                            <img src={editLocation.image_url} alt="" className="mt-2 h-10 rounded-lg object-contain border border-gray-200" />
-                        )}
-                    </div>
-                </div>
-                <div className="flex gap-3 mt-5">
-                    <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">{t?.cancel || 'Cancel'}</button>
-                    <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-[#714B67] text-white rounded-xl font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-2">
-                        {saving && <Loader2 size={14} className="animate-spin" />}
-                        {t?.save || 'Save'}
-                    </button>
-                </div>
+            ))}
+            <div>
+                <label className={labelCls}>Image (optional)</label>
+                <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] ?? null)}
+                    className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] cursor-pointer" />
+                {editLocation?.image_url && !imageFile && (
+                    <img src={editLocation.image_url} alt="" className="mt-1 h-8 rounded-lg object-contain border border-gray-200" />
+                )}
+            </div>
+            <div className="flex gap-2 pt-1">
+                <button onClick={onClose} className={cancelBtnCls}>{t?.cancel || 'Cancel'}</button>
+                <button onClick={handleSave} disabled={saving} className={saveBtnCls}>
+                    {saving && <Loader2 size={10} className="animate-spin" />}
+                    {t?.save || 'Save'}
+                </button>
             </div>
         </div>
     );
 };
 
-// ─── Category Modal ────────────────────────────────────────────────────────────
-const CategoryModal = ({ editCategory, createdBy, token, t, onClose, onSaved }) => {
+// ─── Inline Category Form ─────────────────────────────────────────────────────
+const InlineCategoryForm = ({ editCategory, createdBy, token, t, onClose, onSaved, isAddPanel = false }) => {
     const isEdit = !!editCategory;
     const [form, setForm] = useState({
         name_en: editCategory?.name_en || editCategory?.name || '',
         name_he: editCategory?.name_he || '',
         name_th: editCategory?.name_th || '',
-        code: editCategory?.code || '',
+        code:    editCategory?.code || '',
     });
     const [saving, setSaving] = useState(false);
     const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -250,11 +252,11 @@ const CategoryModal = ({ editCategory, createdBy, token, t, onClose, onSaved }) 
         try {
             const payload = {
                 name_en: form.name_en, name_he: form.name_he, name_th: form.name_th,
-                code: form.code.toUpperCase().slice(0, 3),
+                code:    form.code.toUpperCase().slice(0, 3),
                 created_by: createdBy,
             };
             const method = isEdit ? 'PUT' : 'POST';
-            const url = isEdit ? `${BASE}/categories/${editCategory.id}` : `${BASE}/categories`;
+            const url    = isEdit ? `${BASE}/categories/${editCategory.id}` : `${BASE}/categories`;
             const res = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -267,50 +269,44 @@ const CategoryModal = ({ editCategory, createdBy, token, t, onClose, onSaved }) 
     };
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center z-[200] p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-200 animate-scale-in">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-base font-bold text-slate-800">{isEdit ? 'Edit Category' : 'Add Category'}</h3>
-                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+        <div className={isAddPanel ? addPanelCls : rowPanelCls}>
+            <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
+                {isEdit ? 'Edit Category' : 'Add Category'}
+            </p>
+            {[
+                { label: 'Name (EN) *', key: 'name_en' },
+                { label: 'Name (HE)',   key: 'name_he' },
+                { label: 'Name (TH)',   key: 'name_th' },
+            ].map(({ label, key }) => (
+                <div key={key}>
+                    <label className={labelCls}>{label}</label>
+                    <input type="text" value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} />
                 </div>
-                <div className="space-y-3">
-                    {[
-                        { label: 'Name (EN) *', key: 'name_en' },
-                        { label: 'Name (HE)', key: 'name_he' },
-                        { label: 'Name (TH)', key: 'name_th' },
-                    ].map(({ label, key }) => (
-                        <div key={key}>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">{label}</label>
-                            <input type="text" value={form[key]} onChange={e => set(key, e.target.value)}
-                                className="w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition" />
-                        </div>
-                    ))}
-                    <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Code (3 chars) *</label>
-                        <input type="text" value={form.code} maxLength={3}
-                            onChange={e => set('code', e.target.value.toUpperCase().slice(0, 3))}
-                            className="w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition font-mono" />
-                    </div>
-                </div>
-                <div className="flex gap-3 mt-5">
-                    <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">{t?.cancel || 'Cancel'}</button>
-                    <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-[#714B67] text-white rounded-xl font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-2">
-                        {saving && <Loader2 size={14} className="animate-spin" />}
-                        {t?.save || 'Save'}
-                    </button>
-                </div>
+            ))}
+            <div>
+                <label className={labelCls}>Code (3 chars) *</label>
+                <input type="text" value={form.code} maxLength={3}
+                    onChange={e => set('code', e.target.value.toUpperCase().slice(0, 3))}
+                    className={`${inputCls} font-mono`} />
+            </div>
+            <div className="flex gap-2 pt-1">
+                <button onClick={onClose} className={cancelBtnCls}>{t?.cancel || 'Cancel'}</button>
+                <button onClick={handleSave} disabled={saving} className={saveBtnCls}>
+                    {saving && <Loader2 size={10} className="animate-spin" />}
+                    {t?.save || 'Save'}
+                </button>
             </div>
         </div>
     );
 };
 
-// ─── Asset Modal ───────────────────────────────────────────────────────────────
-const AssetModal = ({ editAsset, createdBy, categories, locations, token, t, onClose, onSaved }) => {
+// ─── Inline Asset Form ────────────────────────────────────────────────────────
+const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t, onClose, onSaved, isAddPanel = false }) => {
     const isEdit = !!editAsset;
     const [form, setForm] = useState({
-        name_en: editAsset?.name_en || editAsset?.name || '',
-        name_he: editAsset?.name_he || '',
-        name_th: editAsset?.name_th || '',
+        name_en:     editAsset?.name_en || editAsset?.name || '',
+        name_he:     editAsset?.name_he || '',
+        name_th:     editAsset?.name_th || '',
         category_id: editAsset?.category_id ? String(editAsset.category_id) : '',
         location_id: editAsset?.location_id ? String(editAsset.location_id) : '',
     });
@@ -326,10 +322,10 @@ const AssetModal = ({ editAsset, createdBy, categories, locations, token, t, onC
                 name_en: form.name_en, name_he: form.name_he, name_th: form.name_th,
                 category_id: form.category_id,
                 location_id: form.location_id || null,
-                created_by: createdBy,
+                created_by:  createdBy,
             };
             const method = isEdit ? 'PUT' : 'POST';
-            const url = isEdit ? `${BASE}/assets/${editAsset.id}` : `${BASE}/assets`;
+            const url    = isEdit ? `${BASE}/assets/${editAsset.id}` : `${BASE}/assets`;
             const res = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -342,52 +338,46 @@ const AssetModal = ({ editAsset, createdBy, categories, locations, token, t, onC
     };
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center z-[200] p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-200 animate-scale-in">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-base font-bold text-slate-800">{isEdit ? 'Edit Asset' : 'Add Asset'}</h3>
-                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+        <div className={isAddPanel ? addPanelCls : rowPanelCls}>
+            <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
+                {isEdit ? 'Edit Asset' : 'Add Asset'}
+            </p>
+            {[
+                { label: 'Name (EN) *', key: 'name_en' },
+                { label: 'Name (HE)',   key: 'name_he' },
+                { label: 'Name (TH)',   key: 'name_th' },
+            ].map(({ label, key }) => (
+                <div key={key}>
+                    <label className={labelCls}>{label}</label>
+                    <input type="text" value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} />
                 </div>
-                <div className="space-y-3">
-                    {[
-                        { label: 'Name (EN) *', key: 'name_en' },
-                        { label: 'Name (HE)', key: 'name_he' },
-                        { label: 'Name (TH)', key: 'name_th' },
-                    ].map(({ label, key }) => (
-                        <div key={key}>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">{label}</label>
-                            <input type="text" value={form[key]} onChange={e => set(key, e.target.value)}
-                                className="w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition" />
-                        </div>
+            ))}
+            <div>
+                <label className={labelCls}>Category *</label>
+                <select value={form.category_id} onChange={e => set('category_id', e.target.value)}
+                    className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]">
+                    <option value="">Select category…</option>
+                    {(categories ?? []).map(c => (
+                        <option key={c.id} value={String(c.id)}>{c.name_en || c.name}</option>
                     ))}
-                    <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Category *</label>
-                        <select value={form.category_id} onChange={e => set('category_id', e.target.value)}
-                            className="w-full p-2.5 border rounded-xl bg-gray-50 text-sm outline-none focus:ring-1 focus:ring-[#714B67]">
-                            <option value="">Select category…</option>
-                            {(categories ?? []).map(c => (
-                                <option key={c.id} value={String(c.id)}>{c.name_en || c.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Location (optional)</label>
-                        <select value={form.location_id} onChange={e => set('location_id', e.target.value)}
-                            className="w-full p-2.5 border rounded-xl bg-gray-50 text-sm outline-none focus:ring-1 focus:ring-[#714B67]">
-                            <option value="">None</option>
-                            {(locations ?? []).map(l => (
-                                <option key={l.id} value={String(l.id)}>{l.name_en || l.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-                <div className="flex gap-3 mt-5">
-                    <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">{t?.cancel || 'Cancel'}</button>
-                    <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-[#714B67] text-white rounded-xl font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-2">
-                        {saving && <Loader2 size={14} className="animate-spin" />}
-                        {t?.save || 'Save'}
-                    </button>
-                </div>
+                </select>
+            </div>
+            <div>
+                <label className={labelCls}>Location (optional)</label>
+                <select value={form.location_id} onChange={e => set('location_id', e.target.value)}
+                    className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]">
+                    <option value="">None</option>
+                    {(locations ?? []).map(l => (
+                        <option key={l.id} value={String(l.id)}>{l.name_en || l.name}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="flex gap-2 pt-1">
+                <button onClick={onClose} className={cancelBtnCls}>{t?.cancel || 'Cancel'}</button>
+                <button onClick={handleSave} disabled={saving} className={saveBtnCls}>
+                    {saving && <Loader2 size={10} className="animate-spin" />}
+                    {t?.save || 'Save'}
+                </button>
             </div>
         </div>
     );
@@ -418,9 +408,9 @@ const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t
         </div>
         <div className="space-y-2">
             {[
-                { key: 'auto_approve_tasks',   label: t?.perm_auto_approve  || 'Auto-approve tasks' },
-                { key: 'stuck_skip_approval',  label: t?.perm_stuck_skip    || 'Stuck task skip approval' },
-                { key: 'can_manage_fields',    label: t?.perm_manage_fields || 'Can manage fields' },
+                { key: 'auto_approve_tasks',  label: t?.perm_auto_approve  || 'Auto-approve tasks' },
+                { key: 'stuck_skip_approval', label: t?.perm_stuck_skip    || 'Stuck task skip approval' },
+                { key: 'can_manage_fields',   label: t?.perm_manage_fields || 'Can manage fields' },
             ].map(({ key, label }) => (
                 <label key={key} className="flex items-center justify-between cursor-pointer gap-2">
                     <span className="text-xs text-gray-600">{label}</span>
@@ -435,14 +425,8 @@ const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t
             ))}
         </div>
         <div className="flex gap-2 pt-1">
-            <button onClick={onClose} className="flex-1 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition">
-                {t?.cancel || 'Cancel'}
-            </button>
-            <button
-                onClick={onSave}
-                disabled={saving}
-                className="flex-1 py-1.5 text-xs bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-1"
-            >
+            <button onClick={onClose} className={cancelBtnCls}>{t?.cancel || 'Cancel'}</button>
+            <button onClick={onSave} disabled={saving} className={saveBtnCls}>
                 {saving && <Loader2 size={10} className="animate-spin" />}
                 {t?.save || 'Save'}
             </button>
@@ -476,14 +460,8 @@ const TeamAssignAccordion = ({ employees, assignedIds, setAssignedIds, onSave, o
             )}
         </div>
         <div className="flex gap-2 pt-1">
-            <button onClick={onClose} className="flex-1 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition">
-                Cancel
-            </button>
-            <button
-                onClick={onSave}
-                disabled={saving}
-                className="flex-1 py-1.5 text-xs bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-1"
-            >
+            <button onClick={onClose} className={cancelBtnCls}>Cancel</button>
+            <button onClick={onSave} disabled={saving} className={saveBtnCls}>
                 {saving && <Loader2 size={10} className="animate-spin" />}
                 Save
             </button>
@@ -499,20 +477,20 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
     const [assets, setAssets] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // CRUD modal state
-    const [userModal, setUserModal] = useState(null);       // { role, user? }
-    const [locationModal, setLocationModal] = useState(null); // {} | { loc }
-    const [categoryModal, setCategoryModal] = useState(null); // {} | { cat }
-    const [assetModal, setAssetModal] = useState(null);       // {} | { asset }
-    const [deleteConfirm, setDeleteConfirm] = useState(null); // { type, id, name }
+    // ── Unified accordion/panel state ──────────────────────────────────────────
+    // Key format: "edit-user:{id}" | "perm:{id}" | "team:{id}" |
+    //             "edit-loc:{id}"  | "edit-cat:{id}" | "edit-asset:{id}" |
+    //             "add-user-cm"    | "add-user-manager" | "add-user-employee" |
+    //             "add-loc"        | "add-cat"          | "add-asset"
+    const [openPanel, setOpenPanel] = useState(null);
 
-    // Permission accordion state
-    const [openPermissionId, setOpenPermissionId] = useState(null);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+    // Permission form state (populated when perm panel opens)
     const [permForm, setPermForm] = useState({});
     const [permSaving, setPermSaving] = useState(false);
 
-    // Team assignment accordion state
-    const [openTeamId, setOpenTeamId] = useState(null);
+    // Team assignment state (populated when team panel opens)
     const [assignedEmployeeIds, setAssignedEmployeeIds] = useState(new Set());
     const [teamSaving, setTeamSaving] = useState(false);
 
@@ -526,9 +504,7 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
             fetch(`${BASE}/categories?company_id=${cid}`, { headers }).then(r => r.json()).catch(() => []),
             fetch(`${BASE}/assets?company_id=${cid}`, { headers }).then(r => r.json()).catch(() => []),
         ]);
-        // Users: server already filters by company_id; keep client filter as safety net
         setUsers((rawUsers ?? []).filter(u => u?.company_id === cid));
-        // Locations / Categories / Assets: server uses compound query (handles legacy null company_id)
         setLocations(rawLocs ?? []);
         setCategories(rawCats ?? []);
         setAssets(rawAssets ?? []);
@@ -541,16 +517,67 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
     }, [cid, token]);
 
     const companyManager = (users ?? []).find(u => u?.role === 'COMPANY_MANAGER') ?? null;
-    const managers = (users ?? []).filter(u => u?.role === 'MANAGER' || u?.role === 'SUPERVISOR');
+    const managers  = (users ?? []).filter(u => u?.role === 'MANAGER' || u?.role === 'SUPERVISOR');
     const employees = (users ?? []).filter(u => u?.role === 'EMPLOYEE');
-
-    // Primary MANAGER (not SUPERVISOR) — used as created_by for new entities
-    const primaryManagerId = (users ?? []).find(u => u?.role === 'MANAGER')?.id
-        ?? managers[0]?.id
-        ?? null;
+    const primaryManagerId = (users ?? []).find(u => u?.role === 'MANAGER')?.id ?? managers[0]?.id ?? null;
 
     const userName = u => u?.['full_name_' + lang] || u?.full_name_en || u?.full_name || u?.name || '—';
     const itemName = item => item?.['name_' + lang] || item?.name_en || item?.name || '—';
+
+    // ── Panel helpers ──────────────────────────────────────────────────────────
+    const togglePanel = (key) => setOpenPanel(prev => prev === key ? null : key);
+
+    const openPermission = (u) => {
+        const key = `perm:${u.id}`;
+        if (openPanel === key) { setOpenPanel(null); return; }
+        setOpenPanel(key);
+        setPermForm({
+            auto_approve_tasks:  u.auto_approve_tasks  ?? false,
+            stuck_skip_approval: u.stuck_skip_approval ?? false,
+            allowed_lang_he:     u.allowed_lang_he     !== false,
+            allowed_lang_en:     u.allowed_lang_en     !== false,
+            allowed_lang_th:     u.allowed_lang_th     !== false,
+            can_manage_fields:   u.can_manage_fields    !== false,
+        });
+    };
+
+    const openTeamPanel = (u) => {
+        const key = `team:${u.id}`;
+        if (openPanel === key) { setOpenPanel(null); return; }
+        setOpenPanel(key);
+        const preSelected = new Set(
+            (users ?? []).filter(e => e.role === 'EMPLOYEE' && e.parent_manager_id === u.id).map(e => e.id)
+        );
+        setAssignedEmployeeIds(preSelected);
+    };
+
+    const savePermissions = async (u) => {
+        setPermSaving(true);
+        try {
+            const res = await fetch(`${BASE}/users/${u.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ full_name: u.full_name_en || u.full_name, email: u.email, role: u.role, ...permForm }),
+            });
+            if (res.ok) { fetchData(); setOpenPanel(null); }
+            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving permissions'); }
+        } catch { alert('Server error'); }
+        setPermSaving(false);
+    };
+
+    const saveTeamAssignment = async (managerId) => {
+        setTeamSaving(true);
+        try {
+            const res = await fetch(`${BASE}/users/${managerId}/assign-employees-to-manager`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ employeeIds: Array.from(assignedEmployeeIds) }),
+            });
+            if (res.ok) { fetchData(); setOpenPanel(null); }
+            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving team'); }
+        } catch { alert('Server error'); }
+        setTeamSaving(false);
+    };
 
     const handleDelete = async () => {
         if (!deleteConfirm) return;
@@ -566,71 +593,26 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
         setDeleteConfirm(null);
     };
 
-    const openPermission = (u) => {
-        if (openPermissionId === u.id) { setOpenPermissionId(null); return; }
-        setOpenTeamId(null);
-        setOpenPermissionId(u.id);
-        setPermForm({
-            auto_approve_tasks:  u.auto_approve_tasks  ?? false,
-            stuck_skip_approval: u.stuck_skip_approval ?? false,
-            allowed_lang_he:     u.allowed_lang_he     !== false,
-            allowed_lang_en:     u.allowed_lang_en     !== false,
-            allowed_lang_th:     u.allowed_lang_th     !== false,
-            can_manage_fields:   u.can_manage_fields    !== false,
-        });
-    };
-
-    const savePermissions = async (u) => {
-        setPermSaving(true);
-        try {
-            const res = await fetch(`${BASE}/users/${u.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ full_name: u.full_name_en || u.full_name, email: u.email, role: u.role, ...permForm }),
-            });
-            if (res.ok) { fetchData(); setOpenPermissionId(null); }
-            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving permissions'); }
-        } catch { alert('Server error'); }
-        setPermSaving(false);
-    };
-
-    const openTeamPanel = (u) => {
-        if (openTeamId === u.id) { setOpenTeamId(null); return; }
-        setOpenPermissionId(null);
-        setOpenTeamId(u.id);
-        const preSelected = new Set(
-            (users ?? []).filter(e => e.role === 'EMPLOYEE' && e.parent_manager_id === u.id).map(e => e.id)
-        );
-        setAssignedEmployeeIds(preSelected);
-    };
-
-    const saveTeamAssignment = async (managerId) => {
-        setTeamSaving(true);
-        try {
-            const res = await fetch(`${BASE}/users/${managerId}/assign-employees-to-manager`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ employeeIds: Array.from(assignedEmployeeIds) }),
-            });
-            if (res.ok) { fetchData(); setOpenTeamId(null); }
-            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving team'); }
-        } catch { alert('Server error'); }
-        setTeamSaving(false);
-    };
-
-    // Row action buttons — order: Edit → Permissions → Assign Team (managers only) → Delete
-    const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen, onTeam, teamOpen, isManager }) => (
+    // ── Row action buttons ─────────────────────────────────────────────────────
+    // editOpen: highlights pencil when edit panel is open for this row
+    const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen, onTeam, teamOpen, isManager, editOpen }) => (
         <div className="ml-auto flex items-center gap-1 shrink-0">
-            <button onClick={onEdit} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition" title="Edit">
+            <button
+                onClick={onEdit}
+                className={`p-1 rounded-lg transition ${editOpen ? 'bg-[#714B67] text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+                title="Edit"
+            >
                 <Pencil size={12} />
             </button>
-            <button
-                onClick={onSettings}
-                className={`p-1 rounded-lg transition ${settingsOpen ? 'bg-[#714B67] text-white' : 'hover:bg-gray-100 text-gray-400'}`}
-                title="Permissions"
-            >
-                <Settings size={12} />
-            </button>
+            {onSettings && (
+                <button
+                    onClick={onSettings}
+                    className={`p-1 rounded-lg transition ${settingsOpen ? 'bg-[#714B67] text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+                    title="Permissions"
+                >
+                    <Settings size={12} />
+                </button>
+            )}
             {isManager && (
                 <button
                     onClick={onTeam}
@@ -700,33 +682,55 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     </span>
                                 </div>
                                 <RowActions
-                                    onEdit={() => setUserModal({ role: 'COMPANY_MANAGER', user: companyManager })}
+                                    onEdit={() => togglePanel(`edit-user:${companyManager.id}`)}
+                                    editOpen={openPanel === `edit-user:${companyManager.id}`}
                                     onSettings={() => openPermission(companyManager)}
-                                    settingsOpen={openPermissionId === companyManager.id}
+                                    settingsOpen={openPanel === `perm:${companyManager.id}`}
                                     onDelete={() => setDeleteConfirm({ type: 'users', id: companyManager.id, name: userName(companyManager) })}
                                 />
                             </div>
-                            {openPermissionId === companyManager.id && (
+                            {openPanel === `edit-user:${companyManager.id}` && (
+                                <InlineUserForm
+                                    editUser={companyManager}
+                                    role="COMPANY_MANAGER"
+                                    token={token}
+                                    t={t}
+                                    onClose={() => setOpenPanel(null)}
+                                    onSaved={fetchData}
+                                />
+                            )}
+                            {openPanel === `perm:${companyManager.id}` && (
                                 <PermissionAccordion
                                     permForm={permForm}
                                     setPermForm={setPermForm}
                                     onSave={() => savePermissions(companyManager)}
-                                    onClose={() => setOpenPermissionId(null)}
+                                    onClose={() => setOpenPanel(null)}
                                     saving={permSaving}
                                     t={t}
                                 />
                             )}
                         </>
                     ) : (
-                        <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm text-gray-400 italic">No Company Manager Assigned</p>
-                            <button
-                                onClick={() => setUserModal({ role: 'COMPANY_MANAGER' })}
-                                className="flex items-center gap-1 text-xs font-semibold text-[#714B67] bg-[#714B67]/10 hover:bg-[#714B67]/20 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                                <span className="text-base leading-none">+</span> Add Company Manager
-                            </button>
-                        </div>
+                        <>
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm text-gray-400 italic">No Company Manager Assigned</p>
+                                <button
+                                    onClick={() => togglePanel('add-user-cm')}
+                                    className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${openPanel === 'add-user-cm' ? 'bg-[#714B67] text-white' : 'text-[#714B67] bg-[#714B67]/10 hover:bg-[#714B67]/20'}`}
+                                >
+                                    <span className="text-base leading-none">+</span> Add Company Manager
+                                </button>
+                            </div>
+                            {openPanel === 'add-user-cm' && (
+                                <InlineUserForm
+                                    role="COMPANY_MANAGER"
+                                    token={token}
+                                    t={t}
+                                    onClose={() => setOpenPanel(null)}
+                                    onSaved={fetchData}
+                                />
+                            )}
+                        </>
                     )}
                 </div>
             </div>
@@ -734,11 +738,11 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
             {/* Stats row */}
             <div className="grid grid-cols-5 gap-2 mb-5">
                 {[
-                    { label: t?.managers_label || 'Managers', count: managers.length, icon: Shield },
-                    { label: t?.employees_label || 'Employees', count: employees.length, icon: Users },
-                    { label: t?.locations_title || 'Locations', count: locations.length, icon: MapPin },
-                    { label: t?.categories_title || 'Categories', count: categories.length, icon: Tag },
-                    { label: t?.assets_title || 'Assets', count: assets.length, icon: Box },
+                    { label: t?.managers_label  || 'Managers',   count: managers.length,   icon: Shield },
+                    { label: t?.employees_label || 'Employees',  count: employees.length,  icon: Users  },
+                    { label: t?.locations_title || 'Locations',  count: locations.length,  icon: MapPin },
+                    { label: t?.categories_title|| 'Categories', count: categories.length, icon: Tag    },
+                    { label: t?.assets_title    || 'Assets',     count: assets.length,     icon: Box    },
                 ].map(({ label, count, icon: Icon }) => (
                     <div key={label} className="bg-white rounded-xl border border-gray-200 p-2.5 text-center">
                         <Icon size={16} className="text-[#714B67] mx-auto mb-1" />
@@ -750,13 +754,25 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
 
             {/* Detail sections */}
             <div className="space-y-4">
+
                 {/* ── Managers ── */}
                 <SectionCard
                     icon={Shield}
                     title={t?.managers_label || 'Managers'}
                     items={managers}
                     emptyLabel={t?.no_managers || 'No managers assigned'}
-                    onAdd={() => setUserModal({ role: 'SUPERVISOR' })}
+                    onAdd={() => togglePanel('add-user-manager')}
+                    addPanel={openPanel === 'add-user-manager' ? (
+                        <InlineUserForm
+                            role="SUPERVISOR"
+                            parentManagerId={primaryManagerId}
+                            token={token}
+                            t={t}
+                            onClose={() => setOpenPanel(null)}
+                            onSaved={fetchData}
+                            isAddPanel
+                        />
+                    ) : null}
                     renderItem={u => (
                         <>
                             <div className="flex items-center gap-2">
@@ -770,32 +786,43 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                 <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
                                 <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{u?.role}</span>
                                 <RowActions
-                                    onEdit={() => setUserModal({ role: u?.role, user: u })}
+                                    onEdit={() => togglePanel(`edit-user:${u.id}`)}
+                                    editOpen={openPanel === `edit-user:${u.id}`}
                                     onDelete={() => setDeleteConfirm({ type: 'users', id: u?.id, name: userName(u) })}
                                     onSettings={() => openPermission(u)}
-                                    settingsOpen={openPermissionId === u?.id}
+                                    settingsOpen={openPanel === `perm:${u.id}`}
                                     onTeam={() => openTeamPanel(u)}
-                                    teamOpen={openTeamId === u?.id}
+                                    teamOpen={openPanel === `team:${u.id}`}
                                     isManager={u?.role === 'MANAGER'}
                                 />
                             </div>
-                            {openPermissionId === u?.id && (
+                            {openPanel === `edit-user:${u.id}` && (
+                                <InlineUserForm
+                                    editUser={u}
+                                    role={u.role}
+                                    token={token}
+                                    t={t}
+                                    onClose={() => setOpenPanel(null)}
+                                    onSaved={fetchData}
+                                />
+                            )}
+                            {openPanel === `perm:${u.id}` && (
                                 <PermissionAccordion
                                     permForm={permForm}
                                     setPermForm={setPermForm}
                                     onSave={() => savePermissions(u)}
-                                    onClose={() => setOpenPermissionId(null)}
+                                    onClose={() => setOpenPanel(null)}
                                     saving={permSaving}
                                     t={t}
                                 />
                             )}
-                            {openTeamId === u?.id && (
+                            {openPanel === `team:${u.id}` && (
                                 <TeamAssignAccordion
                                     employees={employees}
                                     assignedIds={assignedEmployeeIds}
                                     setAssignedIds={setAssignedEmployeeIds}
                                     onSave={() => saveTeamAssignment(u.id)}
-                                    onClose={() => setOpenTeamId(null)}
+                                    onClose={() => setOpenPanel(null)}
                                     saving={teamSaving}
                                     userName={userName}
                                 />
@@ -810,7 +837,18 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     title={t?.employees_label || 'Employees'}
                     items={employees}
                     emptyLabel={t?.no_employees || 'No employees assigned'}
-                    onAdd={() => setUserModal({ role: 'EMPLOYEE' })}
+                    onAdd={() => togglePanel('add-user-employee')}
+                    addPanel={openPanel === 'add-user-employee' ? (
+                        <InlineUserForm
+                            role="EMPLOYEE"
+                            parentManagerId={primaryManagerId}
+                            token={token}
+                            t={t}
+                            onClose={() => setOpenPanel(null)}
+                            onSaved={fetchData}
+                            isAddPanel
+                        />
+                    ) : null}
                     renderItem={u => (
                         <>
                             <div className="flex items-center gap-2">
@@ -823,19 +861,30 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                 )}
                                 <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
                                 <RowActions
-                                    onEdit={() => setUserModal({ role: 'EMPLOYEE', user: u })}
+                                    onEdit={() => togglePanel(`edit-user:${u.id}`)}
+                                    editOpen={openPanel === `edit-user:${u.id}`}
                                     onDelete={() => setDeleteConfirm({ type: 'users', id: u?.id, name: userName(u) })}
                                     onSettings={() => openPermission(u)}
-                                    settingsOpen={openPermissionId === u?.id}
+                                    settingsOpen={openPanel === `perm:${u.id}`}
                                     isManager={false}
                                 />
                             </div>
-                            {openPermissionId === u?.id && (
+                            {openPanel === `edit-user:${u.id}` && (
+                                <InlineUserForm
+                                    editUser={u}
+                                    role="EMPLOYEE"
+                                    token={token}
+                                    t={t}
+                                    onClose={() => setOpenPanel(null)}
+                                    onSaved={fetchData}
+                                />
+                            )}
+                            {openPanel === `perm:${u.id}` && (
                                 <PermissionAccordion
                                     permForm={permForm}
                                     setPermForm={setPermForm}
                                     onSave={() => savePermissions(u)}
-                                    onClose={() => setOpenPermissionId(null)}
+                                    onClose={() => setOpenPanel(null)}
                                     saving={permSaving}
                                     t={t}
                                 />
@@ -850,15 +899,38 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     title={t?.locations_title || 'Locations'}
                     items={locations}
                     emptyLabel={t?.no_locations || 'No locations'}
-                    onAdd={() => setLocationModal({})}
+                    onAdd={() => togglePanel('add-loc')}
+                    addPanel={openPanel === 'add-loc' ? (
+                        <InlineLocationForm
+                            createdBy={primaryManagerId}
+                            token={token}
+                            t={t}
+                            onClose={() => setOpenPanel(null)}
+                            onSaved={fetchData}
+                            isAddPanel
+                        />
+                    ) : null}
                     renderItem={l => (
-                        <div className="flex items-center gap-2">
-                            <span className="flex-1 min-w-0 truncate">{itemName(l)}</span>
-                            <RowActions
-                                onEdit={() => setLocationModal({ loc: l })}
-                                onDelete={() => setDeleteConfirm({ type: 'locations', id: l?.id, name: itemName(l) })}
-                            />
-                        </div>
+                        <>
+                            <div className="flex items-center gap-2">
+                                <span className="flex-1 min-w-0 truncate">{itemName(l)}</span>
+                                <RowActions
+                                    onEdit={() => togglePanel(`edit-loc:${l.id}`)}
+                                    editOpen={openPanel === `edit-loc:${l.id}`}
+                                    onDelete={() => setDeleteConfirm({ type: 'locations', id: l?.id, name: itemName(l) })}
+                                />
+                            </div>
+                            {openPanel === `edit-loc:${l.id}` && (
+                                <InlineLocationForm
+                                    editLocation={l}
+                                    createdBy={primaryManagerId}
+                                    token={token}
+                                    t={t}
+                                    onClose={() => setOpenPanel(null)}
+                                    onSaved={fetchData}
+                                />
+                            )}
+                        </>
                     )}
                 />
 
@@ -868,16 +940,39 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     title={t?.categories_title || 'Categories'}
                     items={categories}
                     emptyLabel={t?.no_categories || 'No categories'}
-                    onAdd={() => setCategoryModal({})}
+                    onAdd={() => togglePanel('add-cat')}
+                    addPanel={openPanel === 'add-cat' ? (
+                        <InlineCategoryForm
+                            createdBy={primaryManagerId}
+                            token={token}
+                            t={t}
+                            onClose={() => setOpenPanel(null)}
+                            onSaved={fetchData}
+                            isAddPanel
+                        />
+                    ) : null}
                     renderItem={c => (
-                        <div className="flex items-center gap-2">
-                            <span className="flex-1 min-w-0 truncate">{itemName(c)}</span>
-                            {c?.code && <span className="text-xs text-gray-400 font-mono shrink-0">{c.code}</span>}
-                            <RowActions
-                                onEdit={() => setCategoryModal({ cat: c })}
-                                onDelete={() => setDeleteConfirm({ type: 'categories', id: c?.id, name: itemName(c) })}
-                            />
-                        </div>
+                        <>
+                            <div className="flex items-center gap-2">
+                                <span className="flex-1 min-w-0 truncate">{itemName(c)}</span>
+                                {c?.code && <span className="text-xs text-gray-400 font-mono shrink-0">{c.code}</span>}
+                                <RowActions
+                                    onEdit={() => togglePanel(`edit-cat:${c.id}`)}
+                                    editOpen={openPanel === `edit-cat:${c.id}`}
+                                    onDelete={() => setDeleteConfirm({ type: 'categories', id: c?.id, name: itemName(c) })}
+                                />
+                            </div>
+                            {openPanel === `edit-cat:${c.id}` && (
+                                <InlineCategoryForm
+                                    editCategory={c}
+                                    createdBy={primaryManagerId}
+                                    token={token}
+                                    t={t}
+                                    onClose={() => setOpenPanel(null)}
+                                    onSaved={fetchData}
+                                />
+                            )}
+                        </>
                     )}
                 />
 
@@ -887,64 +982,48 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     title={t?.assets_title || 'Assets'}
                     items={assets}
                     emptyLabel={t?.no_assets || 'No assets'}
-                    onAdd={() => setAssetModal({})}
+                    onAdd={() => togglePanel('add-asset')}
+                    addPanel={openPanel === 'add-asset' ? (
+                        <InlineAssetForm
+                            createdBy={primaryManagerId}
+                            categories={categories}
+                            locations={locations}
+                            token={token}
+                            t={t}
+                            onClose={() => setOpenPanel(null)}
+                            onSaved={fetchData}
+                            isAddPanel
+                        />
+                    ) : null}
                     renderItem={a => (
-                        <div className="flex items-center gap-2">
-                            <span className="flex-1 min-w-0 truncate">{itemName(a)}</span>
-                            {a?.code && <span className="text-xs text-gray-400 font-mono shrink-0">{a.code}</span>}
-                            <RowActions
-                                onEdit={() => setAssetModal({ asset: a })}
-                                onDelete={() => setDeleteConfirm({ type: 'assets', id: a?.id, name: itemName(a) })}
-                            />
-                        </div>
+                        <>
+                            <div className="flex items-center gap-2">
+                                <span className="flex-1 min-w-0 truncate">{itemName(a)}</span>
+                                {a?.code && <span className="text-xs text-gray-400 font-mono shrink-0">{a.code}</span>}
+                                <RowActions
+                                    onEdit={() => togglePanel(`edit-asset:${a.id}`)}
+                                    editOpen={openPanel === `edit-asset:${a.id}`}
+                                    onDelete={() => setDeleteConfirm({ type: 'assets', id: a?.id, name: itemName(a) })}
+                                />
+                            </div>
+                            {openPanel === `edit-asset:${a.id}` && (
+                                <InlineAssetForm
+                                    editAsset={a}
+                                    createdBy={primaryManagerId}
+                                    categories={categories}
+                                    locations={locations}
+                                    token={token}
+                                    t={t}
+                                    onClose={() => setOpenPanel(null)}
+                                    onSaved={fetchData}
+                                />
+                            )}
+                        </>
                     )}
                 />
             </div>
 
-            {/* ── CRUD Modals ── */}
-            {userModal && (
-                <UserModal
-                    editUser={userModal.user}
-                    role={userModal.role}
-                    parentManagerId={primaryManagerId}
-                    token={token}
-                    t={t}
-                    onClose={() => setUserModal(null)}
-                    onSaved={fetchData}
-                />
-            )}
-            {locationModal && (
-                <LocationModal
-                    editLocation={locationModal.loc}
-                    createdBy={primaryManagerId}
-                    token={token}
-                    t={t}
-                    onClose={() => setLocationModal(null)}
-                    onSaved={fetchData}
-                />
-            )}
-            {categoryModal && (
-                <CategoryModal
-                    editCategory={categoryModal.cat}
-                    createdBy={primaryManagerId}
-                    token={token}
-                    t={t}
-                    onClose={() => setCategoryModal(null)}
-                    onSaved={fetchData}
-                />
-            )}
-            {assetModal && (
-                <AssetModal
-                    editAsset={assetModal.asset}
-                    createdBy={primaryManagerId}
-                    categories={categories}
-                    locations={locations}
-                    token={token}
-                    t={t}
-                    onClose={() => setAssetModal(null)}
-                    onSaved={fetchData}
-                />
-            )}
+            {/* Delete confirmation modal (kept as modal — just a confirmation, not an edit form) */}
             {deleteConfirm && (
                 <ConfirmDeleteModal
                     message={`Delete "${deleteConfirm?.name}"?`}
@@ -969,7 +1048,6 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
     const [imageFile, setImageFile] = useState(null);
     const [saving, setSaving] = useState(false);
 
-    // Company Manager fields — shown for both create and edit
     const [mgr, setMgr] = useState({
         name_en: '', name_he: '', name_th: '',
         email: '', password: '', phone: '', line_id: '',
@@ -980,7 +1058,6 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
     const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
     const setM = (k, v) => setMgr(p => ({ ...p, [k]: v }));
 
-    // In edit mode, fetch the associated COMPANY_MANAGER to pre-populate fields
     useEffect(() => {
         if (!isEdit) return;
         setMgrLoading(true);
@@ -1024,7 +1101,6 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
             if (company?.profile_image_url) formData.append('existing_image', company.profile_image_url);
 
             if (!isEdit) {
-                // Attach manager fields for new company (optional)
                 if (mgr.name_en.trim() && mgr.email.trim() && mgr.password.trim()) {
                     formData.append('manager_name_en',  mgr.name_en.trim());
                     formData.append('manager_name_he',  mgr.name_he.trim());
@@ -1035,11 +1111,10 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
                     if (mgr.line_id) formData.append('manager_line_id', mgr.line_id.trim());
                 }
             } else if (managerUser) {
-                // Always send manager fields in edit mode (backend will update the COMPANY_MANAGER user)
                 formData.append('manager_name_en',  mgr.name_en.trim());
                 formData.append('manager_name_he',  mgr.name_he.trim());
                 formData.append('manager_name_th',  mgr.name_th.trim());
-                if (mgr.email.trim()) formData.append('manager_email', mgr.email.trim().toLowerCase());
+                if (mgr.email.trim())    formData.append('manager_email',    mgr.email.trim().toLowerCase());
                 if (mgr.password.trim()) formData.append('manager_password', mgr.password.trim());
                 formData.append('manager_phone',   mgr.phone.trim());
                 formData.append('manager_line_id', mgr.line_id.trim());
@@ -1058,8 +1133,8 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
         finally { setSaving(false); }
     };
 
-    const inputCls = "w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition";
-    const labelCls = "text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1";
+    const iCls = "w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition";
+    const lCls = "text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1";
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[150] p-4">
@@ -1071,7 +1146,6 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
                 </div>
 
-                {/* ── Company fields ── */}
                 <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-2">Company Info</p>
                 <div className="space-y-3">
                     {[
@@ -1080,23 +1154,20 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
                         { label: 'Name (TH)',   key: 'name_th' },
                     ].map(({ label, key }) => (
                         <div key={key}>
-                            <label className={labelCls}>{label}</label>
-                            <input className={inputCls} value={form[key]} onChange={e => setF(key, e.target.value)} />
+                            <label className={lCls}>{label}</label>
+                            <input className={iCls} value={form[key]} onChange={e => setF(key, e.target.value)} />
                         </div>
                     ))}
-
                     <div>
-                        <label className={labelCls}>Default Notification Language</label>
-                        <select value={form.default_notification_lang} onChange={e => setF('default_notification_lang', e.target.value)}
-                            className={inputCls}>
+                        <label className={lCls}>Default Notification Language</label>
+                        <select value={form.default_notification_lang} onChange={e => setF('default_notification_lang', e.target.value)} className={iCls}>
                             <option value="en">English</option>
                             <option value="he">Hebrew</option>
                             <option value="th">Thai</option>
                         </select>
                     </div>
-
                     <div>
-                        <label className={labelCls}>{t?.company_logo_label || 'Logo (optional)'}</label>
+                        <label className={lCls}>{t?.company_logo_label || 'Logo (optional)'}</label>
                         <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] ?? null)}
                             className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] hover:file:bg-[#714B67]/10 cursor-pointer" />
                         {company?.profile_image_url && !imageFile && (
@@ -1105,7 +1176,6 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
                     </div>
                 </div>
 
-                {/* ── Company Manager fields (create: optional, edit: update existing) ── */}
                 <div className="mt-5">
                     <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-2">
                         Company Manager{' '}
@@ -1122,17 +1192,17 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
                     {(!isEdit || (!mgrLoading && managerUser)) && (
                         <div className="space-y-3 bg-slate-50 rounded-xl p-3 border border-gray-100">
                             {[
-                                { label: 'Manager Name (EN)',                             key: 'name_en',  type: 'text' },
-                                { label: 'Manager Name (HE)',                             key: 'name_he',  type: 'text' },
-                                { label: 'Manager Name (TH)',                             key: 'name_th',  type: 'text' },
-                                { label: 'Manager Email',                                 key: 'email',    type: 'email' },
+                                { label: 'Manager Name (EN)',                                        key: 'name_en',  type: 'text' },
+                                { label: 'Manager Name (HE)',                                        key: 'name_he',  type: 'text' },
+                                { label: 'Manager Name (TH)',                                        key: 'name_th',  type: 'text' },
+                                { label: 'Manager Email',                                            key: 'email',    type: 'email' },
                                 { label: isEdit ? 'Password (blank = keep current)' : 'Manager Password', key: 'password', type: 'password' },
-                                { label: 'Manager Phone',                                 key: 'phone',    type: 'text' },
-                                { label: 'Manager LINE ID',                               key: 'line_id',  type: 'text' },
+                                { label: 'Manager Phone',                                            key: 'phone',    type: 'text' },
+                                { label: 'Manager LINE ID',                                          key: 'line_id',  type: 'text' },
                             ].map(({ label, key, type }) => (
                                 <div key={key}>
-                                    <label className={labelCls}>{label}</label>
-                                    <input type={type} className={inputCls} value={mgr[key]} onChange={e => setM(key, e.target.value)} />
+                                    <label className={lCls}>{label}</label>
+                                    <input type={type} className={iCls} value={mgr[key]} onChange={e => setM(key, e.target.value)} />
                                 </div>
                             ))}
                         </div>
@@ -1192,7 +1262,6 @@ const CompaniesTab = ({ token, t, user, lang }) => {
         setDeleteConfirm(null);
     };
 
-    // ── Company detail view ──
     if (selectedCompany) {
         return (
             <div className="p-4 pb-6">
@@ -1207,10 +1276,8 @@ const CompaniesTab = ({ token, t, user, lang }) => {
         );
     }
 
-    // ── Company list ──
     return (
         <div className="p-4 pb-6 animate-fade-in">
-            {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div>
                     <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -1228,7 +1295,6 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                 </button>
             </div>
 
-            {/* List */}
             {loading ? (
                 <div className="flex items-center justify-center py-20">
                     <Loader2 size={32} className="animate-spin text-[#714B67]" />
@@ -1266,7 +1332,6 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                                 <ChevronRight size={18} className="text-gray-300 shrink-0" />
                             </button>
 
-                            {/* Actions */}
                             <div className="flex border-t border-gray-100">
                                 <button
                                     onClick={() => { setEditingCompany(company); setShowModal(true); }}
@@ -1289,7 +1354,6 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                 </div>
             )}
 
-            {/* Modals */}
             {showModal && (
                 <CompanyModal
                     company={editingCompany}
