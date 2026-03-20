@@ -676,48 +676,60 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                 </div>
             </div>
 
-            {/* Company Manager card */}
-            {companyManager && (
-                <div className="bg-white rounded-2xl border border-[#714B67]/20 overflow-hidden mb-5">
-                    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-[#714B67]/5">
-                        <Shield size={16} className="text-[#714B67]" />
-                        <h3 className="text-sm font-bold text-slate-700">Company Manager</h3>
-                    </div>
-                    <div className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                            {companyManager.profile_picture_url ? (
-                                <img src={companyManager.profile_picture_url} className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200" alt="" />
-                            ) : (
-                                <div className="w-8 h-8 rounded-full bg-[#714B67]/10 flex items-center justify-center text-sm font-bold text-[#714B67] shrink-0">
-                                    {(userName(companyManager)[0] || '?').toUpperCase()}
-                                </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-slate-800 truncate">{userName(companyManager)}</p>
-                                <span className="inline-block text-[10px] font-bold text-[#714B67] bg-[#714B67]/10 px-1.5 py-0.5 rounded mt-0.5">
-                                    Company Manager
-                                </span>
-                            </div>
-                            <RowActions
-                                onEdit={() => setUserModal({ role: 'COMPANY_MANAGER', user: companyManager })}
-                                onSettings={() => openPermission(companyManager)}
-                                settingsOpen={openPermissionId === companyManager.id}
-                                onDelete={() => setDeleteConfirm({ type: 'users', id: companyManager.id, name: userName(companyManager) })}
-                            />
-                        </div>
-                        {openPermissionId === companyManager.id && (
-                            <PermissionAccordion
-                                permForm={permForm}
-                                setPermForm={setPermForm}
-                                onSave={() => savePermissions(companyManager)}
-                                onClose={() => setOpenPermissionId(null)}
-                                saving={permSaving}
-                                t={t}
-                            />
-                        )}
-                    </div>
+            {/* Company Manager card — always visible */}
+            <div className="bg-white rounded-2xl border border-[#714B67]/20 overflow-hidden mb-5">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-[#714B67]/5">
+                    <Shield size={16} className="text-[#714B67]" />
+                    <h3 className="text-sm font-bold text-slate-700">Company Manager</h3>
                 </div>
-            )}
+                <div className="px-4 py-3">
+                    {companyManager ? (
+                        <>
+                            <div className="flex items-center gap-2">
+                                {companyManager.profile_picture_url ? (
+                                    <img src={companyManager.profile_picture_url} className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200" alt="" />
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full bg-[#714B67]/10 flex items-center justify-center text-sm font-bold text-[#714B67] shrink-0">
+                                        {(userName(companyManager)[0] || '?').toUpperCase()}
+                                    </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-slate-800 truncate">{userName(companyManager)}</p>
+                                    <span className="inline-block text-[10px] font-bold text-[#714B67] bg-[#714B67]/10 px-1.5 py-0.5 rounded mt-0.5">
+                                        Company Manager
+                                    </span>
+                                </div>
+                                <RowActions
+                                    onEdit={() => setUserModal({ role: 'COMPANY_MANAGER', user: companyManager })}
+                                    onSettings={() => openPermission(companyManager)}
+                                    settingsOpen={openPermissionId === companyManager.id}
+                                    onDelete={() => setDeleteConfirm({ type: 'users', id: companyManager.id, name: userName(companyManager) })}
+                                />
+                            </div>
+                            {openPermissionId === companyManager.id && (
+                                <PermissionAccordion
+                                    permForm={permForm}
+                                    setPermForm={setPermForm}
+                                    onSave={() => savePermissions(companyManager)}
+                                    onClose={() => setOpenPermissionId(null)}
+                                    saving={permSaving}
+                                    t={t}
+                                />
+                            )}
+                        </>
+                    ) : (
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm text-gray-400 italic">No Company Manager Assigned</p>
+                            <button
+                                onClick={() => setUserModal({ role: 'COMPANY_MANAGER' })}
+                                className="flex items-center gap-1 text-xs font-semibold text-[#714B67] bg-[#714B67]/10 hover:bg-[#714B67]/20 px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                                <span className="text-base leading-none">+</span> Add Company Manager
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
 
             {/* Stats row */}
             <div className="grid grid-cols-5 gap-2 mb-5">
