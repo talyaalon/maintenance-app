@@ -15,6 +15,13 @@ import ConfigurationTab from './ConfigurationTab';
 import CompaniesTab from './CompaniesTab';
 import CompanyManagerSettingsTab from './CompanyManagerSettingsTab';
 
+// Legacy role mapping: DB may still contain "Admin" from before the Phase 1 rename.
+// Normalise it to "BIG_BOSS" so all tab routing and permission checks work correctly.
+const normalizeRole = (role) => {
+  if (role === 'Admin' || role === 'admin') return 'BIG_BOSS';
+  return role;
+};
+
 function App() {
   const [user, setUser] = useState(null);
   // 🚀 מנגנון התחברות אוטומטי וזכירת משתמש (Persistent Login)
@@ -45,7 +52,7 @@ function App() {
             setUser({
                 ...storedUser,             // extended profile fields from localStorage
                 id:   decodedUser.id,      // JWT auth fields always take priority
-                role: decodedUser.role,
+                role: normalizeRole(decodedUser.role),
                 name: decodedUser.name,
             });
         } else {
@@ -228,7 +235,7 @@ function App() {
   if (!user) {
     return (
         <Login
-            onLoginSuccess={setUser}
+            onLoginSuccess={(userData) => setUser({ ...userData, role: normalizeRole(userData?.role) })}
             t={t}
             lang={lang}
             setLang={setLang}
