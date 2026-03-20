@@ -1107,6 +1107,55 @@ app.put('/users/:id/assign-employees', authenticateToken, async (req, res) => {
     }
 });
 
+// PUT /users/:id/assign-employees-to-manager
+// BIG_BOSS assigns employees (by ID) to a MANAGER or SUPERVISOR within the same company.
+app.put('/users/:id/assign-employees-to-manager', authenticateToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'Unauthorized' });
+
+        const managerId = parseInt(req.params.id);
+        if (isNaN(managerId)) return res.status(400).json({ error: 'Invalid ID' });
+
+        const mgrRes = await pool.query(
+            `SELECT id, company_id FROM users WHERE id = $1 AND role IN ('MANAGER', 'SUPERVISOR')`,
+            [managerId]
+        );
+        if (mgrRes.rows.length === 0) return res.status(404).json({ error: 'Manager not found' });
+        const mgr = mgrRes.rows[0];
+
+        const rawIds = req.body.employeeIds;
+        const employeeIds = Array.isArray(rawIds)
+            ? rawIds.map(Number).filter(n => Number.isInteger(n) && n > 0)
+            : [];
+
+        // Unassign all current employees from this manager
+        await pool.query(
+            `UPDATE users SET parent_manager_id = NULL WHERE parent_manager_id = $1 AND role = 'EMPLOYEE'`,
+            [managerId]
+        );
+        await pool.query(`DELETE FROM employee_managers WHERE manager_id = $1`, [managerId]);
+
+        if (employeeIds.length > 0) {
+            await pool.query(
+                `UPDATE users SET parent_manager_id = $1
+                 WHERE id = ANY($2::int[]) AND role = 'EMPLOYEE' AND company_id = $3`,
+                [managerId, employeeIds, mgr.company_id]
+            );
+            for (const empId of employeeIds) {
+                await pool.query(
+                    'INSERT INTO employee_managers (employee_id, manager_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                    [empId, managerId]
+                );
+            }
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ PUT /users/:id/assign-employees-to-manager error:', err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // ==========================================
 // 🏢 Company CRUD Endpoints (Multi-Tenant)
 // ==========================================

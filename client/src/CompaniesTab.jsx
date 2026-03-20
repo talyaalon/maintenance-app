@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, Plus, ChevronRight, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2 } from 'lucide-react';
+import { Building2, Plus, ChevronRight, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck } from 'lucide-react';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -393,6 +393,104 @@ const AssetModal = ({ editAsset, createdBy, categories, locations, token, t, onC
     );
 };
 
+// ─── Permission Accordion ─────────────────────────────────────────────────────
+const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t }) => (
+    <div className="mt-2 pt-3 border-t border-[#714B67]/10 space-y-3 animate-fade-in bg-[#fdf4ff]/60 rounded-b-xl -mx-4 px-4 pb-3">
+        <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider">Permissions</p>
+        <div>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Languages</p>
+            <div className="flex gap-2">
+                {[
+                    { key: 'allowed_lang_he', label: '🇮🇱 HE' },
+                    { key: 'allowed_lang_en', label: '🇺🇸 EN' },
+                    { key: 'allowed_lang_th', label: '🇹🇭 TH' },
+                ].map(({ key, label }) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => setPermForm(p => ({ ...p, [key]: !p[key] }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${permForm[key] ? 'bg-[#714B67] text-white shadow-sm' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+        </div>
+        <div className="space-y-2">
+            {[
+                { key: 'auto_approve_tasks',   label: t?.perm_auto_approve  || 'Auto-approve tasks' },
+                { key: 'stuck_skip_approval',  label: t?.perm_stuck_skip    || 'Stuck task skip approval' },
+                { key: 'can_manage_fields',    label: t?.perm_manage_fields || 'Can manage fields' },
+            ].map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between cursor-pointer gap-2">
+                    <span className="text-xs text-gray-600">{label}</span>
+                    <button
+                        type="button"
+                        onClick={() => setPermForm(p => ({ ...p, [key]: !p[key] }))}
+                        className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${permForm[key] ? 'bg-[#714B67]' : 'bg-gray-200'}`}
+                    >
+                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${permForm[key] ? 'translate-x-4' : ''}`} />
+                    </button>
+                </label>
+            ))}
+        </div>
+        <div className="flex gap-2 pt-1">
+            <button onClick={onClose} className="flex-1 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition">
+                {t?.cancel || 'Cancel'}
+            </button>
+            <button
+                onClick={onSave}
+                disabled={saving}
+                className="flex-1 py-1.5 text-xs bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-1"
+            >
+                {saving && <Loader2 size={10} className="animate-spin" />}
+                {t?.save || 'Save'}
+            </button>
+        </div>
+    </div>
+);
+
+// ─── Team Assign Accordion ─────────────────────────────────────────────────────
+const TeamAssignAccordion = ({ employees, assignedIds, setAssignedIds, onSave, onClose, saving, userName }) => (
+    <div className="mt-2 pt-3 border-t border-blue-200/60 space-y-3 animate-fade-in bg-[#f0f7ff]/60 rounded-b-xl -mx-4 px-4 pb-3">
+        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Assign Team</p>
+        <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+            {employees.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No employees in this company</p>
+            ) : (
+                employees.map(e => (
+                    <label key={e.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+                        <input
+                            type="checkbox"
+                            checked={assignedIds.has(e.id)}
+                            onChange={() => setAssignedIds(prev => {
+                                const next = new Set(prev);
+                                if (next.has(e.id)) next.delete(e.id); else next.add(e.id);
+                                return next;
+                            })}
+                            className="rounded accent-[#714B67]"
+                        />
+                        <span className="text-xs text-gray-600">{userName(e)}</span>
+                    </label>
+                ))
+            )}
+        </div>
+        <div className="flex gap-2 pt-1">
+            <button onClick={onClose} className="flex-1 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition">
+                Cancel
+            </button>
+            <button
+                onClick={onSave}
+                disabled={saving}
+                className="flex-1 py-1.5 text-xs bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-1"
+            >
+                {saving && <Loader2 size={10} className="animate-spin" />}
+                Save
+            </button>
+        </div>
+    </div>
+);
+
 // ─── Company detail view ──────────────────────────────────────────────────────
 const CompanyDetail = ({ company, token, t, lang, onBack }) => {
     const [users, setUsers] = useState([]);
@@ -407,6 +505,16 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
     const [categoryModal, setCategoryModal] = useState(null); // {} | { cat }
     const [assetModal, setAssetModal] = useState(null);       // {} | { asset }
     const [deleteConfirm, setDeleteConfirm] = useState(null); // { type, id, name }
+
+    // Permission accordion state
+    const [openPermissionId, setOpenPermissionId] = useState(null);
+    const [permForm, setPermForm] = useState({});
+    const [permSaving, setPermSaving] = useState(false);
+
+    // Team assignment accordion state
+    const [openTeamId, setOpenTeamId] = useState(null);
+    const [assignedEmployeeIds, setAssignedEmployeeIds] = useState(new Set());
+    const [teamSaving, setTeamSaving] = useState(false);
 
     const cid = company?.id;
 
@@ -457,13 +565,81 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
         setDeleteConfirm(null);
     };
 
-    // Row action buttons (Edit + Delete)
-    const RowActions = ({ onEdit, onDelete }) => (
+    const openPermission = (u) => {
+        if (openPermissionId === u.id) { setOpenPermissionId(null); return; }
+        setOpenTeamId(null);
+        setOpenPermissionId(u.id);
+        setPermForm({
+            auto_approve_tasks:  u.auto_approve_tasks  ?? false,
+            stuck_skip_approval: u.stuck_skip_approval ?? false,
+            allowed_lang_he:     u.allowed_lang_he     !== false,
+            allowed_lang_en:     u.allowed_lang_en     !== false,
+            allowed_lang_th:     u.allowed_lang_th     !== false,
+            can_manage_fields:   u.can_manage_fields    !== false,
+        });
+    };
+
+    const savePermissions = async (u) => {
+        setPermSaving(true);
+        try {
+            const res = await fetch(`${BASE}/users/${u.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ full_name: u.full_name_en || u.full_name, email: u.email, role: u.role, ...permForm }),
+            });
+            if (res.ok) { fetchData(); setOpenPermissionId(null); }
+            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving permissions'); }
+        } catch { alert('Server error'); }
+        setPermSaving(false);
+    };
+
+    const openTeamPanel = (u) => {
+        if (openTeamId === u.id) { setOpenTeamId(null); return; }
+        setOpenPermissionId(null);
+        setOpenTeamId(u.id);
+        const preSelected = new Set(
+            (users ?? []).filter(e => e.role === 'EMPLOYEE' && e.parent_manager_id === u.id).map(e => e.id)
+        );
+        setAssignedEmployeeIds(preSelected);
+    };
+
+    const saveTeamAssignment = async (managerId) => {
+        setTeamSaving(true);
+        try {
+            const res = await fetch(`${BASE}/users/${managerId}/assign-employees-to-manager`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ employeeIds: Array.from(assignedEmployeeIds) }),
+            });
+            if (res.ok) { fetchData(); setOpenTeamId(null); }
+            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving team'); }
+        } catch { alert('Server error'); }
+        setTeamSaving(false);
+    };
+
+    // Row action buttons — order: Edit → Permissions → Assign Team (managers only) → Delete
+    const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen, onTeam, teamOpen, isManager }) => (
         <div className="ml-auto flex items-center gap-1 shrink-0">
-            <button onClick={onEdit} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition">
+            <button onClick={onEdit} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition" title="Edit">
                 <Pencil size={12} />
             </button>
-            <button onClick={onDelete} className="p-1 rounded-lg hover:bg-red-50 text-red-400 transition">
+            <button
+                onClick={onSettings}
+                className={`p-1 rounded-lg transition ${settingsOpen ? 'bg-[#714B67] text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+                title="Permissions"
+            >
+                <Settings size={12} />
+            </button>
+            {isManager && (
+                <button
+                    onClick={onTeam}
+                    className={`p-1 rounded-lg transition ${teamOpen ? 'bg-blue-500 text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+                    title="Assign Team"
+                >
+                    <UserCheck size={12} />
+                </button>
+            )}
+            <button onClick={onDelete} className="p-1 rounded-lg hover:bg-red-50 text-red-400 transition" title="Delete">
                 <Trash2 size={12} />
             </button>
         </div>
@@ -526,21 +702,49 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     emptyLabel={t?.no_managers || 'No managers assigned'}
                     onAdd={() => setUserModal({ role: 'SUPERVISOR' })}
                     renderItem={u => (
-                        <div className="flex items-center gap-2">
-                            {u?.profile_picture_url ? (
-                                <img src={u.profile_picture_url} className="w-6 h-6 rounded-full object-cover shrink-0" alt="" />
-                            ) : (
-                                <div className="w-6 h-6 rounded-full bg-[#714B67]/10 flex items-center justify-center text-[10px] font-bold text-[#714B67] shrink-0">
-                                    {(userName(u)[0] || '?').toUpperCase()}
-                                </div>
+                        <>
+                            <div className="flex items-center gap-2">
+                                {u?.profile_picture_url ? (
+                                    <img src={u.profile_picture_url} className="w-6 h-6 rounded-full object-cover shrink-0" alt="" />
+                                ) : (
+                                    <div className="w-6 h-6 rounded-full bg-[#714B67]/10 flex items-center justify-center text-[10px] font-bold text-[#714B67] shrink-0">
+                                        {(userName(u)[0] || '?').toUpperCase()}
+                                    </div>
+                                )}
+                                <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
+                                <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{u?.role}</span>
+                                <RowActions
+                                    onEdit={() => setUserModal({ role: u?.role, user: u })}
+                                    onDelete={() => setDeleteConfirm({ type: 'users', id: u?.id, name: userName(u) })}
+                                    onSettings={() => openPermission(u)}
+                                    settingsOpen={openPermissionId === u?.id}
+                                    onTeam={() => openTeamPanel(u)}
+                                    teamOpen={openTeamId === u?.id}
+                                    isManager={u?.role === 'MANAGER'}
+                                />
+                            </div>
+                            {openPermissionId === u?.id && (
+                                <PermissionAccordion
+                                    permForm={permForm}
+                                    setPermForm={setPermForm}
+                                    onSave={() => savePermissions(u)}
+                                    onClose={() => setOpenPermissionId(null)}
+                                    saving={permSaving}
+                                    t={t}
+                                />
                             )}
-                            <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
-                            <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{u?.role}</span>
-                            <RowActions
-                                onEdit={() => setUserModal({ role: u?.role, user: u })}
-                                onDelete={() => setDeleteConfirm({ type: 'users', id: u?.id, name: userName(u) })}
-                            />
-                        </div>
+                            {openTeamId === u?.id && (
+                                <TeamAssignAccordion
+                                    employees={employees}
+                                    assignedIds={assignedEmployeeIds}
+                                    setAssignedIds={setAssignedEmployeeIds}
+                                    onSave={() => saveTeamAssignment(u.id)}
+                                    onClose={() => setOpenTeamId(null)}
+                                    saving={teamSaving}
+                                    userName={userName}
+                                />
+                            )}
+                        </>
                     )}
                 />
 
@@ -552,20 +756,35 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     emptyLabel={t?.no_employees || 'No employees assigned'}
                     onAdd={() => setUserModal({ role: 'EMPLOYEE' })}
                     renderItem={u => (
-                        <div className="flex items-center gap-2">
-                            {u?.profile_picture_url ? (
-                                <img src={u.profile_picture_url} className="w-6 h-6 rounded-full object-cover shrink-0" alt="" />
-                            ) : (
-                                <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0">
-                                    {(userName(u)[0] || '?').toUpperCase()}
-                                </div>
+                        <>
+                            <div className="flex items-center gap-2">
+                                {u?.profile_picture_url ? (
+                                    <img src={u.profile_picture_url} className="w-6 h-6 rounded-full object-cover shrink-0" alt="" />
+                                ) : (
+                                    <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0">
+                                        {(userName(u)[0] || '?').toUpperCase()}
+                                    </div>
+                                )}
+                                <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
+                                <RowActions
+                                    onEdit={() => setUserModal({ role: 'EMPLOYEE', user: u })}
+                                    onDelete={() => setDeleteConfirm({ type: 'users', id: u?.id, name: userName(u) })}
+                                    onSettings={() => openPermission(u)}
+                                    settingsOpen={openPermissionId === u?.id}
+                                    isManager={false}
+                                />
+                            </div>
+                            {openPermissionId === u?.id && (
+                                <PermissionAccordion
+                                    permForm={permForm}
+                                    setPermForm={setPermForm}
+                                    onSave={() => savePermissions(u)}
+                                    onClose={() => setOpenPermissionId(null)}
+                                    saving={permSaving}
+                                    t={t}
+                                />
                             )}
-                            <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
-                            <RowActions
-                                onEdit={() => setUserModal({ role: 'EMPLOYEE', user: u })}
-                                onDelete={() => setDeleteConfirm({ type: 'users', id: u?.id, name: userName(u) })}
-                            />
-                        </div>
+                        </>
                     )}
                 />
 
