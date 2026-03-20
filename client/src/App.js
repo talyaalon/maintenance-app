@@ -13,6 +13,7 @@ import TeamTab from './TeamTab';
 import ProfileTab from './ProfileTab';
 import ConfigurationTab from './ConfigurationTab';
 import CompaniesTab from './CompaniesTab';
+import CompanyManagerSettingsTab from './CompanyManagerSettingsTab';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -103,10 +104,9 @@ function App() {
   
   const t = translations[lang]; // המילון הנוכחי
 
-  // שואב את הטאב האחרון מהזיכרון (אם אין, יפתח את טאב 1)
+  // שואב את הטאב האחרון מהזיכרון (אם אין, יפתח את tasks)
   const [activeTab, setActiveTab] = useState(() => {
-      const savedTab = localStorage.getItem('appActiveTab');
-      return savedTab ? parseInt(savedTab, 10) : 1;
+      return localStorage.getItem('appActiveTab') || 'tasks';
   });
 
   // שומר את הטאב לזיכרון בכל פעם שאת עוברת עמוד
@@ -117,7 +117,7 @@ function App() {
   // Reset to Tasks tab on login so a stale tab (e.g. Settings saved by a
   // previous session) never lands the new user on a blank screen.
   useEffect(() => {
-      if (user) setActiveTab(1);
+      if (user) setActiveTab('tasks');
   }, [user?.id]);
 
   // מודאלים
@@ -203,35 +203,62 @@ function App() {
     );
   }
 
-  const isManager  = user.role === 'MANAGER';
-  const isBigBoss  = user.role === 'BIG_BOSS';
+  const isBigBoss        = user.role === 'BIG_BOSS';
+  const isCompanyManager = user.role === 'COMPANY_MANAGER';
 
-  // Settings (Config) tab: BIG_BOSS only — MANAGER, COMPANY_MANAGER cannot access it
-  const canAccessSettings = isBigBoss;
+  // Role-based tab configuration
+  const tabsConfig = React.useMemo(() => {
+      switch (user.role) {
+          case 'BIG_BOSS':
+              return [
+                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
+                  { key: 'companies', label: t.nav_companies,            Icon: Building2 },
+                  { key: 'settings',  label: t.nav_config,               Icon: Settings },
+                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+              ];
+          case 'COMPANY_MANAGER':
+              return [
+                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
+                  { key: 'settings',  label: t.nav_config,               Icon: Settings },
+                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+              ];
+          case 'MANAGER':
+              return [
+                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
+                  { key: 'team',      label: t.nav_team,                 Icon: Users },
+                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+              ];
+          default: // EMPLOYEE
+              return [
+                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
+                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+              ];
+      }
+  }, [user.role, t]);
 
   const renderContent = () => {
       const token = localStorage.getItem('token');
       switch (activeTab) {
-          case 1:
-            return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
-          case 2:
-            // BIG_BOSS → Companies tab; MANAGER → Team tab; EMPLOYEE → nothing
-            if (isBigBoss)  return <CompaniesTab token={token} t={t} user={user} lang={lang} />;
-            if (isManager)  return <TeamTab user={user} token={token} t={t} lang={lang} onAddUser={() => setIsUserFormOpen(true)} refreshTrigger={refreshTrigger} />;
-            return null;
-          case 3:
-            if (!canAccessSettings) return null;
-            return <ConfigurationTab token={token} t={t} user={user} lang={lang} />;
-          case 4:
-            return <ProfileTab
-                        t={t}
-                        user={user}
-                        token={token}
-                        onLogout={() => { setUser(null); localStorage.removeItem('token'); }}
-                        onUpdateUser={handleUserUpdate}
-                    />;
+          case 'tasks':
+              return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
+          case 'companies':
+              return <CompaniesTab token={token} t={t} user={user} lang={lang} />;
+          case 'team':
+              return <TeamTab user={user} token={token} t={t} lang={lang} onAddUser={() => setIsUserFormOpen(true)} refreshTrigger={refreshTrigger} />;
+          case 'settings':
+              if (isBigBoss)        return <ConfigurationTab token={token} t={t} user={user} lang={lang} />;
+              if (isCompanyManager) return <CompanyManagerSettingsTab token={token} t={t} user={user} lang={lang} />;
+              return null;
+          case 'profile':
+              return <ProfileTab
+                          t={t}
+                          user={user}
+                          token={token}
+                          onLogout={() => { setUser(null); localStorage.removeItem('token'); }}
+                          onUpdateUser={handleUserUpdate}
+                      />;
           default:
-            return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
+              return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
       }
   };
 
@@ -307,41 +334,16 @@ function App() {
 {/* ─── Bottom navigation ─────────────────────────────────────────────────── */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
         <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
-
-            {/* Tab 1 — Tasks (all roles) */}
-            <button onClick={() => setActiveTab(1)} className={`flex flex-col items-center w-full ${activeTab === 1 ? 'text-[#714B67]' : 'text-gray-400'}`}>
-                <LayoutDashboard size={24} strokeWidth={activeTab === 1 ? 2.5 : 2} />
-                <span className="text-[10px] mt-1 font-medium">{t.nav_tasks}</span>
-            </button>
-
-            {/* Tab 2 — Companies (BIG_BOSS) | Team (MANAGER) | hidden (EMPLOYEE) */}
-            {isBigBoss && (
-                <button onClick={() => setActiveTab(2)} className={`flex flex-col items-center w-full ${activeTab === 2 ? 'text-[#714B67]' : 'text-gray-400'}`}>
-                    <Building2 size={24} strokeWidth={activeTab === 2 ? 2.5 : 2} />
-                    <span className="text-[10px] mt-1 font-medium">{t.nav_companies || 'Companies'}</span>
+            {tabsConfig.map(({ key, label, Icon }) => (
+                <button
+                    key={key}
+                    onClick={() => setActiveTab(key)}
+                    className={`flex flex-col items-center w-full ${activeTab === key ? 'text-[#714B67]' : 'text-gray-400'}`}
+                >
+                    <Icon size={24} strokeWidth={activeTab === key ? 2.5 : 2} />
+                    <span className="text-[10px] mt-1 font-medium">{label}</span>
                 </button>
-            )}
-            {isManager && (
-                <button onClick={() => setActiveTab(2)} className={`flex flex-col items-center w-full ${activeTab === 2 ? 'text-[#714B67]' : 'text-gray-400'}`}>
-                    <Users size={24} strokeWidth={activeTab === 2 ? 2.5 : 2} />
-                    <span className="text-[10px] mt-1 font-medium">{t.nav_team}</span>
-                </button>
-            )}
-
-            {/* Tab 3 — Settings (BIG_BOSS only) */}
-            {canAccessSettings && (
-                <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#714B67]' : 'text-gray-400'}`}>
-                    <Settings size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
-                    <span className="text-[10px] mt-1 font-medium">{t.nav_config}</span>
-                </button>
-            )}
-
-            {/* Tab 4 — Profile (all roles) */}
-            <button onClick={() => setActiveTab(4)} className={`flex flex-col items-center w-full ${activeTab === 4 ? 'text-[#714B67]' : 'text-gray-400'}`}>
-                <UserCircle size={24} strokeWidth={activeTab === 4 ? 2.5 : 2} />
-                <span className="text-[10px] mt-1 font-medium">{t.nav_profile}</span>
-            </button>
-
+            ))}
         </div>
       </nav>
 
