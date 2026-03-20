@@ -192,23 +192,12 @@ function App() {
   const isRTL = lang === 'he';
   const dir = isRTL ? 'rtl' : 'ltr';
 
-  if (!user) {
-    return (
-        <Login 
-            onLoginSuccess={setUser} 
-            t={t} 
-            lang={lang}          
-            setLang={setLang}    
-        /> 
-    );
-  }
+  const isBigBoss        = user?.role === 'BIG_BOSS';
+  const isCompanyManager = user?.role === 'COMPANY_MANAGER';
 
-  const isBigBoss        = user.role === 'BIG_BOSS';
-  const isCompanyManager = user.role === 'COMPANY_MANAGER';
-
-  // Role-based tab configuration
+  // Role-based tab configuration — must be before any early return
   const tabsConfig = React.useMemo(() => {
-      switch (user.role) {
+      switch (user?.role) {
           case 'BIG_BOSS':
               return [
                   { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
@@ -228,13 +217,24 @@ function App() {
                   { key: 'team',      label: t.nav_team,                 Icon: Users },
                   { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
               ];
-          default: // EMPLOYEE
+          default: // EMPLOYEE (or null user — won't be rendered)
               return [
                   { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
                   { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
               ];
       }
-  }, [user.role, t]);
+  }, [user?.role, t]);
+
+  if (!user) {
+    return (
+        <Login
+            onLoginSuccess={setUser}
+            t={t}
+            lang={lang}
+            setLang={setLang}
+        />
+    );
+  }
 
   const renderContent = () => {
       const token = localStorage.getItem('token');
