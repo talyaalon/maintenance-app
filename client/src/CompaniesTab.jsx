@@ -913,13 +913,43 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
     const [imageFile, setImageFile] = useState(null);
     const [saving, setSaving] = useState(false);
 
-    // Company Manager fields — only shown when creating a new company
+    // Company Manager fields — shown for both create and edit
     const [mgr, setMgr] = useState({
         name_en: '', name_he: '', name_th: '',
         email: '', password: '', phone: '', line_id: '',
     });
+    const [managerUser, setManagerUser] = useState(null);
+    const [mgrLoading, setMgrLoading] = useState(false);
+
     const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
     const setM = (k, v) => setMgr(p => ({ ...p, [k]: v }));
+
+    // In edit mode, fetch the associated COMPANY_MANAGER to pre-populate fields
+    useEffect(() => {
+        if (!isEdit) return;
+        setMgrLoading(true);
+        fetch(`${BASE}/users?company_id=${company.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then(r => r.json())
+            .then(users => {
+                const found = (Array.isArray(users) ? users : []).find(u => u?.role === 'COMPANY_MANAGER');
+                if (found) {
+                    setManagerUser(found);
+                    setMgr({
+                        name_en:  found.full_name_en || found.full_name || '',
+                        name_he:  found.full_name_he || '',
+                        name_th:  found.full_name_th || '',
+                        email:    found.email || '',
+                        password: '',
+                        phone:    found.phone || '',
+                        line_id:  found.line_user_id || '',
+                    });
+                }
+            })
+            .catch(() => {})
+            .finally(() => setMgrLoading(false));
+    }, [isEdit, company?.id]);
 
     const handleSave = async () => {
         if (!form.name_en.trim() && !form.name_he.trim()) {
@@ -937,15 +967,26 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
             if (imageFile) formData.append('profile_image', imageFile);
             if (company?.profile_image_url) formData.append('existing_image', company.profile_image_url);
 
-            // Attach manager fields for new company (optional)
-            if (!isEdit && mgr.name_en.trim() && mgr.email.trim() && mgr.password.trim()) {
+            if (!isEdit) {
+                // Attach manager fields for new company (optional)
+                if (mgr.name_en.trim() && mgr.email.trim() && mgr.password.trim()) {
+                    formData.append('manager_name_en',  mgr.name_en.trim());
+                    formData.append('manager_name_he',  mgr.name_he.trim());
+                    formData.append('manager_name_th',  mgr.name_th.trim());
+                    formData.append('manager_email',    mgr.email.trim().toLowerCase());
+                    formData.append('manager_password', mgr.password.trim());
+                    if (mgr.phone)   formData.append('manager_phone',   mgr.phone.trim());
+                    if (mgr.line_id) formData.append('manager_line_id', mgr.line_id.trim());
+                }
+            } else if (managerUser) {
+                // Always send manager fields in edit mode (backend will update the COMPANY_MANAGER user)
                 formData.append('manager_name_en',  mgr.name_en.trim());
                 formData.append('manager_name_he',  mgr.name_he.trim());
                 formData.append('manager_name_th',  mgr.name_th.trim());
-                formData.append('manager_email',    mgr.email.trim().toLowerCase());
-                formData.append('manager_password', mgr.password.trim());
-                if (mgr.phone)   formData.append('manager_phone',   mgr.phone.trim());
-                if (mgr.line_id) formData.append('manager_line_id', mgr.line_id.trim());
+                if (mgr.email.trim()) formData.append('manager_email', mgr.email.trim().toLowerCase());
+                if (mgr.password.trim()) formData.append('manager_password', mgr.password.trim());
+                formData.append('manager_phone',   mgr.phone.trim());
+                formData.append('manager_line_id', mgr.line_id.trim());
             }
 
             const method = isEdit ? 'PUT' : 'POST';
@@ -1008,21 +1049,30 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
                     </div>
                 </div>
 
-                {/* ── Company Manager fields (create only) ── */}
-                {!isEdit && (
-                    <div className="mt-5">
-                        <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-2">
-                            Company Manager <span className="text-gray-400 font-normal normal-case">(optional — can be added later)</span>
-                        </p>
+                {/* ── Company Manager fields (create: optional, edit: update existing) ── */}
+                <div className="mt-5">
+                    <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-2">
+                        Company Manager{' '}
+                        {!isEdit && <span className="text-gray-400 font-normal normal-case">(optional — can be added later)</span>}
+                    </p>
+                    {isEdit && mgrLoading && (
+                        <div className="flex items-center gap-2 py-3 text-xs text-gray-400">
+                            <Loader2 size={12} className="animate-spin" /> Loading manager info…
+                        </div>
+                    )}
+                    {isEdit && !mgrLoading && !managerUser && (
+                        <p className="text-xs text-gray-400 italic py-2">No company manager found for this company.</p>
+                    )}
+                    {(!isEdit || (!mgrLoading && managerUser)) && (
                         <div className="space-y-3 bg-slate-50 rounded-xl p-3 border border-gray-100">
                             {[
-                                { label: 'Manager Name (EN)',  key: 'name_en',  type: 'text' },
-                                { label: 'Manager Name (HE)',  key: 'name_he',  type: 'text' },
-                                { label: 'Manager Name (TH)',  key: 'name_th',  type: 'text' },
-                                { label: 'Manager Email',      key: 'email',    type: 'email' },
-                                { label: 'Manager Password',   key: 'password', type: 'password' },
-                                { label: 'Manager Phone',      key: 'phone',    type: 'text' },
-                                { label: 'Manager LINE ID',    key: 'line_id',  type: 'text' },
+                                { label: 'Manager Name (EN)',                             key: 'name_en',  type: 'text' },
+                                { label: 'Manager Name (HE)',                             key: 'name_he',  type: 'text' },
+                                { label: 'Manager Name (TH)',                             key: 'name_th',  type: 'text' },
+                                { label: 'Manager Email',                                 key: 'email',    type: 'email' },
+                                { label: isEdit ? 'Password (blank = keep current)' : 'Manager Password', key: 'password', type: 'password' },
+                                { label: 'Manager Phone',                                 key: 'phone',    type: 'text' },
+                                { label: 'Manager LINE ID',                               key: 'line_id',  type: 'text' },
                             ].map(({ label, key, type }) => (
                                 <div key={key}>
                                     <label className={labelCls}>{label}</label>
@@ -1030,8 +1080,8 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
                                 </div>
                             ))}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 <div className="flex gap-3 mt-5">
                     <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">

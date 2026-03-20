@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, Loader2, Plus, Settings } from 'lucide-react';
+import { Building2, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, Loader2, Plus, Settings, UserCheck } from 'lucide-react';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -52,9 +52,53 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd }
     </div>
 );
 
+// ─── Team Assign Accordion ─────────────────────────────────────────────────────
+const TeamAssignAccordion = ({ employees, assignedIds, setAssignedIds, onSave, onClose, saving, userName }) => (
+    <div className="mt-2 pt-3 border-t border-blue-200/60 space-y-3 animate-fade-in bg-[#f0f7ff]/60 rounded-b-xl -mx-4 px-4 pb-3">
+        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Assign Team</p>
+        <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+            {employees.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">No employees in this company</p>
+            ) : (
+                employees.map(e => (
+                    <label key={e.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+                        <input
+                            type="checkbox"
+                            checked={assignedIds.has(e.id)}
+                            onChange={() => setAssignedIds(prev => {
+                                const next = new Set(prev);
+                                if (next.has(e.id)) next.delete(e.id); else next.add(e.id);
+                                return next;
+                            })}
+                            className="rounded accent-[#714B67]"
+                        />
+                        <span className="text-xs text-gray-600">{userName(e)}</span>
+                    </label>
+                ))
+            )}
+        </div>
+        <div className="flex gap-2 pt-1">
+            <button onClick={onClose} className="flex-1 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition">
+                Cancel
+            </button>
+            <button
+                onClick={onSave}
+                disabled={saving}
+                className="flex-1 py-1.5 text-xs bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-1"
+            >
+                {saving && <Loader2 size={10} className="animate-spin" />}
+                Save
+            </button>
+        </div>
+    </div>
+);
+
 // ─── Row action buttons ────────────────────────────────────────────────────────
-const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen }) => (
+const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen, onTeam, teamOpen, isManager }) => (
     <div className="ml-auto flex items-center gap-1 shrink-0">
+        <button onClick={onEdit} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition" title="Edit">
+            <Pencil size={12} />
+        </button>
         <button
             onClick={onSettings}
             className={`p-1 rounded-lg transition ${settingsOpen ? 'bg-[#714B67] text-white' : 'hover:bg-gray-100 text-gray-400'}`}
@@ -62,10 +106,16 @@ const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen }) => (
         >
             <Settings size={12} />
         </button>
-        <button onClick={onEdit} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 transition">
-            <Pencil size={12} />
-        </button>
-        <button onClick={onDelete} className="p-1 rounded-lg hover:bg-red-50 text-red-400 transition">
+        {isManager && (
+            <button
+                onClick={onTeam}
+                className={`p-1 rounded-lg transition ${teamOpen ? 'bg-blue-500 text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+                title="Assign Team"
+            >
+                <UserCheck size={12} />
+            </button>
+        )}
+        <button onClick={onDelete} className="p-1 rounded-lg hover:bg-red-50 text-red-400 transition" title="Delete">
             <Trash2 size={12} />
         </button>
     </div>
@@ -494,8 +544,14 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
     const [permForm, setPermForm] = useState({});
     const [permSaving, setPermSaving] = useState(false);
 
+    // Team assignment accordion state
+    const [openTeamId, setOpenTeamId] = useState(null);
+    const [assignedEmployeeIds, setAssignedEmployeeIds] = useState(new Set());
+    const [teamSaving, setTeamSaving] = useState(false);
+
     const openPermission = (u) => {
         if (openPermissionId === u.id) { setOpenPermissionId(null); return; }
+        setOpenTeamId(null);
         setOpenPermissionId(u.id);
         setPermForm({
             auto_approve_tasks:  u.auto_approve_tasks  ?? false,
@@ -505,6 +561,30 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
             allowed_lang_th:     u.allowed_lang_th     !== false,
             can_manage_fields:   u.can_manage_fields    !== false,
         });
+    };
+
+    const openTeamPanel = (u) => {
+        if (openTeamId === u.id) { setOpenTeamId(null); return; }
+        setOpenPermissionId(null);
+        setOpenTeamId(u.id);
+        const preSelected = new Set(
+            (users ?? []).filter(e => e.role === 'EMPLOYEE' && e.parent_manager_id === u.id).map(e => e.id)
+        );
+        setAssignedEmployeeIds(preSelected);
+    };
+
+    const saveTeamAssignment = async (managerId) => {
+        setTeamSaving(true);
+        try {
+            const res = await fetch(`${BASE}/users/${managerId}/assign-employees-to-manager`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ employeeIds: Array.from(assignedEmployeeIds) }),
+            });
+            if (res.ok) { fetchData(); setOpenTeamId(null); }
+            else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving team'); }
+        } catch { alert('Server error'); }
+        setTeamSaving(false);
     };
 
     const savePermissions = async (u) => {
@@ -557,8 +637,11 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
         fetchData();
     }, [token, user?.company_id]);
 
-    const managers = (users ?? []).filter(u => u?.role === 'COMPANY_MANAGER');
+    // Exclude the logged-in user from the managers list — they appear in the self section above
+    const managers = (users ?? []).filter(u => u?.role === 'COMPANY_MANAGER' && u?.id !== user?.id);
     const employees = (users ?? []).filter(u => u?.role === 'EMPLOYEE');
+    // Fetch full self user data (with all permission fields) from the loaded users list
+    const selfUser = (users ?? []).find(u => u?.id === user?.id) ?? user;
 
     // COMPANY_MANAGER creates resources as themselves
     const createdBy = user?.id ?? null;
@@ -604,6 +687,47 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                 </div>
             </div>
 
+            {/* ── Self-management section ── */}
+            <div className="bg-white rounded-2xl border border-[#714B67]/20 overflow-hidden mb-5">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-[#714B67]/5">
+                    <Shield size={16} className="text-[#714B67]" />
+                    <h3 className="text-sm font-bold text-slate-700">My Account</h3>
+                </div>
+                <div className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                        {selfUser?.profile_picture_url ? (
+                            <img src={selfUser.profile_picture_url} className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200" alt="" />
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-[#714B67]/10 flex items-center justify-center text-sm font-bold text-[#714B67] shrink-0">
+                                {(userName(selfUser)[0] || '?').toUpperCase()}
+                            </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">{userName(selfUser)}</p>
+                            <span className="inline-block text-[10px] font-bold text-[#714B67] bg-[#714B67]/10 px-1.5 py-0.5 rounded mt-0.5">
+                                Company Manager
+                            </span>
+                        </div>
+                        <RowActions
+                            onEdit={() => setUserModal({ role: 'COMPANY_MANAGER', user: selfUser })}
+                            onSettings={() => openPermission(selfUser)}
+                            settingsOpen={openPermissionId === selfUser?.id}
+                            onDelete={() => setDeleteConfirm({ type: 'users', id: selfUser?.id, name: userName(selfUser) })}
+                        />
+                    </div>
+                    {openPermissionId === selfUser?.id && (
+                        <PermissionAccordion
+                            permForm={permForm}
+                            setPermForm={setPermForm}
+                            onSave={() => savePermissions(selfUser)}
+                            onClose={() => setOpenPermissionId(null)}
+                            saving={permSaving}
+                            t={t}
+                        />
+                    )}
+                </div>
+            </div>
+
             {/* Stats row */}
             <div className="grid grid-cols-5 gap-2 mb-5">
                 {[
@@ -624,7 +748,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
             {/* Detail sections */}
             <div className="space-y-4">
 
-                {/* ── Managers (COMPANY_MANAGERs) ── */}
+                {/* ── Managers (COMPANY_MANAGERs, excluding self) ── */}
                 <SectionCard
                     icon={Shield}
                     title={t?.managers_label || 'Managers'}
@@ -644,9 +768,12 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                                 <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
                                 <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{u?.role}</span>
                                 <RowActions
+                                    onEdit={() => setUserModal({ role: u?.role, user: u })}
                                     onSettings={() => openPermission(u)}
                                     settingsOpen={openPermissionId === u?.id}
-                                    onEdit={() => setUserModal({ role: u?.role, user: u })}
+                                    onTeam={() => openTeamPanel(u)}
+                                    teamOpen={openTeamId === u?.id}
+                                    isManager={true}
                                     onDelete={() => setDeleteConfirm({ type: 'users', id: u?.id, name: userName(u) })}
                                 />
                             </div>
@@ -658,6 +785,17 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                                     onClose={() => setOpenPermissionId(null)}
                                     saving={permSaving}
                                     t={t}
+                                />
+                            )}
+                            {openTeamId === u?.id && (
+                                <TeamAssignAccordion
+                                    employees={employees}
+                                    assignedIds={assignedEmployeeIds}
+                                    setAssignedIds={setAssignedEmployeeIds}
+                                    onSave={() => saveTeamAssignment(u.id)}
+                                    onClose={() => setOpenTeamId(null)}
+                                    saving={teamSaving}
+                                    userName={userName}
                                 />
                             )}
                         </>

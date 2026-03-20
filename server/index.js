@@ -1274,7 +1274,45 @@ app.put('/companies/:id', authenticateToken, upload.single('profile_image'), asy
             'UPDATE companies SET name = $1, name_en = $2, name_he = $3, name_th = $4, profile_image_url = $5, default_notification_lang = $6, updated_at = NOW() WHERE id = $7 RETURNING *',
             [newName, newNameEn, newNameHe, newNameTh, newImage, newNotifLang, id]
         );
-        res.json(result.rows[0]);
+        const updatedCompany = result.rows[0];
+
+        // Nested update: if manager fields provided, update the associated COMPANY_MANAGER user
+        const { manager_name_en, manager_name_he, manager_name_th,
+                manager_email, manager_password, manager_phone, manager_line_id } = req.body;
+        const hasManagerUpdate = manager_name_en !== undefined || manager_name_he !== undefined ||
+            manager_name_th !== undefined || manager_email || manager_password ||
+            manager_phone !== undefined || manager_line_id !== undefined;
+
+        if (hasManagerUpdate) {
+            const mgrRes = await pool.query(
+                'SELECT * FROM users WHERE company_id = $1 AND role = $2 LIMIT 1',
+                [id, 'COMPANY_MANAGER']
+            );
+            if (mgrRes.rows.length > 0) {
+                const mgr = mgrRes.rows[0];
+                const setClauses = [];
+                const vals = [];
+                let pi = 1;
+
+                const newMgrNameEn = manager_name_en !== undefined ? (manager_name_en || null) : mgr.full_name_en;
+                const newMgrName   = newMgrNameEn || mgr.full_name;
+                setClauses.push(`full_name=$${pi++}`);    vals.push(newMgrName);
+                setClauses.push(`full_name_en=$${pi++}`); vals.push(newMgrNameEn);
+                setClauses.push(`full_name_he=$${pi++}`); vals.push(manager_name_he !== undefined ? (manager_name_he || null) : mgr.full_name_he);
+                setClauses.push(`full_name_th=$${pi++}`); vals.push(manager_name_th !== undefined ? (manager_name_th || null) : mgr.full_name_th);
+                if (manager_email)              { setClauses.push(`email=$${pi++}`);        vals.push(manager_email.toLowerCase()); }
+                if (manager_phone !== undefined){ setClauses.push(`phone=$${pi++}`);        vals.push(manager_phone || null); }
+                if (manager_line_id !== undefined){ setClauses.push(`line_user_id=$${pi++}`); vals.push(manager_line_id || null); }
+                if (manager_password && manager_password.trim()) {
+                    const hashedPw = await bcrypt.hash(manager_password.trim(), 10);
+                    setClauses.push(`password=$${pi++}`); vals.push(hashedPw);
+                }
+                vals.push(mgr.id);
+                await pool.query(`UPDATE users SET ${setClauses.join(', ')} WHERE id=$${pi}`, vals);
+            }
+        }
+
+        res.json(updatedCompany);
     } catch (err) {
         console.error('PUT /companies/:id error:', err.message);
         res.status(500).json({ error: 'Server error' });
