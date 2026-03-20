@@ -349,9 +349,12 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
             </select>
           </div>
 
-          {/* Title */}
+          {/* Logo + Brand Title */}
           <div className="text-center mb-8 mt-8">
             <img src={airManageLogo} alt="Air Manage" className="h-16 w-auto object-contain mx-auto mb-4" />
+            <h2 className="text-xs font-extrabold tracking-[0.3em] text-[#714B67] uppercase mb-1">
+              AIR MANAGE
+            </h2>
             <p className="text-slate-400 text-sm font-medium">{t.login_title}</p>
           </div>
 

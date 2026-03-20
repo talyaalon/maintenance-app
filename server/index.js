@@ -19,6 +19,10 @@ try {
     console.log("⚠️ Firebase warning (Server is still running!):", error.message);
 }
 
+// Firestore reference for multi-tenant Company documents
+let db = null;
+try { db = admin.firestore(); } catch (e) { console.log("⚠️ Firestore unavailable:", e.message); }
+
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 const express = require('express');
@@ -390,15 +394,15 @@ app.get('/fix-db', async (req, res) => {
             // Backfill: MANAGER (AreaManager) → area_id = their own id (they define the area)
             await client.query("UPDATE users SET area_id = id WHERE role = 'MANAGER' AND area_id IS NULL");
 
-            // Backfill: SUPERVISOR (DeptManager) → area_id = parent MANAGER's area_id
+            // Backfill: COMPANY_MANAGER (DeptManager) → area_id = parent MANAGER's area_id
             await client.query(`
                 UPDATE users SET area_id = (
                     SELECT u2.area_id FROM users u2 WHERE u2.id = users.parent_manager_id
                 )
-                WHERE role = 'SUPERVISOR' AND parent_manager_id IS NOT NULL AND area_id IS NULL
+                WHERE role = 'COMPANY_MANAGER' AND parent_manager_id IS NOT NULL AND area_id IS NULL
             `);
 
-            // Backfill: EMPLOYEE → area_id from parent (SUPERVISOR or MANAGER)
+            // Backfill: EMPLOYEE → area_id from parent (COMPANY_MANAGER or MANAGER)
             await client.query(`
                 UPDATE users SET area_id = (
                     SELECT COALESCE(u2.area_id, CASE WHEN u2.role = 'MANAGER' THEN u2.id ELSE NULL END)
@@ -734,7 +738,7 @@ app.get('/users', authenticateToken, async (req, res) => {
             // AreaManager sees all users sharing their area (area_id = their own id)
             query += ` WHERE u.area_id = $1`;
             params.push(req.user.id);
-        } else if (req.user.role === 'SUPERVISOR') {
+        } else if (req.user.role === 'COMPANY_MANAGER') {
             // DeptManager sees self + employees in the same area
             const areaId = req.user.area_id ?? null;
             if (areaId) {
@@ -782,7 +786,7 @@ app.post('/users', authenticateToken, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     
     let assignedManager = parent_manager_id;
-    if (!assignedManager && (req.user.role === 'MANAGER' || req.user.role === 'SUPERVISOR')) {
+    if (!assignedManager && (req.user.role === 'MANAGER' || req.user.role === 'COMPANY_MANAGER')) {
         assignedManager = req.user.id;
     }
 
@@ -790,7 +794,7 @@ app.post('/users', authenticateToken, async (req, res) => {
 
     // Determine area_id for the new user
     let newUserAreaId = null;
-    if (role === 'SUPERVISOR' || role === 'EMPLOYEE') {
+    if (role === 'COMPANY_MANAGER' || role === 'EMPLOYEE') {
         const parentId = assignedManager;
         if (parentId) {
             const parentRes = await pool.query('SELECT role, area_id FROM users WHERE id = $1', [parentId]);
@@ -993,10 +997,10 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
 });
 
 // PUT /users/:id/assign-employees
-// Assigns a set of Employees (by ID) to report to a DeptManager (SUPERVISOR).
+// Assigns a set of Employees (by ID) to report to a DeptManager (COMPANY_MANAGER).
 // • Only employees with the SAME area_id as the DeptManager are eligible.
 // • Employees previously assigned to this DeptManager but omitted from the new
-//   list are moved back to the parent AreaManager (area_id = MANAGER's id).
+//   list are moved back to the parent AreaManager (area_id = MANAGER's id). COMPANY_MANAGER replaces SUPERVISOR.
 app.put('/users/:id/assign-employees', authenticateToken, async (req, res) => {
     try {
         const deptMgrId = parseInt(req.params.id);
@@ -1005,7 +1009,7 @@ app.put('/users/:id/assign-employees', authenticateToken, async (req, res) => {
         if (req.user.role === 'EMPLOYEE') return res.status(403).json({ error: 'Unauthorized' });
 
         const deptMgrRes = await pool.query(
-            `SELECT id, area_id FROM users WHERE id = $1 AND role = 'SUPERVISOR'`,
+            `SELECT id, area_id FROM users WHERE id = $1 AND role = 'COMPANY_MANAGER'`,
             [deptMgrId]
         );
         if (deptMgrRes.rows.length === 0) return res.status(404).json({ error: 'Dept Manager not found' });
@@ -1015,8 +1019,8 @@ app.put('/users/:id/assign-employees', authenticateToken, async (req, res) => {
         if (req.user.role === 'MANAGER' && deptMgr.area_id !== req.user.id) {
             return res.status(403).json({ error: 'Unauthorized: outside your area' });
         }
-        // SUPERVISOR can only manage their own assignment
-        if (req.user.role === 'SUPERVISOR' && deptMgr.id !== req.user.id) {
+        // COMPANY_MANAGER can only manage their own assignment
+        if (req.user.role === 'COMPANY_MANAGER' && deptMgr.id !== req.user.id) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
@@ -1227,7 +1231,7 @@ app.get('/managers', authenticateToken, async (req, res) => {
              COALESCE(allowed_lang_en, TRUE)     AS allowed_lang_en,
              COALESCE(allowed_lang_th, TRUE)     AS allowed_lang_th
       FROM users
-      WHERE role IN ('MANAGER','SUPERVISOR','BIG_BOSS')
+      WHERE role IN ('MANAGER','COMPANY_MANAGER','BIG_BOSS')
     `;
     const params = [];
 
@@ -1304,7 +1308,7 @@ app.get('/locations', authenticateToken, async (req, res) => {
             }
             // else: Admin sees everything — no filter
         } else {
-            // MANAGER, SUPERVISOR, EMPLOYEE: restrict to their area
+            // MANAGER, COMPANY_MANAGER, EMPLOYEE: restrict to their area
             const areaId = getEffectiveAreaId(req.user);
             if (areaId) {
                 query += ` WHERE (locations.area_id = $1 OR locations.area_id IS NULL)`;
@@ -1642,7 +1646,7 @@ app.get('/tasks', authenticateToken, async (req, res) => {
             return res.json(result.rows);
         }
 
-        if (role === 'SUPERVISOR') {
+        if (role === 'COMPANY_MANAGER') {
             // DeptManager sees own tasks + tasks of employees in their area
             const areaId = req.user.area_id || null;
             if (areaId) {
@@ -2772,6 +2776,72 @@ app.post('/webhook/line', (req, res) => {
     });
 });
 
+// ── Company (Multi-Tenant) Firestore CRUD ────────────────────────────────────
+// Document structure: companies/{company_id}
+//   name            : string  — company display name
+//   owner_name_en   : string  — owner name (English)
+//   owner_name_he   : string  — owner name (Hebrew)
+//   owner_name_th   : string  — owner name (Thai)
+//   email           : string  — company login email
+//   password        : string  — hashed password
+//   phone           : string  — contact phone number
+//   line_id         : string  — LINE messaging ID
+//   notification_lang : string — preferred notification language ('he'|'en'|'th')
+//   profile_picture_url : string — Cloudinary URL for company logo/avatar
+//   created_at      : Timestamp
+
+const COMPANY_FIELDS = ['name', 'owner_name_en', 'owner_name_he', 'owner_name_th',
+    'email', 'phone', 'line_id', 'notification_lang', 'profile_picture_url'];
+
+// GET /companies/:id — fetch a single company document (BIG_BOSS only)
+app.get('/companies/:id', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'Access denied' });
+    if (!db) return res.status(503).json({ error: 'Firestore not available' });
+    try {
+        const doc = await db.collection('companies').doc(req.params.id).get();
+        if (!doc.exists) return res.status(404).json({ error: 'Company not found' });
+        res.json({ id: doc.id, ...doc.data() });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /companies — list all companies (BIG_BOSS only)
+app.get('/companies', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'Access denied' });
+    if (!db) return res.status(503).json({ error: 'Firestore not available' });
+    try {
+        const snap = await db.collection('companies').get();
+        res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /companies — create a new company (BIG_BOSS only)
+app.post('/companies', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'Access denied' });
+    if (!db) return res.status(503).json({ error: 'Firestore not available' });
+    try {
+        const payload = {};
+        COMPANY_FIELDS.forEach(f => { if (req.body[f] !== undefined) payload[f] = req.body[f]; });
+        if (req.body.password) payload.password = await bcrypt.hash(req.body.password, 10);
+        payload.created_at = admin.firestore.FieldValue.serverTimestamp();
+        const ref = await db.collection('companies').add(payload);
+        res.status(201).json({ id: ref.id, ...payload });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /companies/:id — update an existing company (BIG_BOSS only)
+app.put('/companies/:id', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'Access denied' });
+    if (!db) return res.status(503).json({ error: 'Firestore not available' });
+    try {
+        const updates = {};
+        COMPANY_FIELDS.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+        if (req.body.password) updates.password = await bcrypt.hash(req.body.password, 10);
+        if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No valid fields to update' });
+        await db.collection('companies').doc(req.params.id).update(updates);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.listen(port, async () => {
     // Ensure all required columns exist without requiring a manual /fix-db call
     try {
@@ -2820,15 +2890,15 @@ app.listen(port, async () => {
         // Backfill: MANAGER (AreaManager) → area_id = their own id (defines the area)
         await pool.query("UPDATE users SET area_id = id WHERE role = 'MANAGER' AND area_id IS NULL");
 
-        // Backfill: SUPERVISOR (DeptManager) → area_id = parent MANAGER's area_id
+        // Backfill: COMPANY_MANAGER (DeptManager) → area_id = parent MANAGER's area_id
         await pool.query(`
             UPDATE users SET area_id = (
                 SELECT u2.area_id FROM users u2 WHERE u2.id = users.parent_manager_id
             )
-            WHERE role = 'SUPERVISOR' AND parent_manager_id IS NOT NULL AND area_id IS NULL
+            WHERE role = 'COMPANY_MANAGER' AND parent_manager_id IS NOT NULL AND area_id IS NULL
         `);
 
-        // Backfill: EMPLOYEE → area_id from parent (SUPERVISOR or MANAGER)
+        // Backfill: EMPLOYEE → area_id from parent (COMPANY_MANAGER or MANAGER)
         await pool.query(`
             UPDATE users SET area_id = (
                 SELECT COALESCE(u2.area_id, CASE WHEN u2.role = 'MANAGER' THEN u2.id ELSE NULL END)

@@ -42,7 +42,7 @@ const RoleBadge = ({ role, t }) => {
         return <span className="text-[10px] bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded-full font-semibold">Admin</span>;
     if (role === 'MANAGER')
         return <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full font-semibold">{t?.role_area_manager || 'Area Manager'}</span>;
-    if (role === 'SUPERVISOR')
+    if (role === 'COMPANY_MANAGER')
         return <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-semibold">{t?.role_dept_manager || 'Dept Manager'}</span>;
     if (role === 'EMPLOYEE')
         return <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-semibold">{t?.role_employee || 'Employee'}</span>;
@@ -78,7 +78,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const [isLoadingTasks, setIsLoadingTasks] = useState(false);
 
     // All managers/supervisors visible to the viewer (for parent dropdown)
-    const activeManagers = (Array.isArray(team) ? team : []).filter(u => u?.role === 'MANAGER' || u?.role === 'BIG_BOSS' || u?.role === 'SUPERVISOR');
+    const activeManagers = (Array.isArray(team) ? team : []).filter(u => u?.role === 'MANAGER' || u?.role === 'BIG_BOSS' || u?.role === 'COMPANY_MANAGER');
 
     useEffect(() => { fetchTeam(); }, []);
 
@@ -93,7 +93,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             setTeam(data);
             // Auto-expand all managers and dept managers
             const toExpand = (data ?? [])
-                .filter(u => u?.role === 'MANAGER' || u?.role === 'SUPERVISOR')
+                .filter(u => u?.role === 'MANAGER' || u?.role === 'COMPANY_MANAGER')
                 .map(u => u?.id)
                 .filter(Boolean);
             setExpandedNodes(new Set(toExpand));
@@ -152,7 +152,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             line_user_id: member.line_user_id || ''
         });
         // Pre-load employees already assigned to this DeptManager
-        if (member.role === 'SUPERVISOR') {
+        if (member.role === 'COMPANY_MANAGER') {
             const assigned = (Array.isArray(team) ? team : [])
                 .filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === member.id)
                 .map(u => u.id);
@@ -174,7 +174,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             const data = await res.json();
             if (res.ok) {
                 // For DeptManagers, persist the employee assignment in the same save
-                if (editMember.role === 'SUPERVISOR') {
+                if (editMember.role === 'COMPANY_MANAGER') {
                     await fetch(`https://maintenance-app-staging.onrender.com/users/${editMember.id}/assign-employees`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -192,11 +192,11 @@ const TeamTab = ({ token, t, user, lang }) => {
     const handleAddUser = async (e) => {
         e.preventDefault();
         let payload = { ...addForm };
-        if (user.role === 'MANAGER' || user.role === 'SUPERVISOR') {
+        if (user.role === 'MANAGER' || user.role === 'COMPANY_MANAGER') {
             payload.parent_manager_id = user.id;
             payload.role = 'EMPLOYEE';
         }
-        if (payload.role === 'MANAGER' || payload.role === 'SUPERVISOR') payload.parent_manager_id = null;
+        if (payload.role === 'MANAGER' || payload.role === 'COMPANY_MANAGER') payload.parent_manager_id = null;
 
         try {
             const res = await fetch('https://maintenance-app-staging.onrender.com/users', {
@@ -207,7 +207,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             const data = await res.json();
             if (res.ok) {
                 // If creating a DeptManager with employees selected, assign them now
-                if (payload.role === 'SUPERVISOR' && addAssignedEmployeeIds.size > 0) {
+                if (payload.role === 'COMPANY_MANAGER' && addAssignedEmployeeIds.size > 0) {
                     await fetch(`https://maintenance-app-staging.onrender.com/users/${data.id}/assign-employees`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -230,7 +230,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const renderMemberRow = (member, depth = 0) => {
         const displayName = member['full_name_' + lang] || member.full_name_en || member.full_name || '?';
         const initial = displayName.charAt(0).toUpperCase();
-        const isExpandable = member.role === 'MANAGER' || member.role === 'SUPERVISOR';
+        const isExpandable = member.role === 'MANAGER' || member.role === 'COMPANY_MANAGER';
         const indentClass = depth === 1 ? 'ml-4 sm:ml-6' : depth === 2 ? 'ml-8 sm:ml-12' : depth === 3 ? 'ml-12 sm:ml-16' : '';
         const borderClass = depth === 1 ? 'border-l-4 border-l-indigo-200' : depth === 2 ? 'border-l-4 border-l-blue-200' : depth === 3 ? 'border-l-4 border-l-green-200' : '';
 
@@ -274,7 +274,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const safeTeam     = Array.isArray(team) ? team : [];
     const bigBosses    = (safeTeam ?? []).filter(u => u?.role === 'BIG_BOSS');
     const areaManagers = (safeTeam ?? []).filter(u => u?.role === 'MANAGER');
-    const deptManagers = (safeTeam ?? []).filter(u => u?.role === 'SUPERVISOR');
+    const deptManagers = (safeTeam ?? []).filter(u => u?.role === 'COMPANY_MANAGER');
     const employees    = (safeTeam ?? []).filter(u => u?.role === 'EMPLOYEE');
 
     // Render Employees under a given parent id
@@ -462,7 +462,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                         <SkeletonRow indent />
                     </>
                 ) : (
-                    user?.role === 'SUPERVISOR'
+                    user?.role === 'COMPANY_MANAGER'
                         ? renderDeptManagerView()
                         : renderFullHierarchy()
                 )}
@@ -529,6 +529,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         onChange={e => setEditForm({...editForm, role: e.target.value})}
                                     >
                                         <option value="EMPLOYEE">{t.role_employee || 'Employee'}</option>
+                                        <option value="COMPANY_MANAGER">{t.role_dept_manager || 'Dept Manager'}</option>
                                         <option value="MANAGER">{t.role_area_manager || 'Area Manager'}</option>
                                     </select>
                                 </div>
@@ -560,7 +561,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                             </div>
 
                             {/* ── Assign Employees (DeptManager only) ─────────────── */}
-                            {editMember?.role === 'SUPERVISOR' && (() => {
+                            {editMember?.role === 'COMPANY_MANAGER' && (() => {
                                 const areaEmps = safeTeam.filter(u => u.role === 'EMPLOYEE' && u.area_id === editMember.area_id);
                                 return (
                                     <div>
@@ -645,13 +646,14 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         }}
                                     >
                                         <option value="EMPLOYEE">{t.role_employee || "Employee"}</option>
+                                        <option value="COMPANY_MANAGER">{t.role_dept_manager || "Dept Manager"}</option>
                                         <option value="MANAGER">{t.role_area_manager || "Area Manager"}</option>
                                     </select>
 
-                                    {(addForm.role === 'EMPLOYEE' || addForm.role === 'SUPERVISOR') && (
+                                    {(addForm.role === 'EMPLOYEE' || addForm.role === 'COMPANY_MANAGER') && (
                                         <div className="relative">
                                             <p className="text-xs text-gray-500 mb-1">
-                                                {addForm.role === 'SUPERVISOR'
+                                                {addForm.role === 'COMPANY_MANAGER'
                                                     ? (t.role_area_manager || 'Area Manager') + ' (parent)'
                                                     : (t.select_manager || 'Select Manager') + ' (' + (t.optional || 'Optional — leave blank for direct Area Manager') + ')'}
                                             </p>
@@ -678,7 +680,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                             {managerDropdownOpen && (
                                                 <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                                                     {activeManagers
-                                                        .filter(m => addForm.role === 'SUPERVISOR' ? m.role === 'MANAGER' : true)
+                                                        .filter(m => addForm.role === 'COMPANY_MANAGER' ? m.role === 'MANAGER' : true)
                                                         .map(m => (
                                                         <div
                                                             key={m.id}
@@ -693,7 +695,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                                             <span className="text-sm text-gray-700">
                                                                 {m.full_name}
                                                                 <span className="text-xs text-gray-400 ml-1">
-                                                                    ({m.role === 'MANAGER' ? (t.role_area_manager || 'Area Mgr') : m.role === 'SUPERVISOR' ? (t.role_dept_manager || 'Dept Mgr') : m.role})
+                                                                    ({m.role === 'MANAGER' ? (t.role_area_manager || 'Area Mgr') : m.role === 'COMPANY_MANAGER' ? (t.role_dept_manager || 'Dept Mgr') : m.role})
                                                                 </span>
                                                             </span>
                                                         </div>
@@ -704,7 +706,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                     )}
 
                                     {/* ── Assign Employees to new DeptManager ──────── */}
-                                    {addForm.role === 'SUPERVISOR' && addForm.parent_manager_id && (() => {
+                                    {addForm.role === 'COMPANY_MANAGER' && addForm.parent_manager_id && (() => {
                                         const parentId = parseInt(addForm.parent_manager_id);
                                         const addAreaEmps = safeTeam.filter(u => u.role === 'EMPLOYEE' && u.area_id === parentId);
                                         return (

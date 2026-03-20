@@ -206,7 +206,7 @@ function App() {
   const isManager  = user.role === 'MANAGER';
   const isBigBoss  = user.role === 'BIG_BOSS';
 
-  // Settings (Config) tab: BIG_BOSS only — Managers no longer have it in nav
+  // Settings (Config) tab: BIG_BOSS only — MANAGER, COMPANY_MANAGER cannot access it
   const canAccessSettings = isBigBoss;
 
   const renderContent = () => {
