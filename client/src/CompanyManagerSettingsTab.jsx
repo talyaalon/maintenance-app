@@ -528,14 +528,21 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
 
     const fetchData = async () => {
         const headers = { Authorization: `Bearer ${token}` };
+        // company_id from the logged-in COMPANY_MANAGER — used as explicit scope param
+        const cid = user?.company_id ? `?company_id=${user.company_id}` : '';
         try {
             const [rawUsers, rawLocs, rawCats, rawAssets] = await Promise.all([
                 fetch(`${BASE}/users`, { headers }).then(r => r.json()).catch(() => []),
-                fetch(`${BASE}/locations`, { headers }).then(r => r.json()).catch(() => []),
-                fetch(`${BASE}/categories`, { headers }).then(r => r.json()).catch(() => []),
-                fetch(`${BASE}/assets`, { headers }).then(r => r.json()).catch(() => []),
+                fetch(`${BASE}/locations${cid}`, { headers }).then(r => r.json()).catch(() => []),
+                fetch(`${BASE}/categories${cid}`, { headers }).then(r => r.json()).catch(() => []),
+                fetch(`${BASE}/assets${cid}`, { headers }).then(r => r.json()).catch(() => []),
             ]);
-            setUsers(Array.isArray(rawUsers) ? rawUsers : []);
+            // Extra client-side guard: keep only users belonging to this company
+            const companyUsers = Array.isArray(rawUsers) ? rawUsers : [];
+            setUsers(user?.company_id
+                ? companyUsers.filter(u => u?.company_id === user.company_id)
+                : companyUsers
+            );
             setLocations(Array.isArray(rawLocs) ? rawLocs : []);
             setCategories(Array.isArray(rawCats) ? rawCats : []);
             setAssets(Array.isArray(rawAssets) ? rawAssets : []);
@@ -548,7 +555,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
     useEffect(() => {
         setLoading(true);
         fetchData();
-    }, [token]);
+    }, [token, user?.company_id]);
 
     const managers = (users ?? []).filter(u => u?.role === 'COMPANY_MANAGER');
     const employees = (users ?? []).filter(u => u?.role === 'EMPLOYEE');

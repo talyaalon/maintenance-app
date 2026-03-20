@@ -903,21 +903,53 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
 
 // ─── Create / Edit company modal ──────────────────────────────────────────────
 const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
-    const [name, setName] = useState(company?.name ?? '');
+    const isEdit = !!company;
+    const [form, setForm] = useState({
+        name_en: company?.name_en || company?.name || '',
+        name_he: company?.name_he || '',
+        name_th: company?.name_th || '',
+        default_notification_lang: company?.default_notification_lang || 'en',
+    });
     const [imageFile, setImageFile] = useState(null);
     const [saving, setSaving] = useState(false);
 
+    // Company Manager fields — only shown when creating a new company
+    const [mgr, setMgr] = useState({
+        name_en: '', name_he: '', name_th: '',
+        email: '', password: '', phone: '', line_id: '',
+    });
+    const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
+    const setM = (k, v) => setMgr(p => ({ ...p, [k]: v }));
+
     const handleSave = async () => {
-        if (!name.trim()) { alert(t?.company_name_required || 'Company name is required'); return; }
+        if (!form.name_en.trim() && !form.name_he.trim()) {
+            alert(t?.company_name_required || 'Company name (EN or HE) is required');
+            return;
+        }
         setSaving(true);
         try {
             const formData = new FormData();
-            formData.append('name', name.trim());
+            formData.append('name_en', form.name_en.trim());
+            formData.append('name_he', form.name_he.trim());
+            formData.append('name_th', form.name_th.trim());
+            formData.append('name',    form.name_en.trim() || form.name_he.trim());
+            formData.append('default_notification_lang', form.default_notification_lang);
             if (imageFile) formData.append('profile_image', imageFile);
             if (company?.profile_image_url) formData.append('existing_image', company.profile_image_url);
 
-            const method = company ? 'PUT' : 'POST';
-            const url = company ? `${BASE}/companies/${company.id}` : `${BASE}/companies`;
+            // Attach manager fields for new company (optional)
+            if (!isEdit && mgr.name_en.trim() && mgr.email.trim() && mgr.password.trim()) {
+                formData.append('manager_name_en',  mgr.name_en.trim());
+                formData.append('manager_name_he',  mgr.name_he.trim());
+                formData.append('manager_name_th',  mgr.name_th.trim());
+                formData.append('manager_email',    mgr.email.trim().toLowerCase());
+                formData.append('manager_password', mgr.password.trim());
+                if (mgr.phone)   formData.append('manager_phone',   mgr.phone.trim());
+                if (mgr.line_id) formData.append('manager_line_id', mgr.line_id.trim());
+            }
+
+            const method = isEdit ? 'PUT' : 'POST';
+            const url    = isEdit ? `${BASE}/companies/${company.id}` : `${BASE}/companies`;
             const res = await fetch(url, {
                 method,
                 headers: { Authorization: `Bearer ${token}` },
@@ -929,43 +961,77 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
         finally { setSaving(false); }
     };
 
+    const inputCls = "w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition";
+    const labelCls = "text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1";
+
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[150] p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-200 animate-scale-in max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-base font-bold text-slate-800">
-                        {company ? (t?.edit_company || 'Edit Company') : (t?.create_company || 'Create Company')}
+                        {isEdit ? (t?.edit_company || 'Edit Company') : (t?.create_company || 'Create Company')}
                     </h3>
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
                 </div>
 
+                {/* ── Company fields ── */}
+                <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-2">Company Info</p>
                 <div className="space-y-3">
+                    {[
+                        { label: 'Name (EN) *', key: 'name_en' },
+                        { label: 'Name (HE)',   key: 'name_he' },
+                        { label: 'Name (TH)',   key: 'name_th' },
+                    ].map(({ label, key }) => (
+                        <div key={key}>
+                            <label className={labelCls}>{label}</label>
+                            <input className={inputCls} value={form[key]} onChange={e => setF(key, e.target.value)} />
+                        </div>
+                    ))}
+
                     <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
-                            {t?.company_name_label || 'Company Name'} <span className="text-red-400">*</span>
-                        </label>
-                        <input
-                            className="w-full p-3 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                            placeholder={t?.company_name_placeholder || 'e.g. Acme Corp'}
-                        />
+                        <label className={labelCls}>Default Notification Language</label>
+                        <select value={form.default_notification_lang} onChange={e => setF('default_notification_lang', e.target.value)}
+                            className={inputCls}>
+                            <option value="en">English</option>
+                            <option value="he">Hebrew</option>
+                            <option value="th">Thai</option>
+                        </select>
                     </div>
+
                     <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
-                            {t?.company_logo_label || 'Logo (optional)'}
-                        </label>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={e => setImageFile(e.target.files?.[0] ?? null)}
-                            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] hover:file:bg-[#714B67]/10 cursor-pointer"
-                        />
+                        <label className={labelCls}>{t?.company_logo_label || 'Logo (optional)'}</label>
+                        <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] ?? null)}
+                            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] hover:file:bg-[#714B67]/10 cursor-pointer" />
                         {company?.profile_image_url && !imageFile && (
                             <img src={company.profile_image_url} alt="" className="mt-2 h-10 rounded-lg object-contain border border-gray-200" />
                         )}
                     </div>
                 </div>
+
+                {/* ── Company Manager fields (create only) ── */}
+                {!isEdit && (
+                    <div className="mt-5">
+                        <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-2">
+                            Company Manager <span className="text-gray-400 font-normal normal-case">(optional — can be added later)</span>
+                        </p>
+                        <div className="space-y-3 bg-slate-50 rounded-xl p-3 border border-gray-100">
+                            {[
+                                { label: 'Manager Name (EN)',  key: 'name_en',  type: 'text' },
+                                { label: 'Manager Name (HE)',  key: 'name_he',  type: 'text' },
+                                { label: 'Manager Name (TH)',  key: 'name_th',  type: 'text' },
+                                { label: 'Manager Email',      key: 'email',    type: 'email' },
+                                { label: 'Manager Password',   key: 'password', type: 'password' },
+                                { label: 'Manager Phone',      key: 'phone',    type: 'text' },
+                                { label: 'Manager LINE ID',    key: 'line_id',  type: 'text' },
+                            ].map(({ label, key, type }) => (
+                                <div key={key}>
+                                    <label className={labelCls}>{label}</label>
+                                    <input type={type} className={inputCls} value={mgr[key]} onChange={e => setM(key, e.target.value)} />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex gap-3 mt-5">
                     <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">

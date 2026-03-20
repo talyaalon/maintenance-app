@@ -517,6 +517,14 @@ app.get('/fix-db', async (req, res) => {
                 ON CONFLICT DO NOTHING
             `);
 
+            // ── Multi-Tenant: company multilingual names + notification language ──
+            await client.query('ALTER TABLE companies ADD COLUMN IF NOT EXISTS name_en TEXT');
+            await client.query('ALTER TABLE companies ADD COLUMN IF NOT EXISTS name_he TEXT');
+            await client.query('ALTER TABLE companies ADD COLUMN IF NOT EXISTS name_th TEXT');
+            await client.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS default_notification_lang VARCHAR(10) DEFAULT 'en'");
+            // Backfill existing single-name into the English column
+            await client.query("UPDATE companies SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
+
             console.log("✅ DB Fix Completed!");
             res.send(`
                 <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
@@ -740,9 +748,13 @@ app.get('/users', authenticateToken, async (req, res) => {
             query += ` WHERE u.area_id = $1`;
             params.push(req.user.id);
         } else if (req.user.role === 'COMPANY_MANAGER') {
-            // DeptManager sees all COMPANY_MANAGERs + EMPLOYEEs in the same area
-            const areaId = req.user.area_id ?? null;
-            if (areaId) {
+            // Prefer company_id scoping (multi-tenant safe); fall back to area_id for legacy data
+            const companyId = req.user.company_id ?? null;
+            const areaId    = req.user.area_id    ?? null;
+            if (companyId) {
+                query += ` WHERE u.company_id = $1 AND u.role IN ('COMPANY_MANAGER', 'EMPLOYEE')`;
+                params.push(companyId);
+            } else if (areaId) {
                 query += ` WHERE u.area_id = $1 AND u.role IN ('COMPANY_MANAGER', 'EMPLOYEE')`;
                 params.push(areaId);
             } else {
@@ -809,8 +821,11 @@ app.post('/users', authenticateToken, async (req, res) => {
     // Determine company_id for the new user
     let newUserCompanyId = null;
     if (role === 'SUPERVISOR' || role === 'EMPLOYEE' || role === 'COMPANY_MANAGER') {
-        // Inherit company from parent manager
-        if (assignedManager) {
+        // BIG_BOSS can directly assign company_id when provisioning a COMPANY_MANAGER
+        if (role === 'COMPANY_MANAGER' && req.user.role === 'BIG_BOSS' && req.body.company_id) {
+            newUserCompanyId = parseInt(req.body.company_id, 10);
+        } else if (assignedManager) {
+            // Inherit company from parent manager
             const parentCoRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [assignedManager]);
             newUserCompanyId = parentCoRes.rows[0]?.company_id || null;
         }
@@ -831,6 +846,12 @@ app.post('/users', authenticateToken, async (req, res) => {
             [`Company (${effectiveFullName})`]
         );
         await pool.query('UPDATE users SET company_id = $1 WHERE id = $2', [newCo.rows[0].id, newUser.rows[0].id]);
+    }
+
+    // For COMPANY_MANAGER created directly by BIG_BOSS (no parent MANAGER):
+    // set area_id = their own id so they can scope their own team
+    if (role === 'COMPANY_MANAGER' && !assignedManager) {
+        await pool.query('UPDATE users SET area_id = id WHERE id = $1', [newUser.rows[0].id]);
     }
 
     // Populate M:M junction table for SUPERVISOR/EMPLOYEE
@@ -1180,18 +1201,50 @@ app.get('/companies', authenticateToken, async (req, res) => {
     }
 });
 
-// POST /companies — BIG_BOSS only; optionally attach profile image
+// POST /companies — BIG_BOSS only; optionally attach profile image + optional COMPANY_MANAGER creation
 app.post('/companies', authenticateToken, upload.single('profile_image'), async (req, res) => {
     if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'BIG_BOSS only' });
     try {
-        const { name } = req.body;
-        if (!name) return res.status(400).json({ error: 'Company name is required' });
+        const {
+            name, name_en, name_he, name_th, default_notification_lang,
+            // Optional COMPANY_MANAGER fields
+            manager_name_en, manager_name_he, manager_name_th,
+            manager_email, manager_password, manager_phone, manager_line_id,
+        } = req.body;
+        const primaryName = name_en || name_he || name || '';
+        if (!primaryName) return res.status(400).json({ error: 'Company name is required' });
         const imageUrl = req.file ? (req.file.path || req.file.secure_url || null) : null;
+        const notifLang = default_notification_lang || 'en';
         const result = await pool.query(
-            'INSERT INTO companies (name, profile_image_url) VALUES ($1, $2) RETURNING *',
-            [name, imageUrl]
+            'INSERT INTO companies (name, name_en, name_he, name_th, profile_image_url, default_notification_lang) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [primaryName, name_en || null, name_he || null, name_th || null, imageUrl, notifLang]
         );
-        res.json(result.rows[0]);
+        const company = result.rows[0];
+
+        // Optionally create the initial COMPANY_MANAGER for this company
+        if (manager_email && manager_password && manager_name_en) {
+            try {
+                const bcrypt = require('bcrypt');
+                const hashedPw = await bcrypt.hash(manager_password, 10);
+                const newMgr = await pool.query(
+                    `INSERT INTO users
+                        (full_name, full_name_en, full_name_he, full_name_th, email, password, role, phone, line_user_id, company_id, preferred_language)
+                     VALUES ($1, $2, $3, $4, $5, $6, 'COMPANY_MANAGER', $7, $8, $9, $10) RETURNING id`,
+                    [manager_name_en, manager_name_en, manager_name_he || null, manager_name_th || null,
+                     manager_email.toLowerCase(), hashedPw,
+                     manager_phone || null, manager_line_id || null, company.id, notifLang]
+                );
+                // Set area_id = own id so this manager can scope their own team
+                await pool.query('UPDATE users SET area_id = id WHERE id = $1', [newMgr.rows[0].id]);
+                // Send welcome email (best-effort)
+                try { await sendWelcomeEmail(manager_email, manager_name_en, manager_password, 'COMPANY_MANAGER', notifLang); } catch (_) {}
+            } catch (mgrErr) {
+                console.error('POST /companies — manager creation failed:', mgrErr.message);
+                // Return company even if manager creation failed; client can create manager separately
+            }
+        }
+
+        res.json(company);
     } catch (err) {
         console.error('POST /companies error:', err.message);
         res.status(500).json({ error: 'Server error' });
@@ -1203,18 +1256,23 @@ app.put('/companies/:id', authenticateToken, upload.single('profile_image'), asy
     if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'BIG_BOSS only' });
     try {
         const { id } = req.params;
-        const { name } = req.body;
+        const { name, name_en, name_he, name_th, default_notification_lang } = req.body;
         const existing = await pool.query('SELECT * FROM companies WHERE id = $1', [id]);
         if (existing.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
 
-        const newName = name || existing.rows[0].name;
+        const ex = existing.rows[0];
+        const newNameEn = name_en !== undefined ? (name_en || null) : ex.name_en;
+        const newNameHe = name_he !== undefined ? (name_he || null) : ex.name_he;
+        const newNameTh = name_th !== undefined ? (name_th || null) : ex.name_th;
+        const newName   = name_en || name_he || name || ex.name;
+        const newNotifLang = default_notification_lang || ex.default_notification_lang || 'en';
         const newImage = req.file
             ? (req.file.path || req.file.secure_url || null)
-            : (req.body.existing_image || existing.rows[0].profile_image_url);
+            : (req.body.existing_image || ex.profile_image_url);
 
         const result = await pool.query(
-            'UPDATE companies SET name = $1, profile_image_url = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
-            [newName, newImage, id]
+            'UPDATE companies SET name = $1, name_en = $2, name_he = $3, name_th = $4, profile_image_url = $5, default_notification_lang = $6, updated_at = NOW() WHERE id = $7 RETURNING *',
+            [newName, newNameEn, newNameHe, newNameTh, newImage, newNotifLang, id]
         );
         res.json(result.rows[0]);
     } catch (err) {
