@@ -719,6 +719,7 @@ app.get('/users', authenticateToken, async (req, res) => {
                    COALESCE(u.allowed_lang_he, TRUE)    AS allowed_lang_he,
                    COALESCE(u.allowed_lang_en, TRUE)    AS allowed_lang_en,
                    COALESCE(u.allowed_lang_th, TRUE)    AS allowed_lang_th,
+                   COALESCE(u.stuck_skip_approval, FALSE) AS stuck_skip_approval,
                    u.line_user_id,
                    m.full_name AS manager_name,
                    COALESCE(m.auto_approve_tasks, FALSE) AS manager_auto_approve_tasks
