@@ -2,7 +2,7 @@ export const translations = {
   // --- English ---
   en: {
     // --- Navigation ---
-    app_name: "Air Manage",
+    app_name: "AIR MANAGE",
     nav_tasks: "Tasks",
     nav_team: "Team",
     nav_config: "Config",
@@ -419,7 +419,7 @@ export const translations = {
   // --- Hebrew ---
   he: {
     // --- Navigation ---
-    app_name: "Air Manage",
+    app_name: "AIR MANAGE",
     nav_tasks: "משימות",
     nav_team: "הצוות שלי",
     nav_config: "הגדרות",
@@ -836,7 +836,7 @@ export const translations = {
   // --- Thai ---
   th: {
     // --- Navigation ---
-    app_name: "Air Manage",
+    app_name: "AIR MANAGE",
     nav_tasks: "งาน",
     nav_team: "ทีมของฉัน",
     nav_config: "การตั้งค่า",
