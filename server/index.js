@@ -319,9 +319,9 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// BIG_BOSS (Admin) or MANAGER (AreaManager) may mutate locations, categories, assets, and location fields
+// BIG_BOSS, MANAGER (AreaManager), or COMPANY_MANAGER may mutate locations, categories, assets, and location fields
 const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'BIG_BOSS' && req.user.role !== 'MANAGER') {
+  if (req.user.role !== 'BIG_BOSS' && req.user.role !== 'MANAGER' && req.user.role !== 'COMPANY_MANAGER') {
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();
@@ -573,7 +573,7 @@ app.post('/login', async (req, res) => {
 
     // For MANAGER (AreaManager), effective area_id = their own id
     const effectiveAreaId = user.role === 'MANAGER' ? user.id : (user.area_id || null);
-    const token = jwt.sign({ id: user.id, role: user.role, name: user.full_name, area_id: effectiveAreaId }, SECRET_KEY, { expiresIn: '24h' });
+    const token = jwt.sign({ id: user.id, role: user.role, name: user.full_name, area_id: effectiveAreaId, company_id: user.company_id ?? null }, SECRET_KEY, { expiresIn: '24h' });
 
     // For employees, fetch the manager's settings so the UI can apply them
     let managerAutoApprove = false;
@@ -739,11 +739,11 @@ app.get('/users', authenticateToken, async (req, res) => {
             query += ` WHERE u.area_id = $1`;
             params.push(req.user.id);
         } else if (req.user.role === 'COMPANY_MANAGER') {
-            // DeptManager sees self + employees in the same area
+            // DeptManager sees all COMPANY_MANAGERs + EMPLOYEEs in the same area
             const areaId = req.user.area_id ?? null;
             if (areaId) {
-                query += ` WHERE u.id = $1 OR (u.area_id = $2 AND u.role = 'EMPLOYEE')`;
-                params.push(req.user.id, areaId);
+                query += ` WHERE u.area_id = $1 AND u.role IN ('COMPANY_MANAGER', 'EMPLOYEE')`;
+                params.push(areaId);
             } else {
                 query += ` WHERE u.id = $1`;
                 params.push(req.user.id);
@@ -807,7 +807,7 @@ app.post('/users', authenticateToken, async (req, res) => {
 
     // Determine company_id for the new user
     let newUserCompanyId = null;
-    if (role === 'SUPERVISOR' || role === 'EMPLOYEE') {
+    if (role === 'SUPERVISOR' || role === 'EMPLOYEE' || role === 'COMPANY_MANAGER') {
         // Inherit company from parent manager
         if (assignedManager) {
             const parentCoRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [assignedManager]);
@@ -1307,8 +1307,24 @@ app.get('/locations', authenticateToken, async (req, res) => {
                 params.push(req.query.company_id);
             }
             // else: Admin sees everything — no filter
+        } else if (req.user.role === 'COMPANY_MANAGER') {
+            // Critical multi-tenant safety: COMPANY_MANAGER must ONLY see their own company's data
+            const companyId = req.user.company_id ?? null;
+            if (companyId) {
+                query += ` WHERE locations.company_id = $1`;
+                params.push(companyId);
+            } else {
+                // Fallback: scope strictly to area, no NULL bypass
+                const areaId = req.user.area_id ?? null;
+                if (areaId) {
+                    query += ` WHERE locations.area_id = $1`;
+                    params.push(areaId);
+                } else {
+                    query += ` WHERE 1=0`; // No scope = no data
+                }
+            }
         } else {
-            // MANAGER, COMPANY_MANAGER, EMPLOYEE: restrict to their area
+            // MANAGER, EMPLOYEE: restrict to their area
             const areaId = getEffectiveAreaId(req.user);
             if (areaId) {
                 query += ` WHERE (locations.area_id = $1 OR locations.area_id IS NULL)`;
@@ -1367,6 +1383,9 @@ app.post('/locations', authenticateToken, requireAdmin, (req, res) => {
                 locAreaId = req.user.id;
                 const coRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [req.user.id]);
                 locCompanyId = coRes.rows[0]?.company_id ?? null;
+            } else if (req.user.role === 'COMPANY_MANAGER') {
+                locAreaId = req.user.area_id ?? null;
+                locCompanyId = req.user.company_id ?? null;
             } else if (req.user.role === 'BIG_BOSS' && ownerId !== req.user.id) {
                 const ownerRes = await pool.query('SELECT area_id, role, company_id FROM users WHERE id = $1', [ownerId]);
                 const owner = ownerRes.rows[0];
@@ -1432,6 +1451,21 @@ app.get('/categories', authenticateToken, async (req, res) => {
                 query += ` WHERE (categories.company_id = $1 OR (categories.company_id IS NULL AND categories.area_id IN (SELECT id FROM users WHERE company_id = $1 AND role = 'MANAGER')))`;
                 params.push(req.query.company_id);
             }
+        } else if (req.user.role === 'COMPANY_MANAGER') {
+            // Critical multi-tenant safety: COMPANY_MANAGER must ONLY see their own company's data
+            const companyId = req.user.company_id ?? null;
+            if (companyId) {
+                query += ` WHERE categories.company_id = $1`;
+                params.push(companyId);
+            } else {
+                const areaId = req.user.area_id ?? null;
+                if (areaId) {
+                    query += ` WHERE categories.area_id = $1`;
+                    params.push(areaId);
+                } else {
+                    query += ` WHERE 1=0`;
+                }
+            }
         } else {
             const areaId = getEffectiveAreaId(req.user);
             if (areaId) {
@@ -1461,6 +1495,9 @@ app.post('/categories', authenticateToken, requireAdmin, async (req, res) => {
             catAreaId = req.user.id;
             const coRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [req.user.id]);
             catCompanyId = coRes.rows[0]?.company_id ?? null;
+        } else if (req.user.role === 'COMPANY_MANAGER') {
+            catAreaId = req.user.area_id ?? null;
+            catCompanyId = req.user.company_id ?? null;
         } else if (req.user.role === 'BIG_BOSS' && ownerId !== req.user.id) {
             const ownerRes = await pool.query('SELECT area_id, role, company_id FROM users WHERE id = $1', [ownerId]);
             const owner = ownerRes.rows[0];
@@ -1513,6 +1550,21 @@ app.get('/assets', authenticateToken, async (req, res) => {
             if (req.query.company_id) {
                 query += ` WHERE (assets.company_id = $1 OR (assets.company_id IS NULL AND assets.area_id IN (SELECT id FROM users WHERE company_id = $1 AND role = 'MANAGER')))`;
                 params.push(req.query.company_id);
+            }
+        } else if (req.user.role === 'COMPANY_MANAGER') {
+            // Critical multi-tenant safety: COMPANY_MANAGER must ONLY see their own company's data
+            const companyId = req.user.company_id ?? null;
+            if (companyId) {
+                query += ` WHERE assets.company_id = $1`;
+                params.push(companyId);
+            } else {
+                const areaId = req.user.area_id ?? null;
+                if (areaId) {
+                    query += ` WHERE assets.area_id = $1`;
+                    params.push(areaId);
+                } else {
+                    query += ` WHERE 1=0`;
+                }
             }
         } else {
             const areaId = getEffectiveAreaId(req.user);
@@ -1567,6 +1619,9 @@ app.post('/assets', authenticateToken, requireAdmin, async (req, res) => {
             assetAreaId = req.user.id;
             const coRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [req.user.id]);
             assetCompanyId = coRes.rows[0]?.company_id ?? null;
+        } else if (req.user.role === 'COMPANY_MANAGER') {
+            assetAreaId = req.user.area_id ?? null;
+            assetCompanyId = req.user.company_id ?? null;
         } else if (req.user.role === 'BIG_BOSS' && ownerId !== req.user.id) {
             const ownerRes = await pool.query('SELECT area_id, role, company_id FROM users WHERE id = $1', [ownerId]);
             const owner = ownerRes.rows[0];
