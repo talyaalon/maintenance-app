@@ -66,7 +66,7 @@ const saveBtnCls   = "flex-1 py-1.5 text-xs bg-[#714B67] text-white rounded-lg f
 const cancelBtnCls = "flex-1 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition";
 
 // ─── Inline User Form (Edit or Add) ──────────────────────────────────────────
-const InlineUserForm = ({ editUser, role, parentManagerId, token, t, onClose, onSaved, isAddPanel = false }) => {
+const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, token, t, onClose, onSaved, isAddPanel = false }) => {
     const isEdit = !!editUser;
     const [form, setForm] = useState({
         full_name_en: editUser?.full_name_en || editUser?.full_name || '',
@@ -95,7 +95,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, token, t, onClose, on
                 line_user_id: form.line_user_id || undefined,
                 role,
             };
-            if (!isEdit) { payload.password = form.password; payload.parent_manager_id = parentManagerId; }
+            if (!isEdit) { payload.password = form.password; payload.parent_manager_id = parentManagerId; if (companyId) payload.company_id = companyId; }
             if (form.password?.trim() && isEdit) payload.password = form.password;
             const method = isEdit ? 'PUT' : 'POST';
             const url    = isEdit ? `${BASE}/users/${editUser.id}` : `${BASE}/users`;
@@ -516,6 +516,9 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
     //             "add-loc"          | "add-cat"            | "add-asset"
     const [openPanel, setOpenPanel] = useState(null);
 
+    // ── Active list filter — null = show all; string key = show only that section ──
+    const [activeListView, setActiveListView] = useState(null);
+
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
     // Permission form state
@@ -715,28 +718,35 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                 </div>
             </div>
 
-            {/* Stats row */}
+            {/* Stats row — clickable filters; click active card again to show all */}
             <div className="grid grid-cols-5 gap-2 mb-5">
                 {[
-                    { label: t?.managers_label  || 'Managers',   count: managers.length,   icon: Shield },
-                    { label: t?.employees_label || 'Employees',  count: employees.length,  icon: Users  },
-                    { label: t?.locations_title || 'Locations',  count: locations.length,  icon: MapPin },
-                    { label: t?.categories_title|| 'Categories', count: categories.length, icon: Tag    },
-                    { label: t?.assets_title    || 'Assets',     count: assets.length,     icon: Box    },
-                ].map(({ label, count, icon: Icon }) => (
-                    <div key={label} className="bg-white rounded-xl border border-gray-200 p-2.5 text-center">
-                        <Icon size={16} className="text-[#714B67] mx-auto mb-1" />
-                        <p className="text-lg font-bold text-slate-800">{count}</p>
-                        <p className="text-[10px] text-gray-400 font-medium leading-tight">{label}</p>
-                    </div>
-                ))}
+                    { label: t?.managers_label  || 'Managers',   count: managers.length,   icon: Shield, key: 'managers'   },
+                    { label: t?.employees_label || 'Employees',  count: employees.length,  icon: Users,  key: 'employees'  },
+                    { label: t?.locations_title || 'Locations',  count: locations.length,  icon: MapPin, key: 'locations'  },
+                    { label: t?.categories_title|| 'Categories', count: categories.length, icon: Tag,    key: 'categories' },
+                    { label: t?.assets_title    || 'Assets',     count: assets.length,     icon: Box,    key: 'assets'     },
+                ].map(({ label, count, icon: Icon, key }) => {
+                    const isActive = activeListView === key;
+                    return (
+                        <button
+                            key={key}
+                            onClick={() => setActiveListView(prev => prev === key ? null : key)}
+                            className={`rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
+                        >
+                            <Icon size={16} className={`mx-auto mb-1 ${isActive ? 'text-white' : 'text-[#714B67]'}`} />
+                            <p className={`text-lg font-bold ${isActive ? 'text-white' : 'text-slate-800'}`}>{count}</p>
+                            <p className={`text-[10px] font-medium leading-tight ${isActive ? 'text-white/80' : 'text-gray-400'}`}>{label}</p>
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Detail sections */}
             <div className="space-y-4">
 
                 {/* ── Managers (COMPANY_MANAGERs, excluding self) ── */}
-                <SectionCard
+                {(!activeListView || activeListView === 'managers') && <SectionCard
                     icon={Shield}
                     title={t?.managers_label || 'Managers'}
                     items={managers}
@@ -809,10 +819,10 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             )}
                         </>
                     )}
-                />
+                />}
 
                 {/* ── Employees ── */}
-                <SectionCard
+                {(!activeListView || activeListView === 'employees') && <SectionCard
                     icon={Users}
                     title={t?.employees_label || 'Employees'}
                     items={employees}
@@ -870,10 +880,10 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             )}
                         </>
                     )}
-                />
+                />}
 
                 {/* ── Locations ── */}
-                <SectionCard
+                {(!activeListView || activeListView === 'locations') && <SectionCard
                     icon={MapPin}
                     title={t?.locations_title || 'Locations'}
                     items={locations}
@@ -919,10 +929,10 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             )}
                         </>
                     )}
-                />
+                />}
 
                 {/* ── Categories ── */}
-                <SectionCard
+                {(!activeListView || activeListView === 'categories') && <SectionCard
                     icon={Tag}
                     title={t?.categories_title || 'Categories'}
                     items={categories}
@@ -961,10 +971,10 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             )}
                         </>
                     )}
-                />
+                />}
 
                 {/* ── Assets ── */}
-                <SectionCard
+                {(!activeListView || activeListView === 'assets') && <SectionCard
                     icon={Box}
                     title={t?.assets_title || 'Assets'}
                     items={assets}
@@ -1007,7 +1017,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             )}
                         </>
                     )}
-                />
+                />}
             </div>
 
             {/* Delete confirmation modal (kept as modal — just a confirmation) */}
