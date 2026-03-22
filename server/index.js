@@ -749,13 +749,15 @@ app.get('/users', authenticateToken, async (req, res) => {
             params.push(req.user.id);
         } else if (req.user.role === 'COMPANY_MANAGER') {
             // Prefer company_id scoping (multi-tenant safe); fall back to area_id for legacy data
+            // COMPANY_MANAGER has full admin access to ALL users (MANAGER, COMPANY_MANAGER, EMPLOYEE)
+            // within their company — no role filter applied.
             const companyId = req.user.company_id ?? null;
             const areaId    = req.user.area_id    ?? null;
             if (companyId) {
-                query += ` WHERE u.company_id = $1 AND u.role IN ('COMPANY_MANAGER', 'EMPLOYEE')`;
+                query += ` WHERE u.company_id = $1 AND u.role IN ('MANAGER', 'COMPANY_MANAGER', 'EMPLOYEE')`;
                 params.push(companyId);
             } else if (areaId) {
-                query += ` WHERE u.area_id = $1 AND u.role IN ('COMPANY_MANAGER', 'EMPLOYEE')`;
+                query += ` WHERE u.area_id = $1 AND u.role IN ('MANAGER', 'COMPANY_MANAGER', 'EMPLOYEE')`;
                 params.push(areaId);
             } else {
                 query += ` WHERE u.id = $1`;
@@ -1139,21 +1141,25 @@ app.put('/users/:id/assign-employees-to-manager', authenticateToken, async (req,
         const managerId = parseInt(req.params.id);
         if (isNaN(managerId)) return res.status(400).json({ error: 'Invalid ID' });
 
-        const mgrRes = await pool.query(
-            `SELECT id, company_id FROM users WHERE id = $1 AND role IN ('MANAGER', 'SUPERVISOR')`,
-            [managerId]
-        );
+        let mgrRes;
+        if (isCompanyManager) {
+            // COMPANY_MANAGER: only validate that target belongs to the same company — no role restriction.
+            const callerCompRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [req.user.id]);
+            const callerCompanyId = callerCompRes.rows[0]?.company_id;
+            if (!callerCompanyId) return res.status(403).json({ error: 'Unauthorized: no company assigned' });
+            mgrRes = await pool.query(
+                `SELECT id, company_id FROM users WHERE id = $1 AND company_id = $2`,
+                [managerId, callerCompanyId]
+            );
+        } else {
+            // BIG_BOSS: original role-scoped lookup
+            mgrRes = await pool.query(
+                `SELECT id, company_id FROM users WHERE id = $1 AND role IN ('MANAGER', 'SUPERVISOR')`,
+                [managerId]
+            );
+        }
         if (mgrRes.rows.length === 0) return res.status(404).json({ error: 'Manager not found' });
         const mgr = mgrRes.rows[0];
-
-        // COMPANY_MANAGER: ensure the target manager belongs to their own company
-        if (isCompanyManager) {
-            const callerRes = await pool.query(`SELECT company_id FROM users WHERE id = $1`, [req.user.id]);
-            const callerCompanyId = callerRes.rows[0]?.company_id;
-            if (!callerCompanyId || mgr.company_id !== callerCompanyId) {
-                return res.status(403).json({ error: 'Unauthorized: manager belongs to a different company' });
-            }
-        }
 
         const rawIds = req.body.employeeIds;
         const employeeIds = Array.isArray(rawIds)
@@ -1861,11 +1867,11 @@ app.get('/tasks', authenticateToken, async (req, res) => {
         }
 
         if (role === 'COMPANY_MANAGER') {
-            // DeptManager sees own tasks + tasks of employees in their area
-            const areaId = req.user.area_id || null;
-            if (areaId) {
-                query += ` WHERE t.worker_id = $1 OR t.worker_id IN (SELECT id FROM users WHERE area_id = $2 AND role = 'EMPLOYEE')`;
-                const result = await pool.query(query + ` ORDER BY t.due_date ASC`, [id, areaId]);
+            // COMPANY_MANAGER sees tasks of ALL users in their company (MANAGER, COMPANY_MANAGER, EMPLOYEE)
+            const companyId = req.user.company_id || null;
+            if (companyId) {
+                query += ` WHERE t.worker_id IN (SELECT id FROM users WHERE company_id = $1)`;
+                const result = await pool.query(query + ` ORDER BY t.due_date ASC`, [companyId]);
                 return res.json(result.rows);
             } else {
                 query += ` WHERE t.worker_id = $1`;
