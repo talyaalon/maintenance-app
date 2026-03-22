@@ -50,7 +50,7 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, 
             )}
         </div>
         {addPanel && (
-            <div className="px-4 py-2.5 text-sm text-slate-700 border-t border-[#714B67]/10 bg-[#fdf4ff]/60">
+            <div className="px-4 py-2.5 text-sm text-slate-700 border-t border-slate-200 bg-slate-50">
                 {addPanel}
             </div>
         )}
@@ -58,7 +58,7 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, 
 );
 
 // ─── Shared inline style helpers ──────────────────────────────────────────────
-const rowPanelCls  = "mt-2 pt-3 border-t border-[#714B67]/10 space-y-2 animate-fade-in bg-[#fdf4ff]/60 rounded-b-xl -mx-4 px-4 pb-3";
+const rowPanelCls  = "mt-2 pt-3 border-y border-slate-200 space-y-2 animate-fade-in bg-slate-50 shadow-inner rounded-b-xl -mx-4 px-4 pb-3";
 const addPanelCls  = "space-y-2 animate-fade-in";
 const inputCls     = "w-full p-2 border rounded-lg bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-xs transition";
 const labelCls     = "text-[10px] font-semibold text-slate-400 uppercase tracking-wide block mb-0.5";
@@ -255,7 +255,7 @@ const InlineLocationForm = ({ editLocation, createdBy, token, t, onClose, onSave
             <div>
                 <label className={labelCls}>Image (optional)</label>
                 <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] ?? null)}
-                    className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] cursor-pointer" />
+                    className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-[#714B67] cursor-pointer" />
                 {editLocation?.image_url && !imageFile && (
                     <img src={editLocation.image_url} alt="" className="mt-1 h-8 rounded-lg object-contain border border-gray-200" />
                 )}
@@ -486,7 +486,7 @@ const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen, onTeam, teamOp
 
 // ─── Permission Accordion ─────────────────────────────────────────────────────
 const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t }) => (
-    <div className="mt-2 pt-3 border-t border-[#714B67]/10 space-y-3 animate-fade-in bg-[#fdf4ff]/60 rounded-b-xl -mx-4 px-4 pb-3">
+    <div className="mt-2 pt-3 border-y border-slate-200 space-y-3 animate-fade-in bg-slate-50 shadow-inner rounded-b-xl -mx-4 px-4 pb-3">
         <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider">Permissions</p>
         <div>
             <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Languages</p>
@@ -537,8 +537,8 @@ const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t
 
 // ─── Team Assign Accordion ─────────────────────────────────────────────────────
 const TeamAssignAccordion = ({ employees, assignedIds, setAssignedIds, onSave, onClose, saving, userName }) => (
-    <div className="mt-2 pt-3 border-t border-blue-200/60 space-y-3 animate-fade-in bg-[#f0f7ff]/60 rounded-b-xl -mx-4 px-4 pb-3">
-        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Assign Team</p>
+    <div className="mt-2 pt-3 border-y border-slate-200 space-y-3 animate-fade-in bg-slate-50 shadow-inner rounded-b-xl -mx-4 px-4 pb-3">
+        <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider">Assign Team</p>
         <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
             {employees.length === 0 ? (
                 <p className="text-xs text-gray-400 italic">No employees in this company</p>
