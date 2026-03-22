@@ -737,13 +737,21 @@ app.get('/users', authenticateToken, async (req, res) => {
         `;
         let params = [];
 
-        // BIG_BOSS: full access, optional company_id filter for scoped views
+        // BIG_BOSS: full access, optional company_id / manager_id filter for scoped views
         if (req.user.role === 'BIG_BOSS') {
-            if (req.query.company_id) {
+            if (req.query.manager_id) {
+                // Return employees assigned to this manager via M:M junction
+                query += ` WHERE u.id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $1) AND u.role = 'EMPLOYEE'`;
+                params.push(req.query.manager_id);
+            } else if (req.query.company_id) {
                 query += ` WHERE u.company_id = $1`;
                 params.push(req.query.company_id);
             }
             // else: no WHERE clause — intentional full access
+        } else if (req.user.role === 'COMPANY_MANAGER' && req.query.manager_id) {
+            // COMPANY_MANAGER can fetch employees for a specific manager via M:M
+            query += ` WHERE u.id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $1) AND u.role = 'EMPLOYEE'`;
+            params.push(req.query.manager_id);
         } else if (req.user.role === 'MANAGER') {
             if (req.query.teamOnly === 'true') {
                 // Return only employees directly assigned to this manager via M:M junction table
@@ -2528,20 +2536,23 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
         const { userId } = req.params;
         const userCheck = await pool.query('SELECT role FROM users WHERE id = $1', [userId]);
         if (userCheck.rows.length === 0) return res.status(404).send("User not found");
-        
+
         const targetRole = userCheck.rows[0].role;
         let whereClause = "";
 
-        if (targetRole === 'MANAGER' || targetRole === 'BIG_BOSS') {
+        if (targetRole === 'MANAGER') {
+            // Use M:M junction table to get all employees assigned to this manager
+            whereClause = `WHERE t.worker_id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $1)`;
+        } else if (targetRole === 'BIG_BOSS') {
             whereClause = `WHERE t.worker_id = $1 OR t.worker_id IN (SELECT id FROM users WHERE parent_manager_id = $1)`;
         } else {
             whereClause = `WHERE t.worker_id = $1`;
         }
 
         const query = `
-            SELECT t.*, 
+            SELECT t.*,
                    l.name as location_name,
-                   a.name as asset_name, 
+                   a.name as asset_name,
                    c.name as category_name,
                    u.full_name as worker_name,
                    creator.full_name as manager_name

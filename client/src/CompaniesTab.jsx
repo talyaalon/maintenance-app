@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Building2, Plus, ChevronRight, ChevronDown, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck, Send } from 'lucide-react';
+import { Building2, Plus, ChevronRight, ChevronDown, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck, Send, ClipboardList } from 'lucide-react';
+import ScopedTasksPanel from './ScopedTasksPanel';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -697,7 +698,7 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
 
     // ── Row action buttons ─────────────────────────────────────────────────────
     // editOpen: highlights pencil when edit panel is open for this row
-    const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen, onTeam, teamOpen, isManager, editOpen }) => (
+    const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen, onTeam, teamOpen, isManager, editOpen, onTasks, tasksOpen }) => (
         <div className="ml-auto flex items-center gap-1 shrink-0">
             <button
                 onClick={onEdit}
@@ -724,6 +725,13 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     <UserCheck size={12} />
                 </button>
             )}
+            <button
+                onClick={onTasks}
+                className={`p-1 rounded-lg transition ${tasksOpen ? 'bg-emerald-500 text-white' : 'hover:bg-gray-100 text-gray-400'}`}
+                title="View Tasks"
+            >
+                <ClipboardList size={12} />
+            </button>
             <button onClick={onDelete} className="p-1 rounded-lg hover:bg-red-50 text-red-400 transition" title="Delete">
                 <Trash2 size={12} />
             </button>
@@ -929,6 +937,8 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     onTeam={() => openTeamPanel(u)}
                                     teamOpen={openPanel === `team:${u.id}`}
                                     isManager={u?.role === 'MANAGER'}
+                                    onTasks={() => togglePanel(`tasks:${u.id}`)}
+                                    tasksOpen={openPanel === `tasks:${u.id}`}
                                 />
                             </div>
                             {openPanel === `edit-user:${u.id}` && (
@@ -962,6 +972,16 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     onClose={() => setOpenPanel(null)}
                                     saving={teamSaving}
                                     userName={userName}
+                                />
+                            )}
+                            {openPanel === `tasks:${u.id}` && (
+                                <ScopedTasksPanel
+                                    scopedUser={u}
+                                    scopedUserRole={u?.role === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE'}
+                                    currentUser={{ company_id: cid }}
+                                    token={token}
+                                    lang={lang}
+                                    t={t}
                                 />
                             )}
                         </>
@@ -1009,6 +1029,8 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     onSettings={() => openPermission(u)}
                                     settingsOpen={openPanel === `perm:${u.id}`}
                                     isManager={false}
+                                    onTasks={() => togglePanel(`tasks:${u.id}`)}
+                                    tasksOpen={openPanel === `tasks:${u.id}`}
                                 />
                             </div>
                             {openPanel === `edit-user:${u.id}` && (
@@ -1031,6 +1053,16 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     t={t}
                                     onSendReport={() => sendDailyReport(u)}
                                     reportSending={reportSendingIds.has(u.id)}
+                                />
+                            )}
+                            {openPanel === `tasks:${u.id}` && (
+                                <ScopedTasksPanel
+                                    scopedUser={u}
+                                    scopedUserRole="EMPLOYEE"
+                                    currentUser={{ company_id: cid }}
+                                    token={token}
+                                    lang={lang}
+                                    t={t}
                                 />
                             )}
                         </>
