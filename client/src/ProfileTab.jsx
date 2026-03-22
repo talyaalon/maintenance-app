@@ -134,14 +134,14 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   };
 
   return (
-    <div className="px-3 sm:px-4 pt-3 pb-24 flex flex-col items-center max-w-lg mx-auto animate-fade-in">
+    <div className="px-3 sm:px-4 pt-2 pb-24 flex flex-col items-center max-w-lg mx-auto animate-fade-in">
 
-      <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 self-start">{t.nav_profile || 'Profile'}</h1>
+      <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2 self-start">{t.nav_profile || 'Profile'}</h1>
 
-      <div className="relative mb-4 group flex flex-col items-center">
+      <div className="relative mb-2 group flex flex-col items-center">
         <div className="relative">
             {/* 🚀 תוקן צבע הרקע כאן לסגול המדויק */}
-            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 border-white shadow-sm ring-1 ring-gray-200 bg-slate-50 flex items-center justify-center">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-white shadow-sm ring-1 ring-gray-200 bg-slate-50 flex items-center justify-center">
                 {previewImage ? (
                     <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
@@ -159,22 +159,22 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             )}
         </div>
         
-        <div className="mt-3 text-center">
-            <h3 className="text-lg sm:text-xl font-bold text-slate-900">{formData.full_name}</h3>
+        <div className="mt-2 text-center">
+            <h3 className="text-base sm:text-lg font-bold text-slate-900">{formData.full_name}</h3>
             <p className="text-xs sm:text-sm text-slate-400 uppercase tracking-wide font-medium">{user?.role || 'User'}</p>
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="w-full bg-white p-4 sm:p-6 rounded-xl border border-gray-200 space-y-4">
+      <form onSubmit={handleSave} className="w-full bg-white p-3 sm:p-4 rounded-xl border border-gray-200 space-y-2.5">
         
         <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{t.full_name_label || 'Full Name'}</label>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
                 <input
                     type="text"
                     dir="rtl"
                     placeholder={t.name_he_placeholder || 'שם בעברית'}
-                    className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                    className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
                     value={formData.full_name_he}
                     onChange={e => setFormData({...formData, full_name_he: e.target.value})}
                     disabled={!isEditing}
@@ -183,7 +183,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
                     type="text"
                     dir="ltr"
                     placeholder={t.name_en_placeholder || 'Name in English'}
-                    className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                    className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
                     value={formData.full_name_en}
                     onChange={e => setFormData({...formData, full_name_en: e.target.value})}
                     disabled={!isEditing}
@@ -192,7 +192,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
                     type="text"
                     dir="ltr"
                     placeholder={t.name_th_placeholder || 'ชื่อภาษาไทย'}
-                    className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                    className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
                     value={formData.full_name_th}
                     onChange={e => setFormData({...formData, full_name_th: e.target.value})}
                     disabled={!isEditing}
@@ -204,7 +204,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{t.email_label || 'Email'}</label>
             <input 
                 type="email" 
-                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
                 value={formData.email}
                 onChange={e => setFormData({...formData, email: e.target.value})}
                 disabled={!isEditing}
@@ -218,7 +218,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             </label>
             <input 
                 type="tel" 
-                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
                 value={formData.phone}
                 onChange={e => setFormData({...formData, phone: e.target.value})}
                 disabled={!isEditing}
@@ -234,7 +234,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             <input
                 type="text"
                 dir="ltr"
-                className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
                 value={formData.line_user_id}
                 onChange={e => setFormData({...formData, line_user_id: e.target.value})}
                 disabled={!isEditing}
@@ -249,7 +249,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             <div className="relative">
                 <Globe className={`absolute top-1/2 transform -translate-y-1/2 text-gray-400 ${lang === 'he' ? 'right-3' : 'left-3'}`} size={18} />
                 <select
-                    className={`w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition ${lang === 'he' ? 'pr-10' : 'pl-10'}`}
+                    className={`w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition ${lang === 'he' ? 'pr-10' : 'pl-10'}`}
                     value={formData.preferred_language}
                     onChange={e => setFormData({...formData, preferred_language: e.target.value})}
                     disabled={!isEditing}
@@ -268,7 +268,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
                 <div className="relative">
                     <input 
                         type={showPassword ? "text" : "password"} 
-                        className="w-full p-3 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none pr-10 transition" 
+                        className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none pr-10 transition"
                         value={formData.password}
                         onChange={e => setFormData({...formData, password: e.target.value})}
                         placeholder="********"
@@ -286,7 +286,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
             </div>
         )}
 
-        <div className="pt-4 flex gap-3">
+        <div className="pt-2 flex gap-3">
             {isEditing ? (
                 <>
                     <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-2.5 border border-gray-200 rounded-lg text-slate-600 hover:bg-gray-50 flex justify-center gap-2 transition text-sm font-medium">
@@ -304,7 +304,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         </div>
       </form>
         
-      <button onClick={onLogout} className="mt-8 text-red-500 flex items-center gap-2 hover:bg-red-50 px-4 py-2 rounded-full transition font-bold">
+      <button onClick={onLogout} className="mt-4 text-red-500 flex items-center gap-2 hover:bg-red-50 px-4 py-2 rounded-full transition font-bold">
           <LogOut size={18} /> {t.logout || "Logout"}
       </button>
 
