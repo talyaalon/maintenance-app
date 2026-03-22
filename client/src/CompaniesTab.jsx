@@ -847,7 +847,7 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     return (
                         <button
                             onClick={() => setActiveListView('all')}
-                            className={`flex-none min-w-[100px] max-w-[100px] flex-shrink-0 rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
+                            className={`flex-none w-[90px] sm:flex-1 sm:w-auto sm:max-w-none rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
                         >
                             <LayoutGrid size={16} className={`mx-auto mb-1 ${isActive ? 'text-white' : 'text-[#714B67]'}`} />
                             <p className={`text-[10px] font-medium leading-tight ${isActive ? 'text-white/80' : 'text-gray-400'}`}>All</p>
@@ -866,7 +866,7 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                         <button
                             key={key}
                             onClick={() => setActiveListView(key)}
-                            className={`flex-none min-w-[100px] max-w-[100px] flex-shrink-0 rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
+                            className={`flex-none w-[90px] sm:flex-1 sm:w-auto sm:max-w-none rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
                         >
                             <Icon size={16} className={`mx-auto mb-1 ${isActive ? 'text-white' : 'text-[#714B67]'}`} />
                             <p className={`text-lg font-bold ${isActive ? 'text-white' : 'text-slate-800'}`}>{count}</p>
