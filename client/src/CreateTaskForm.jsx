@@ -72,16 +72,13 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         if (subordinates && subordinates.length > 0) {
             setTeamMembers(subordinates);
         } else {
-            fetch('https://maintenance-app-staging.onrender.com/users', { headers })
+            // MANAGER uses ?teamOnly=true to fetch only employees assigned via M:M junction table
+            const usersUrl = currentUser?.role === 'MANAGER'
+                ? 'https://maintenance-app-staging.onrender.com/users?teamOnly=true'
+                : 'https://maintenance-app-staging.onrender.com/users';
+            fetch(usersUrl, { headers })
                 .then(res => res.json())
-                .then(d => {
-                    let members = Array.isArray(d) ? d : [];
-                    // MANAGER must only assign tasks to their directly assigned team members
-                    if (currentUser?.role === 'MANAGER') {
-                        members = members.filter(u => u?.parent_manager_id === currentUser.id);
-                    }
-                    setTeamMembers(members);
-                })
+                .then(d => setTeamMembers(Array.isArray(d) ? d : []))
                 .catch(err => console.error("Error users", err));
         }
     }

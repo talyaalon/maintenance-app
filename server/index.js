@@ -383,6 +383,7 @@ app.get('/fix-db', async (req, res) => {
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_stuck BOOLEAN DEFAULT FALSE');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_description TEXT');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_file_url TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
 
             // ── 4-Tier RBAC: area_id grouping ──
             // Add area_id columns (idempotent)
@@ -744,8 +745,13 @@ app.get('/users', authenticateToken, async (req, res) => {
             }
             // else: no WHERE clause — intentional full access
         } else if (req.user.role === 'MANAGER') {
-            // AreaManager sees all users sharing their area (area_id = their own id)
-            query += ` WHERE u.area_id = $1`;
+            if (req.query.teamOnly === 'true') {
+                // Return only employees directly assigned to this manager via M:M junction table
+                query += ` WHERE u.id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $1) AND u.role = 'EMPLOYEE'`;
+            } else {
+                // AreaManager sees all users sharing their area (area_id = their own id)
+                query += ` WHERE u.area_id = $1`;
+            }
             params.push(req.user.id);
         } else if (req.user.role === 'COMPANY_MANAGER') {
             // Prefer company_id scoping (multi-tenant safe); fall back to area_id for legacy data
@@ -1178,27 +1184,40 @@ app.put('/users/:id/assign-employees-to-manager', authenticateToken, async (req,
             ? rawIds.map(Number).filter(n => Number.isInteger(n) && n > 0)
             : [];
 
-        // Unassign all current employees from this manager
-        await pool.query(
-            `UPDATE users SET parent_manager_id = NULL WHERE parent_manager_id = $1 AND role = 'EMPLOYEE'`,
+        // M:M diff: only manage the junction table rows for this manager —
+        // never wipe parent_manager_id (an employee can be assigned to multiple managers).
+        const currentAssignRes = await pool.query(
+            `SELECT employee_id FROM employee_managers WHERE manager_id = $1`,
             [managerId]
         );
-        await pool.query(`DELETE FROM employee_managers WHERE manager_id = $1`, [managerId]);
+        const currentAssignIds = currentAssignRes.rows.map(r => r.employee_id);
 
+        // Remove employees NOT in the new list from this manager's junction rows only
+        const toRemove = currentAssignIds.filter(id => !employeeIds.includes(id));
+        if (toRemove.length > 0) {
+            await pool.query(
+                `DELETE FROM employee_managers WHERE manager_id = $1 AND employee_id = ANY($2::int[])`,
+                [managerId, toRemove]
+            );
+        }
+
+        // Add new assignments to junction table
+        for (const empId of employeeIds) {
+            await pool.query(
+                'INSERT INTO employee_managers (employee_id, manager_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                [empId, managerId]
+            );
+        }
+
+        // Set parent_manager_id only for employees who have no primary manager yet —
+        // preserves existing M:M relationships for employees shared across managers.
         if (employeeIds.length > 0) {
-            // Always scope employee updates to the manager's company_id, which for COMPANY_MANAGER
-            // has already been verified to match their own company above.
             await pool.query(
                 `UPDATE users SET parent_manager_id = $1
-                 WHERE id = ANY($2::int[]) AND role = 'EMPLOYEE' AND company_id = $3`,
+                 WHERE id = ANY($2::int[]) AND role = 'EMPLOYEE' AND company_id = $3
+                   AND parent_manager_id IS NULL`,
                 [managerId, employeeIds, mgr.company_id]
             );
-            for (const empId of employeeIds) {
-                await pool.query(
-                    'INSERT INTO employee_managers (employee_id, manager_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-                    [empId, managerId]
-                );
-            }
         }
 
         res.json({ success: true });
@@ -1923,9 +1942,9 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
     if (!isRecurring) {
         await pool.query(
-            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
-            [title, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id]
+            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8, $9)`,
+            [title, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id, req.user.id]
         );
     } else {
         const tasksToInsert = [];
@@ -1964,9 +1983,9 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
         for (const date of tasksToInsert) {
             await pool.query(
-                `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)`,
-                [title + ' (Recurring)', location_id, worker_id, urgency, date, description, imageUrls, asset_id]
+                `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8, $9)`,
+                [title + ' (Recurring)', location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id]
             );
         }
         createdCount = tasksToInsert.length;
@@ -3449,6 +3468,9 @@ app.listen(port, async () => {
                 [coId, mgr.area_id]
             );
         }
+
+        // ── created_by on tasks: tracks which manager/user created each task ──
+        await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL');
 
         // ── Migrate existing parent_manager_id → M:M junction table (idempotent) ──
         await pool.query(`
