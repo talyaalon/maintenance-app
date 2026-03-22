@@ -74,7 +74,14 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         } else {
             fetch('https://maintenance-app-staging.onrender.com/users', { headers })
                 .then(res => res.json())
-                .then(d => setTeamMembers(Array.isArray(d) ? d : []))
+                .then(d => {
+                    let members = Array.isArray(d) ? d : [];
+                    // MANAGER must only assign tasks to their directly assigned team members
+                    if (currentUser?.role === 'MANAGER') {
+                        members = members.filter(u => u?.parent_manager_id === currentUser.id);
+                    }
+                    setTeamMembers(members);
+                })
                 .catch(err => console.error("Error users", err));
         }
     }

@@ -116,7 +116,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
         finally { setSaving(false); }
     };
 
-    const roleLabel = role === 'SUPERVISOR' ? 'Manager' : role === 'COMPANY_MANAGER' ? 'Company Manager' : 'Employee';
+    const roleLabel = (role === 'SUPERVISOR' || role === 'MANAGER') ? 'Manager' : role === 'COMPANY_MANAGER' ? 'Company Manager' : 'Employee';
     return (
         <div className={isAddPanel ? addPanelCls : rowPanelCls}>
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
@@ -888,7 +888,8 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     onAdd={() => togglePanel('add-user-manager')}
                     addPanel={openPanel === 'add-user-manager' ? (
                         <InlineUserForm
-                            role="SUPERVISOR"
+                            role="MANAGER"
+                            companyId={cid}
                             parentManagerId={primaryManagerId}
                             token={token}
                             t={t}

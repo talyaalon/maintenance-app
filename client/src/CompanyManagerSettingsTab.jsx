@@ -113,7 +113,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
         finally { setSaving(false); }
     };
 
-    const roleLabel = role === 'COMPANY_MANAGER' ? 'Manager' : 'Employee';
+    const roleLabel = (role === 'MANAGER' || role === 'COMPANY_MANAGER') ? 'Manager' : 'Employee';
     return (
         <div className={isAddPanel ? addPanelCls : rowPanelCls}>
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
@@ -718,7 +718,8 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
     }, [token, user?.company_id]);
 
     // Exclude the logged-in user from the managers list — they appear in the self section
-    const managers  = (users ?? []).filter(u => u?.role === 'COMPANY_MANAGER' && u?.id !== user?.id);
+    // Show both COMPANY_MANAGER peers and MANAGER users created within this company
+    const managers  = (users ?? []).filter(u => (u?.role === 'COMPANY_MANAGER' || u?.role === 'MANAGER') && u?.id !== user?.id);
     const employees = (users ?? []).filter(u => u?.role === 'EMPLOYEE');
     const selfUser  = (users ?? []).find(u => u?.id === user?.id) ?? user;
 
@@ -869,7 +870,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     onAdd={() => togglePanel('add-user-manager')}
                     addPanel={openPanel === 'add-user-manager' ? (
                         <InlineUserForm
-                            role="COMPANY_MANAGER"
+                            role="MANAGER"
                             parentManagerId={createdBy}
                             token={token}
                             t={t}

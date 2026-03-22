@@ -832,7 +832,16 @@ app.post('/users', authenticateToken, async (req, res) => {
             newUserCompanyId = parentCoRes.rows[0]?.company_id || null;
         }
     }
-    // For MANAGER: company is created after insert (we need their id first)
+    // For MANAGER created by BIG_BOSS with an explicit company_id (e.g. from CompaniesTab):
+    // use the provided company_id instead of auto-creating a new one.
+    if (role === 'MANAGER' && req.user.role === 'BIG_BOSS' && req.body.company_id) {
+        newUserCompanyId = parseInt(req.body.company_id, 10);
+    }
+    // For MANAGER created by COMPANY_MANAGER: inherit the caller's company_id.
+    if (role === 'MANAGER' && req.user.role === 'COMPANY_MANAGER') {
+        newUserCompanyId = req.user.company_id || null;
+    }
+    // For MANAGER with no company determined yet: company is auto-created after insert
 
     const newUser = await pool.query(
       `INSERT INTO users (full_name, full_name_he, full_name_en, full_name_th, email, password, role, phone, parent_manager_id, preferred_language, line_user_id, area_id, company_id)
@@ -840,14 +849,17 @@ app.post('/users', authenticateToken, async (req, res) => {
       [effectiveFullName, full_name_he || null, full_name_en || null, full_name_th || null, email, hashedPassword, role, phone, assignedManager, lang, line_user_id || null, newUserAreaId, newUserCompanyId]
     );
 
-    // For MANAGER (AreaManager), area_id = their own id, and auto-create a Company for them
+    // For MANAGER (AreaManager), area_id = their own id.
+    // Auto-create a Company only when no company_id was already determined (BIG_BOSS standalone creation).
     if (role === 'MANAGER') {
         await pool.query('UPDATE users SET area_id = id WHERE id = $1', [newUser.rows[0].id]);
-        const newCo = await pool.query(
-            'INSERT INTO companies (name) VALUES ($1) RETURNING id',
-            [`Company (${effectiveFullName})`]
-        );
-        await pool.query('UPDATE users SET company_id = $1 WHERE id = $2', [newCo.rows[0].id, newUser.rows[0].id]);
+        if (!newUserCompanyId) {
+            const newCo = await pool.query(
+                'INSERT INTO companies (name) VALUES ($1) RETURNING id',
+                [`Company (${effectiveFullName})`]
+            );
+            await pool.query('UPDATE users SET company_id = $1 WHERE id = $2', [newCo.rows[0].id, newUser.rows[0].id]);
+        }
     }
 
     // For COMPANY_MANAGER created directly by BIG_BOSS (no parent MANAGER):
