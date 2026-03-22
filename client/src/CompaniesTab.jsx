@@ -818,8 +818,7 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                             onClick={() => setActiveListView('all')}
                             className={`rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
                         >
-                            <LayoutGrid size={16} className={`mx-auto mb-1 ${isActive ? 'text-white' : 'text-[#714B67]'}`} />
-                            <p className={`text-lg font-bold ${isActive ? 'text-white' : 'text-slate-800'}`}>{total}</p>
+                            <LayoutGrid size={32} className={`mx-auto mb-1 ${isActive ? 'text-white' : 'text-[#714B67]'}`} />
                             <p className={`text-[10px] font-medium leading-tight ${isActive ? 'text-white/80' : 'text-gray-400'}`}>All</p>
                         </button>
                     );
