@@ -141,7 +141,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
       <div className="relative mb-2 group flex flex-col items-center">
         <div className="relative">
             {/* 🚀 תוקן צבע הרקע כאן לסגול המדויק */}
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-white shadow-sm ring-1 ring-gray-200 bg-slate-50 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-sm ring-1 ring-gray-200 bg-slate-50 flex items-center justify-center">
                 {previewImage ? (
                     <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
@@ -165,7 +165,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="w-full bg-white p-3 sm:p-4 rounded-xl border border-gray-200 space-y-2.5">
+      <form onSubmit={handleSave} className="w-full bg-white p-2 rounded-xl border border-gray-200 space-y-1">
         
         <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{t.full_name_label || 'Full Name'}</label>
