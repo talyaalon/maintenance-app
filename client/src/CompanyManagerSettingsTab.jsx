@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, MapPin, Tag, Box, Shield, Pencil, Trash2, Loader2, Plus, Settings, UserCheck } from 'lucide-react';
+import { Building2, Users, MapPin, Tag, Box, Shield, Pencil, Trash2, Loader2, Plus, Settings, UserCheck, ChevronDown, LayoutGrid } from 'lucide-react';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -71,6 +71,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
     const [form, setForm] = useState({
         full_name_en: editUser?.full_name_en || editUser?.full_name || '',
         full_name_he: editUser?.full_name_he || '',
+        full_name_th: editUser?.full_name_th || '',
         email:        editUser?.email || '',
         password:     '',
         phone:        editUser?.phone || '',
@@ -78,6 +79,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
         line_user_id: editUser?.line_user_id || '',
     });
     const [saving, setSaving] = useState(false);
+    const [showAltLangs, setShowAltLangs] = useState(!!(editUser?.full_name_he || editUser?.full_name_th));
     const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
@@ -89,6 +91,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
                 full_name:    form.full_name_en,
                 full_name_en: form.full_name_en,
                 full_name_he: form.full_name_he || undefined,
+                full_name_th: form.full_name_th || undefined,
                 email:        form.email.toLowerCase(),
                 phone:        form.phone || undefined,
                 preferred_language: form.preferred_language,
@@ -116,9 +119,30 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
                 {isEdit ? `Edit ${roleLabel}` : `Add ${roleLabel}`}
             </p>
+            <div>
+                <div className="flex items-center justify-between mb-0.5">
+                    <label className={labelCls}>Name (EN) *</label>
+                    <button type="button" onClick={() => setShowAltLangs(p => !p)}
+                        className="flex items-center gap-0.5 text-[9px] font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
+                        <span>{showAltLangs ? 'Hide' : '+ HE / TH'}</span>
+                        <ChevronDown size={10} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
+                    </button>
+                </div>
+                <input type="text" value={form.full_name_en} onChange={e => set('full_name_en', e.target.value)} className={inputCls} />
+            </div>
+            {showAltLangs && (
+                <>
+                    <div>
+                        <label className={labelCls}>Name (HE)</label>
+                        <input type="text" value={form.full_name_he} onChange={e => set('full_name_he', e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                        <label className={labelCls}>Name (TH)</label>
+                        <input type="text" value={form.full_name_th} onChange={e => set('full_name_th', e.target.value)} className={inputCls} />
+                    </div>
+                </>
+            )}
             {[
-                { label: 'Name (EN) *',                                     key: 'full_name_en', type: 'text' },
-                { label: 'Name (HE)',                                        key: 'full_name_he', type: 'text' },
                 { label: 'Email *',                                          key: 'email',        type: 'email' },
                 { label: isEdit ? 'Password (blank = keep)' : 'Password *', key: 'password',     type: 'password' },
                 { label: 'Phone',                                            key: 'phone',        type: 'text' },
@@ -160,6 +184,7 @@ const InlineLocationForm = ({ editLocation, createdBy, token, t, onClose, onSave
     });
     const [imageFile, setImageFile] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [showAltLangs, setShowAltLangs] = useState(!!(editLocation?.name_he || editLocation?.name_th));
     const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     useEffect(() => {
@@ -200,17 +225,33 @@ const InlineLocationForm = ({ editLocation, createdBy, token, t, onClose, onSave
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
                 {isEdit ? 'Edit Location' : 'Add Location'}
             </p>
-            {[
-                { label: 'Name (EN) *',       key: 'name_en' },
-                { label: 'Name (HE)',          key: 'name_he' },
-                { label: 'Name (TH)',          key: 'name_th' },
-                { label: 'Address / Map Link', key: 'address' },
-            ].map(({ label, key }) => (
-                <div key={key}>
-                    <label className={labelCls}>{label}</label>
-                    <input type="text" value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} />
+            <div>
+                <div className="flex items-center justify-between mb-0.5">
+                    <label className={labelCls}>Name (EN) *</label>
+                    <button type="button" onClick={() => setShowAltLangs(p => !p)}
+                        className="flex items-center gap-0.5 text-[9px] font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
+                        <span>{showAltLangs ? 'Hide' : '+ HE / TH'}</span>
+                        <ChevronDown size={10} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
+                    </button>
                 </div>
-            ))}
+                <input type="text" value={form.name_en} onChange={e => set('name_en', e.target.value)} className={inputCls} />
+            </div>
+            {showAltLangs && (
+                <>
+                    <div>
+                        <label className={labelCls}>Name (HE)</label>
+                        <input type="text" value={form.name_he} onChange={e => set('name_he', e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                        <label className={labelCls}>Name (TH)</label>
+                        <input type="text" value={form.name_th} onChange={e => set('name_th', e.target.value)} className={inputCls} />
+                    </div>
+                </>
+            )}
+            <div>
+                <label className={labelCls}>Address / Map Link</label>
+                <input type="text" value={form.address} onChange={e => set('address', e.target.value)} className={inputCls} />
+            </div>
             <div>
                 <label className={labelCls}>Image (optional)</label>
                 <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] ?? null)}
@@ -240,6 +281,7 @@ const InlineCategoryForm = ({ editCategory, createdBy, token, t, onClose, onSave
         code:    editCategory?.code || '',
     });
     const [saving, setSaving] = useState(false);
+    const [showAltLangs, setShowAltLangs] = useState(!!(editCategory?.name_he || editCategory?.name_th));
     const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
@@ -270,16 +312,29 @@ const InlineCategoryForm = ({ editCategory, createdBy, token, t, onClose, onSave
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
                 {isEdit ? 'Edit Category' : 'Add Category'}
             </p>
-            {[
-                { label: 'Name (EN) *', key: 'name_en' },
-                { label: 'Name (HE)',   key: 'name_he' },
-                { label: 'Name (TH)',   key: 'name_th' },
-            ].map(({ label, key }) => (
-                <div key={key}>
-                    <label className={labelCls}>{label}</label>
-                    <input type="text" value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} />
+            <div>
+                <div className="flex items-center justify-between mb-0.5">
+                    <label className={labelCls}>Name (EN) *</label>
+                    <button type="button" onClick={() => setShowAltLangs(p => !p)}
+                        className="flex items-center gap-0.5 text-[9px] font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
+                        <span>{showAltLangs ? 'Hide' : '+ HE / TH'}</span>
+                        <ChevronDown size={10} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
+                    </button>
                 </div>
-            ))}
+                <input type="text" value={form.name_en} onChange={e => set('name_en', e.target.value)} className={inputCls} />
+            </div>
+            {showAltLangs && (
+                <>
+                    <div>
+                        <label className={labelCls}>Name (HE)</label>
+                        <input type="text" value={form.name_he} onChange={e => set('name_he', e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                        <label className={labelCls}>Name (TH)</label>
+                        <input type="text" value={form.name_th} onChange={e => set('name_th', e.target.value)} className={inputCls} />
+                    </div>
+                </>
+            )}
             <div>
                 <label className={labelCls}>Code (3 chars) *</label>
                 <input type="text" value={form.code} maxLength={3}
@@ -308,6 +363,7 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
         location_id: editAsset?.location_id ? String(editAsset.location_id) : '',
     });
     const [saving, setSaving] = useState(false);
+    const [showAltLangs, setShowAltLangs] = useState(!!(editAsset?.name_he || editAsset?.name_th));
     const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
@@ -339,16 +395,29 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
                 {isEdit ? 'Edit Asset' : 'Add Asset'}
             </p>
-            {[
-                { label: 'Name (EN) *', key: 'name_en' },
-                { label: 'Name (HE)',   key: 'name_he' },
-                { label: 'Name (TH)',   key: 'name_th' },
-            ].map(({ label, key }) => (
-                <div key={key}>
-                    <label className={labelCls}>{label}</label>
-                    <input type="text" value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} />
+            <div>
+                <div className="flex items-center justify-between mb-0.5">
+                    <label className={labelCls}>Name (EN) *</label>
+                    <button type="button" onClick={() => setShowAltLangs(p => !p)}
+                        className="flex items-center gap-0.5 text-[9px] font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
+                        <span>{showAltLangs ? 'Hide' : '+ HE / TH'}</span>
+                        <ChevronDown size={10} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
+                    </button>
                 </div>
-            ))}
+                <input type="text" value={form.name_en} onChange={e => set('name_en', e.target.value)} className={inputCls} />
+            </div>
+            {showAltLangs && (
+                <>
+                    <div>
+                        <label className={labelCls}>Name (HE)</label>
+                        <input type="text" value={form.name_he} onChange={e => set('name_he', e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                        <label className={labelCls}>Name (TH)</label>
+                        <input type="text" value={form.name_th} onChange={e => set('name_th', e.target.value)} className={inputCls} />
+                    </div>
+                </>
+            )}
             <div>
                 <label className={labelCls}>Category *</label>
                 <select value={form.category_id} onChange={e => set('category_id', e.target.value)}
@@ -516,8 +585,8 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
     //             "add-loc"          | "add-cat"            | "add-asset"
     const [openPanel, setOpenPanel] = useState(null);
 
-    // ── Active list filter — null = show all; string key = show only that section ──
-    const [activeListView, setActiveListView] = useState(null);
+    // ── Active list filter — 'all' = show all; string key = show only that section ──
+    const [activeListView, setActiveListView] = useState('all');
 
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
@@ -718,8 +787,22 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                 </div>
             </div>
 
-            {/* Stats row — clickable filters; click active card again to show all */}
-            <div className="grid grid-cols-5 gap-2 mb-5">
+            {/* Stats row — 'all' = show everything; string key = isolate that section */}
+            <div className="grid grid-cols-6 gap-2 mb-5">
+                {(() => {
+                    const isActive = activeListView === 'all';
+                    const total = managers.length + employees.length + locations.length + categories.length + assets.length;
+                    return (
+                        <button
+                            onClick={() => setActiveListView('all')}
+                            className={`rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
+                        >
+                            <LayoutGrid size={16} className={`mx-auto mb-1 ${isActive ? 'text-white' : 'text-[#714B67]'}`} />
+                            <p className={`text-lg font-bold ${isActive ? 'text-white' : 'text-slate-800'}`}>{total}</p>
+                            <p className={`text-[10px] font-medium leading-tight ${isActive ? 'text-white/80' : 'text-gray-400'}`}>All</p>
+                        </button>
+                    );
+                })()}
                 {[
                     { label: t?.managers_label  || 'Managers',   count: managers.length,   icon: Shield, key: 'managers'   },
                     { label: t?.employees_label || 'Employees',  count: employees.length,  icon: Users,  key: 'employees'  },
@@ -731,7 +814,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     return (
                         <button
                             key={key}
-                            onClick={() => setActiveListView(prev => prev === key ? null : key)}
+                            onClick={() => setActiveListView(key)}
                             className={`rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
                         >
                             <Icon size={16} className={`mx-auto mb-1 ${isActive ? 'text-white' : 'text-[#714B67]'}`} />
@@ -746,7 +829,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
             <div className="space-y-4">
 
                 {/* ── Managers (COMPANY_MANAGERs, excluding self) ── */}
-                {(!activeListView || activeListView === 'managers') && <SectionCard
+                {(activeListView === 'all' || activeListView === 'managers') && <SectionCard
                     icon={Shield}
                     title={t?.managers_label || 'Managers'}
                     items={managers}
@@ -822,7 +905,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                 />}
 
                 {/* ── Employees ── */}
-                {(!activeListView || activeListView === 'employees') && <SectionCard
+                {(activeListView === 'all' || activeListView === 'employees') && <SectionCard
                     icon={Users}
                     title={t?.employees_label || 'Employees'}
                     items={employees}
@@ -883,7 +966,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                 />}
 
                 {/* ── Locations ── */}
-                {(!activeListView || activeListView === 'locations') && <SectionCard
+                {(activeListView === 'all' || activeListView === 'locations') && <SectionCard
                     icon={MapPin}
                     title={t?.locations_title || 'Locations'}
                     items={locations}
@@ -932,7 +1015,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                 />}
 
                 {/* ── Categories ── */}
-                {(!activeListView || activeListView === 'categories') && <SectionCard
+                {(activeListView === 'all' || activeListView === 'categories') && <SectionCard
                     icon={Tag}
                     title={t?.categories_title || 'Categories'}
                     items={categories}
@@ -974,7 +1057,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                 />}
 
                 {/* ── Assets ── */}
-                {(!activeListView || activeListView === 'assets') && <SectionCard
+                {(activeListView === 'all' || activeListView === 'assets') && <SectionCard
                     icon={Box}
                     title={t?.assets_title || 'Assets'}
                     items={assets}
