@@ -1047,8 +1047,8 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
     );
 };
 
-// ─── Create / Edit company modal ──────────────────────────────────────────────
-const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
+// ─── Inline Company Form (Create or Edit — replaces popup modal) ──────────────
+const InlineCompanyForm = ({ company, token, t, onClose, onSaved }) => {
     const isEdit = !!company;
     const [form, setForm] = useState({
         name_en: company?.name_en || company?.name || '',
@@ -1144,91 +1144,83 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
         finally { setSaving(false); }
     };
 
-    const iCls = "w-full p-2.5 border rounded-xl bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm transition";
-    const lCls = "text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1";
-
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[150] p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl border border-gray-200 animate-scale-in max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-base font-bold text-slate-800">
-                        {isEdit ? (t?.edit_company || 'Edit Company') : (t?.create_company || 'Create Company')}
-                    </h3>
-                    <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
-                </div>
+        <div className="space-y-2 animate-fade-in">
+            <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider">
+                    {isEdit ? (t?.edit_company || 'Edit Company') : (t?.create_company || 'Create Company')}
+                </p>
+                <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#714B67]/10 text-[#714B67] transition"><X size={14} /></button>
+            </div>
 
-                <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-2">Company Info</p>
-                <div className="space-y-3">
-                    {[
-                        { label: 'Name (EN) *', key: 'name_en' },
-                        { label: 'Name (HE)',   key: 'name_he' },
-                        { label: 'Name (TH)',   key: 'name_th' },
-                    ].map(({ label, key }) => (
-                        <div key={key}>
-                            <label className={lCls}>{label}</label>
-                            <input className={iCls} value={form[key]} onChange={e => setF(key, e.target.value)} />
-                        </div>
-                    ))}
-                    <div>
-                        <label className={lCls}>Default Notification Language</label>
-                        <select value={form.default_notification_lang} onChange={e => setF('default_notification_lang', e.target.value)} className={iCls}>
-                            <option value="en">English</option>
-                            <option value="he">Hebrew</option>
-                            <option value="th">Thai</option>
-                        </select>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Company Info</p>
+            {[
+                { label: 'Name (EN) *', key: 'name_en' },
+                { label: 'Name (HE)',   key: 'name_he' },
+                { label: 'Name (TH)',   key: 'name_th' },
+            ].map(({ label, key }) => (
+                <div key={key}>
+                    <label className={labelCls}>{label}</label>
+                    <input className={inputCls} value={form[key]} onChange={e => setF(key, e.target.value)} />
+                </div>
+            ))}
+            <div>
+                <label className={labelCls}>Default Notification Language</label>
+                <select value={form.default_notification_lang} onChange={e => setF('default_notification_lang', e.target.value)}
+                    className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]">
+                    <option value="en">English</option>
+                    <option value="he">Hebrew</option>
+                    <option value="th">Thai</option>
+                </select>
+            </div>
+            <div>
+                <label className={labelCls}>{t?.company_logo_label || 'Logo (optional)'}</label>
+                <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] ?? null)}
+                    className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] cursor-pointer" />
+                {company?.profile_image_url && !imageFile && (
+                    <img src={company.profile_image_url} alt="" className="mt-1 h-8 rounded-lg object-contain border border-gray-200" />
+                )}
+            </div>
+
+            <div className="pt-1">
+                <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1.5">
+                    Company Manager{' '}
+                    {!isEdit && <span className="text-gray-400 font-normal normal-case">(optional — can be added later)</span>}
+                </p>
+                {isEdit && mgrLoading && (
+                    <div className="flex items-center gap-2 py-2 text-xs text-gray-400">
+                        <Loader2 size={12} className="animate-spin" /> Loading manager info…
                     </div>
-                    <div>
-                        <label className={lCls}>{t?.company_logo_label || 'Logo (optional)'}</label>
-                        <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files?.[0] ?? null)}
-                            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-[#fdf4ff] file:text-[#714B67] hover:file:bg-[#714B67]/10 cursor-pointer" />
-                        {company?.profile_image_url && !imageFile && (
-                            <img src={company.profile_image_url} alt="" className="mt-2 h-10 rounded-lg object-contain border border-gray-200" />
-                        )}
+                )}
+                {isEdit && !mgrLoading && !managerUser && (
+                    <p className="text-xs text-gray-400 italic py-1">No company manager found for this company.</p>
+                )}
+                {(!isEdit || (!mgrLoading && managerUser)) && (
+                    <div className="space-y-2 bg-white/60 rounded-xl p-2.5 border border-[#714B67]/10">
+                        {[
+                            { label: 'Manager Name (EN)',                                             key: 'name_en',  type: 'text' },
+                            { label: 'Manager Name (HE)',                                             key: 'name_he',  type: 'text' },
+                            { label: 'Manager Name (TH)',                                             key: 'name_th',  type: 'text' },
+                            { label: 'Manager Email',                                                 key: 'email',    type: 'email' },
+                            { label: isEdit ? 'Password (blank = keep current)' : 'Manager Password', key: 'password', type: 'password' },
+                            { label: 'Manager Phone',                                                 key: 'phone',    type: 'text' },
+                            { label: 'Manager LINE ID',                                               key: 'line_id',  type: 'text' },
+                        ].map(({ label, key, type }) => (
+                            <div key={key}>
+                                <label className={labelCls}>{label}</label>
+                                <input type={type} className={inputCls} value={mgr[key]} onChange={e => setM(key, e.target.value)} />
+                            </div>
+                        ))}
                     </div>
-                </div>
+                )}
+            </div>
 
-                <div className="mt-5">
-                    <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-2">
-                        Company Manager{' '}
-                        {!isEdit && <span className="text-gray-400 font-normal normal-case">(optional — can be added later)</span>}
-                    </p>
-                    {isEdit && mgrLoading && (
-                        <div className="flex items-center gap-2 py-3 text-xs text-gray-400">
-                            <Loader2 size={12} className="animate-spin" /> Loading manager info…
-                        </div>
-                    )}
-                    {isEdit && !mgrLoading && !managerUser && (
-                        <p className="text-xs text-gray-400 italic py-2">No company manager found for this company.</p>
-                    )}
-                    {(!isEdit || (!mgrLoading && managerUser)) && (
-                        <div className="space-y-3 bg-slate-50 rounded-xl p-3 border border-gray-100">
-                            {[
-                                { label: 'Manager Name (EN)',                                        key: 'name_en',  type: 'text' },
-                                { label: 'Manager Name (HE)',                                        key: 'name_he',  type: 'text' },
-                                { label: 'Manager Name (TH)',                                        key: 'name_th',  type: 'text' },
-                                { label: 'Manager Email',                                            key: 'email',    type: 'email' },
-                                { label: isEdit ? 'Password (blank = keep current)' : 'Manager Password', key: 'password', type: 'password' },
-                                { label: 'Manager Phone',                                            key: 'phone',    type: 'text' },
-                                { label: 'Manager LINE ID',                                          key: 'line_id',  type: 'text' },
-                            ].map(({ label, key, type }) => (
-                                <div key={key}>
-                                    <label className={lCls}>{label}</label>
-                                    <input type={type} className={iCls} value={mgr[key]} onChange={e => setM(key, e.target.value)} />
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex gap-3 mt-5">
-                    <button onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition">
-                        {t?.cancel || 'Cancel'}
-                    </button>
-                    <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 bg-[#714B67] text-white rounded-xl font-bold hover:bg-[#5a3b52] transition disabled:opacity-60 flex items-center justify-center gap-2">
-                        {saving && <Loader2 size={14} className="animate-spin" />}
-                        {t?.save || 'Save'}
-                    </button>
-                </div>
+            <div className="flex gap-2 pt-1">
+                <button onClick={onClose} className={cancelBtnCls}>{t?.cancel || 'Cancel'}</button>
+                <button onClick={handleSave} disabled={saving} className={saveBtnCls}>
+                    {saving && <Loader2 size={10} className="animate-spin" />}
+                    {t?.save || 'Save'}
+                </button>
             </div>
         </div>
     );
@@ -1237,20 +1229,29 @@ const CompanyModal = ({ company, token, t, onClose, onSaved }) => {
 // ─── Main CompaniesTab ────────────────────────────────────────────────────────
 const CompaniesTab = ({ token, t, user, lang }) => {
     const [companies, setCompanies] = useState([]);
+    const [companyManagers, setCompanyManagers] = useState({}); // { company_id: userObj }
     const [loading, setLoading] = useState(true);
     const [selectedCompany, setSelectedCompany] = useState(null);
-    const [showModal, setShowModal] = useState(false);
-    const [editingCompany, setEditingCompany] = useState(null);
+    const [openPanel, setOpenPanel] = useState(null); // 'new-company' | 'edit-company:{id}'
     const [deleteConfirm, setDeleteConfirm] = useState(null);
 
     const fetchCompanies = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${BASE}/companies`, {
-                headers: { Authorization: `Bearer ${token}` },
+            const headers = { Authorization: `Bearer ${token}` };
+            const [companiesData, usersData] = await Promise.all([
+                fetch(`${BASE}/companies`, { headers }).then(r => r.json()).catch(() => []),
+                fetch(`${BASE}/users`, { headers }).then(r => r.json()).catch(() => []),
+            ]);
+            setCompanies(Array.isArray(companiesData) ? companiesData : []);
+            // Build map of company_id -> COMPANY_MANAGER for list display
+            const mgrs = {};
+            (Array.isArray(usersData) ? usersData : []).forEach(u => {
+                if (u?.role === 'COMPANY_MANAGER' && u?.company_id) {
+                    mgrs[u.company_id] = u;
+                }
             });
-            const data = await res.json();
-            setCompanies(Array.isArray(data) ? data : []);
+            setCompanyManagers(mgrs);
         } catch (e) {
             console.error('fetchCompanies error:', e);
             setCompanies([]);
@@ -1273,6 +1274,8 @@ const CompaniesTab = ({ token, t, user, lang }) => {
         setDeleteConfirm(null);
     };
 
+    const togglePanel = (key) => setOpenPanel(prev => prev === key ? null : key);
+
     if (selectedCompany) {
         return (
             <div className="p-4 pb-6">
@@ -1289,6 +1292,7 @@ const CompaniesTab = ({ token, t, user, lang }) => {
 
     return (
         <div className="p-4 pb-6 animate-fade-in">
+            {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div>
                     <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -1298,13 +1302,25 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                     <p className="text-xs text-gray-400 mt-0.5">{t?.companies_subtitle || 'Manage all your tenant companies'}</p>
                 </div>
                 <button
-                    onClick={() => { setEditingCompany(null); setShowModal(true); }}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-[#714B67] text-white rounded-xl text-sm font-bold hover:bg-[#5a3b52] transition active:scale-95 shadow-sm"
+                    onClick={() => togglePanel('new-company')}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold transition active:scale-95 shadow-sm ${openPanel === 'new-company' ? 'bg-[#5a3b52] text-white' : 'bg-[#714B67] text-white hover:bg-[#5a3b52]'}`}
                 >
                     <Plus size={16} />
                     {t?.create_company_btn || 'New Company'}
                 </button>
             </div>
+
+            {/* New Company inline accordion — expands below header */}
+            {openPanel === 'new-company' && (
+                <div className="mb-4 p-4 bg-[#fdf4ff]/80 border border-[#714B67]/20 rounded-2xl animate-fade-in">
+                    <InlineCompanyForm
+                        token={token}
+                        t={t}
+                        onClose={() => setOpenPanel(null)}
+                        onSaved={() => { fetchCompanies(); setOpenPanel(null); }}
+                    />
+                </div>
+            )}
 
             {loading ? (
                 <div className="flex items-center justify-center py-20">
@@ -1318,62 +1334,77 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {(companies ?? []).map(company => (
-                        <div
-                            key={company?.id}
-                            className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition overflow-hidden"
-                        >
-                            <button
-                                className="w-full flex items-center gap-3 p-4 text-left"
-                                onClick={() => setSelectedCompany(company)}
-                            >
-                                {company?.profile_image_url ? (
-                                    <img src={company.profile_image_url} alt="" className="w-12 h-12 rounded-xl object-cover border border-gray-100 shrink-0" />
-                                ) : (
-                                    <div className="w-12 h-12 rounded-xl bg-[#714B67]/10 flex items-center justify-center shrink-0">
-                                        <Building2 size={22} className="text-[#714B67]" />
+                    {(companies ?? []).map(company => {
+                        const manager = companyManagers[company?.id];
+                        const isEditOpen = openPanel === `edit-company:${company?.id}`;
+                        return (
+                            <div key={company?.id}>
+                                {/* Company card row */}
+                                <div className={`bg-white rounded-2xl border shadow-sm hover:shadow-md transition overflow-hidden ${isEditOpen ? 'border-[#714B67]/30' : 'border-gray-200'}`}>
+                                    <button
+                                        className="w-full flex items-center gap-3 p-4 text-left"
+                                        onClick={() => setSelectedCompany(company)}
+                                    >
+                                        {company?.profile_image_url ? (
+                                            <img src={company.profile_image_url} alt="" className="w-12 h-12 rounded-xl object-cover border border-gray-100 shrink-0" />
+                                        ) : (
+                                            <div className="w-12 h-12 rounded-xl bg-[#714B67]/10 flex items-center justify-center shrink-0">
+                                                <Building2 size={22} className="text-[#714B67]" />
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-slate-800 truncate">{company?.name}</p>
+                                            {manager ? (
+                                                <div className="mt-0.5">
+                                                    <p className="text-xs font-medium text-[#714B67] truncate">
+                                                        {manager.full_name_en || manager.full_name || '—'}
+                                                    </p>
+                                                    <p className="text-[11px] text-gray-400 truncate">{manager.email}</p>
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-gray-400 mt-0.5">{t?.company_id_label || 'ID'}: {company?.id}</p>
+                                            )}
+                                        </div>
+                                        <ChevronRight size={18} className="text-gray-300 shrink-0" />
+                                    </button>
+
+                                    <div className="flex border-t border-gray-100">
+                                        <button
+                                            onClick={e => { e.stopPropagation(); togglePanel(`edit-company:${company?.id}`); }}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition ${isEditOpen ? 'bg-[#714B67]/10 text-[#714B67]' : 'text-slate-500 hover:bg-slate-50'}`}
+                                        >
+                                            <Pencil size={13} />
+                                            {t?.edit_btn || 'Edit'}
+                                        </button>
+                                        <div className="w-px bg-gray-100" />
+                                        <button
+                                            onClick={() => setDeleteConfirm(company)}
+                                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-50 transition"
+                                        >
+                                            <Trash2 size={13} />
+                                            {t?.delete_btn || 'Delete'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Edit accordion — inline panel directly beneath the row */}
+                                {isEditOpen && (
+                                    <div className="mt-1 p-4 bg-[#fdf4ff]/80 border border-[#714B67]/20 rounded-2xl animate-fade-in">
+                                        <InlineCompanyForm
+                                            company={company}
+                                            token={token}
+                                            t={t}
+                                            onClose={() => setOpenPanel(null)}
+                                            onSaved={() => { fetchCompanies(); setOpenPanel(null); }}
+                                        />
                                     </div>
                                 )}
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-slate-800 truncate">{company?.name}</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">
-                                        {t?.company_id_label || 'ID'}: {company?.id}
-                                    </p>
-                                </div>
-                                <ChevronRight size={18} className="text-gray-300 shrink-0" />
-                            </button>
-
-                            <div className="flex border-t border-gray-100">
-                                <button
-                                    onClick={() => { setEditingCompany(company); setShowModal(true); }}
-                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-slate-500 hover:bg-slate-50 transition"
-                                >
-                                    <Pencil size={13} />
-                                    {t?.edit_btn || 'Edit'}
-                                </button>
-                                <div className="w-px bg-gray-100" />
-                                <button
-                                    onClick={() => setDeleteConfirm(company)}
-                                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-50 transition"
-                                >
-                                    <Trash2 size={13} />
-                                    {t?.delete_btn || 'Delete'}
-                                </button>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
-            {showModal && (
-                <CompanyModal
-                    company={editingCompany}
-                    token={token}
-                    t={t}
-                    onClose={() => { setShowModal(false); setEditingCompany(null); }}
-                    onSaved={fetchCompanies}
-                />
-            )}
             {deleteConfirm && (
                 <ConfirmDeleteModal
                     message={`${t?.confirm_delete_company || 'Delete company'} "${deleteConfirm?.name}"?`}
