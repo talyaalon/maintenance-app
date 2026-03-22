@@ -1496,39 +1496,38 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                                 {/* Company card row */}
                                 <div className={`bg-white rounded-2xl border shadow-sm hover:shadow-md transition overflow-hidden ${isEditOpen ? 'border-[#714B67]/30' : 'border-gray-200'}`}>
                                     <button
-                                        className="w-full flex items-center justify-between gap-3 p-4 text-left"
+                                        className="w-full flex items-center gap-3 p-4 text-left"
                                         onClick={() => setSelectedCompany(company)}
                                     >
-                                        {/* Left: Logo + Company Name */}
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            {company?.profile_image_url ? (
-                                                <img src={company.profile_image_url} alt="" className="w-12 h-12 rounded-xl object-cover border border-gray-100 shrink-0" />
-                                            ) : (
-                                                <div className="w-12 h-12 rounded-xl bg-[#714B67]/10 flex items-center justify-center shrink-0">
-                                                    <Building2 size={22} className="text-[#714B67]" />
-                                                </div>
-                                            )}
-                                            <p className="font-bold text-slate-800 truncate">{company?.name}</p>
-                                        </div>
+                                        {/* Logo / Avatar */}
+                                        {company?.profile_image_url ? (
+                                            <img src={company.profile_image_url} alt="" className="w-12 h-12 rounded-xl object-cover border border-gray-100 shrink-0" />
+                                        ) : (
+                                            <div className="w-12 h-12 rounded-xl bg-[#714B67]/10 flex items-center justify-center shrink-0">
+                                                <Building2 size={22} className="text-[#714B67]" />
+                                            </div>
+                                        )}
 
-                                        {/* Right: Manager Info + Chevron */}
-                                        <div className="flex items-center gap-3 shrink-0">
+                                        {/* Vertical text block */}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-slate-800 truncate">{company?.name}</p>
                                             {manager ? (
-                                                <div className="text-right">
-                                                    <p className="text-xs font-medium text-[#714B67]">
-                                                        <span className="text-slate-500 font-normal">{t?.manager_label || 'Manager'}:</span>{' '}
+                                                <>
+                                                    <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                                        <span className="font-semibold">{t?.manager_label || 'Manager'}:</span>{' '}
                                                         {manager.full_name_en || manager.full_name || '—'}
                                                     </p>
-                                                    <p className="text-[11px] text-gray-400">
-                                                        <span className="text-slate-400 font-normal">{t?.email_label || 'Email'}:</span>{' '}
+                                                    <p className="text-[11px] text-gray-400 truncate">
+                                                        <span className="font-semibold">{t?.email_label || 'Email'}:</span>{' '}
                                                         {manager.email}
                                                     </p>
-                                                </div>
+                                                </>
                                             ) : (
-                                                <p className="text-xs text-gray-400">{t?.company_id_label || 'ID'}: {company?.id}</p>
+                                                <p className="text-xs text-gray-400 mt-0.5">{t?.company_id_label || 'ID'}: {company?.id}</p>
                                             )}
-                                            <ChevronRight size={18} className="text-gray-300 shrink-0" />
                                         </div>
+
+                                        <ChevronRight size={18} className="text-gray-300 shrink-0" />
                                     </button>
 
                                     <div className="flex border-t border-gray-100">
