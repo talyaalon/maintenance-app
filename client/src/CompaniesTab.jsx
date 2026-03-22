@@ -841,16 +841,15 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
             </div>
 
             {/* Stats row — 'all' = show everything; string key = isolate that section */}
-            <div className="grid grid-cols-6 gap-2 mb-5">
+            <div className="flex overflow-x-auto gap-2 mb-5 pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {(() => {
                     const isActive = activeListView === 'all';
-                    const total = managers.length + employees.length + locations.length + categories.length + assets.length;
                     return (
                         <button
                             onClick={() => setActiveListView('all')}
-                            className={`rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
+                            className={`flex-none min-w-[100px] max-w-[100px] flex-shrink-0 rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
                         >
-                            <LayoutGrid size={32} className={`mx-auto mb-1 ${isActive ? 'text-white' : 'text-[#714B67]'}`} />
+                            <LayoutGrid size={16} className={`mx-auto mb-1 ${isActive ? 'text-white' : 'text-[#714B67]'}`} />
                             <p className={`text-[10px] font-medium leading-tight ${isActive ? 'text-white/80' : 'text-gray-400'}`}>All</p>
                         </button>
                     );
@@ -867,7 +866,7 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                         <button
                             key={key}
                             onClick={() => setActiveListView(key)}
-                            className={`rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
+                            className={`flex-none min-w-[100px] max-w-[100px] flex-shrink-0 rounded-xl border p-2.5 text-center transition-all ${isActive ? 'bg-[#714B67] border-[#714B67] shadow-md' : 'bg-white border-gray-200 hover:border-[#714B67]/40 hover:shadow-sm'}`}
                         >
                             <Icon size={16} className={`mx-auto mb-1 ${isActive ? 'text-white' : 'text-[#714B67]'}`} />
                             <p className={`text-lg font-bold ${isActive ? 'text-white' : 'text-slate-800'}`}>{count}</p>
