@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, Plus, ChevronRight, ChevronDown, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck } from 'lucide-react';
+import { Building2, Plus, ChevronRight, ChevronDown, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck, Send } from 'lucide-react';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -453,7 +453,7 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
 };
 
 // ─── Permission Accordion ─────────────────────────────────────────────────────
-const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t }) => (
+const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t, onSendReport, reportSending }) => (
     <div className="mt-2 pt-3 border-y border-slate-200 space-y-3 animate-fade-in bg-slate-50 shadow-inner rounded-b-xl -mx-4 px-4 pb-3">
         <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider">Permissions</p>
         <div>
@@ -493,6 +493,19 @@ const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t
                 </label>
             ))}
         </div>
+        {onSendReport && (
+            <div className="pt-1 border-t border-slate-200">
+                <button
+                    type="button"
+                    onClick={onSendReport}
+                    disabled={reportSending}
+                    className="w-full py-1.5 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold hover:bg-emerald-100 transition disabled:opacity-60 flex items-center justify-center gap-1.5"
+                >
+                    {reportSending ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+                    Send Daily Report
+                </button>
+            </div>
+        )}
         <div className="flex gap-2 pt-1">
             <button onClick={onClose} className={cancelBtnCls}>{t?.cancel || 'Cancel'}</button>
             <button onClick={onSave} disabled={saving} className={saveBtnCls}>
@@ -565,6 +578,9 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
     // Team assignment state (populated when team panel opens)
     const [assignedEmployeeIds, setAssignedEmployeeIds] = useState(new Set());
     const [teamSaving, setTeamSaving] = useState(false);
+
+    // Daily report sending state — tracks which user IDs are currently dispatching
+    const [reportSendingIds, setReportSendingIds] = useState(new Set());
 
     const cid = company?.id;
 
@@ -649,6 +665,20 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
             else { const d = await res.json().catch(() => ({})); alert(d?.error || 'Error saving team'); }
         } catch { alert('Server error'); }
         setTeamSaving(false);
+    };
+
+    const sendDailyReport = async (u) => {
+        setReportSendingIds(prev => new Set([...prev, u.id]));
+        try {
+            const res = await fetch(`${BASE}/api/send-daily-report/${u.id}`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const d = await res.json().catch(() => ({}));
+            if (res.ok) alert(`Daily report sent to ${userName(u)}`);
+            else alert(d?.error || 'Error sending report');
+        } catch { alert('Server error'); }
+        setReportSendingIds(prev => { const next = new Set(prev); next.delete(u.id); return next; });
     };
 
     const handleDelete = async () => {
@@ -779,6 +809,8 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     onClose={() => setOpenPanel(null)}
                                     saving={permSaving}
                                     t={t}
+                                    onSendReport={() => sendDailyReport(companyManager)}
+                                    reportSending={reportSendingIds.has(companyManager.id)}
                                 />
                             )}
                         </>
@@ -907,6 +939,8 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     onClose={() => setOpenPanel(null)}
                                     saving={permSaving}
                                     t={t}
+                                    onSendReport={() => sendDailyReport(u)}
+                                    reportSending={reportSendingIds.has(u.id)}
                                 />
                             )}
                             {openPanel === `team:${u.id}` && (
@@ -980,6 +1014,8 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     onClose={() => setOpenPanel(null)}
                                     saving={permSaving}
                                     t={t}
+                                    onSendReport={() => sendDailyReport(u)}
+                                    reportSending={reportSendingIds.has(u.id)}
                                 />
                             )}
                         </>

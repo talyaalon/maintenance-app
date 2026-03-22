@@ -2894,6 +2894,243 @@ app.post('/api/trigger-daily-reports', async (req, res) => {
     }
 });
 
+// ── Scoped daily report for a single user (all 3 channels simultaneously) ─────
+const sendScopedDailyReport = async (userId) => {
+    const dict = {
+        he: {
+            dir: 'rtl', align: 'right',
+            perf_subj: '🌟 אלופה! סיימת את כל המשימות',
+            pend_subj: '⚠️ דוח יומי: עליך להשלים משימות פתוחות',
+            none_subj: '🏖️ איזה כיף! אין לך משימות להיום',
+            w_perf_title: 'כל הכבוד סיימת הכל! 🎉', w_pend_title: 'לא סיימת את המשימות להיום! ⏰', w_none_title: 'אין לך משימות להיום! 🏖️',
+            w_perf_body: 'להלן הסיכום שלך להיום:', w_pend_body: 'פירוט המשימות שביצעת ואלו שעליך להשלים בדחיפות:', w_none_body: 'תהנה מהיום שלך, אין משימות פתוחות שמשויכות אליך.',
+            m_perf_subj: '🌟 סיכום יומי: כל הצוות סיים בהצטיינות!', m_pend_subj: '📊 סיכום יומי: יש משימות פתוחות בצוות', m_none_subj: '🏖️ סיכום יומי: לצוות אין משימות היום',
+            m_title: 'דוח ביצועי צוות יומי 📊', m_desc: 'להלן סטטוס המשימות של העובדים להיום.',
+            btn_app: 'לכניסה לאפליקציה לחץ כאן', th_task: 'משימה', th_status: 'סטטוס',
+            status_done: 'בוצע ✔️', status_not: 'לא בוצע ❌', status_none: 'ללא משימות היום 🏖️', out_of: 'מתוך',
+            push_w_perf_title: 'סיימת הכל! 🏆', push_w_perf_body: 'כל הכבוד! הסיכום היומי נשלח למייל.',
+            push_w_pend_title: 'יש משימות פתוחות! ⏰', push_w_pend_body: 'נותרו לך משימות להשלים.',
+            push_w_none_title: 'יום חופשי! 🏖️', push_w_none_body: 'אין לך משימות פתוחות להיום.',
+            push_m_perf_title: 'הצוות סיים הכל! 🏆', push_m_perf_body: 'כל העובדים סיימו את המשימות.',
+            push_m_pend_title: 'דוח יומי מוכן 📊', push_m_pend_body: 'לצוות שלך יש משימות פתוחות. הדוח נשלח למייל.',
+            push_m_none_title: 'אין משימות לצוות 🏖️', push_m_none_body: 'הצוות שלך סיים הכל להיום.'
+        },
+        en: {
+            dir: 'ltr', align: 'left',
+            perf_subj: '🌟 Awesome! All tasks completed', pend_subj: '⚠️ Daily Report: Pending tasks to complete', none_subj: '🏖️ Free day! No tasks for today',
+            w_perf_title: 'Great job, you finished everything! 🎉', w_pend_title: 'You have pending tasks today! ⏰', w_none_title: 'Enjoy, no tasks for today! 🏖️',
+            w_perf_body: 'Here is your summary for today:', w_pend_body: 'Details of your tasks and what needs urgent completion:', w_none_body: 'There are no tasks assigned to you today.',
+            m_perf_subj: '🌟 Daily Summary: Entire team excelled!', m_pend_subj: '📊 Daily Summary: Pending tasks in your team', m_none_subj: '🏖️ Daily Summary: Team has no tasks today',
+            m_title: 'Daily Team Performance 📊', m_desc: 'Here is the task status of your employees for today.',
+            btn_app: 'Click here to open the app', th_task: 'Task', th_status: 'Status',
+            status_done: 'Done ✔️', status_not: 'Pending ❌', status_none: 'No tasks today 🏖️', out_of: 'out of',
+            push_w_perf_title: 'All done! 🏆', push_w_perf_body: 'Great job! Daily summary sent to email.',
+            push_w_pend_title: 'Pending tasks! ⏰', push_w_pend_body: 'You have tasks left to complete.',
+            push_w_none_title: 'Free day! 🏖️', push_w_none_body: 'You have no tasks today.',
+            push_m_perf_title: 'Team finished! 🏆', push_m_perf_body: 'All employees completed their tasks.',
+            push_m_pend_title: 'Daily Report 📊', push_m_pend_body: 'Your team has pending tasks. Report sent to email.',
+            push_m_none_title: 'No team tasks 🏖️', push_m_none_body: 'Your team has no tasks today.'
+        },
+        th: {
+            dir: 'ltr', align: 'left',
+            perf_subj: '🌟 ยอดเยี่ยม! ทำภารกิจเสร็จสิ้นทั้งหมด', pend_subj: '⚠️ รายงานประจำวัน: มีภารกิจที่ต้องทำ', none_subj: '🏖️ วันว่าง! ไม่มีภารกิจสำหรับวันนี้',
+            w_perf_title: 'ทำได้ดีมาก คุณทำเสร็จหมดแล้ว! 🎉', w_pend_title: 'คุณมีภารกิจค้างอยู่สำหรับวันนี้! ⏰', w_none_title: 'วันนี้ไม่มีภารกิจ! 🏖️',
+            w_perf_body: 'นี่คือสรุปของคุณสำหรับวันนี้:', w_pend_body: 'รายละเอียดภารกิจและสิ่งที่ต้องทำด่วน:', w_none_body: 'วันนี้ไม่มีงานที่ได้รับมอบหมาย',
+            m_perf_subj: '🌟 สรุปประจำวัน: ทีมทำงานยอดเยี่ยม!', m_pend_subj: '📊 สรุปประจำวัน: มีภารกิจค้างในทีม', m_none_subj: '🏖️ สรุปประจำวัน: ทีมไม่มีภารกิจวันนี้',
+            m_title: 'ผลงานทีมประจำวัน 📊', m_desc: 'สถานะภารกิจของพนักงานสำหรับวันนี้.',
+            btn_app: 'คลิกที่นี่เพื่อเปิดแอป', th_task: 'งาน', th_status: 'สถานะ',
+            status_done: 'เสร็จ ✔️', status_not: 'รอดำเนินการ ❌', status_none: 'ไม่มีงาน 🏖️', out_of: 'จาก',
+            push_w_perf_title: 'เสร็จหมด! 🏆', push_w_perf_body: 'ยอดเยี่ยม! ส่งสรุปไปที่อีเมลแล้ว.',
+            push_w_pend_title: 'มีงานค้าง! ⏰', push_w_pend_body: 'คุณมีงานที่ต้องทำต่อ.',
+            push_w_none_title: 'วันว่าง! 🏖️', push_w_none_body: 'วันนี้ไม่มีภารกิจ',
+            push_m_perf_title: 'ทีมเสร็จงาน! 🏆', push_m_perf_body: 'พนักงานทุกคนทำงานเสร็จแล้ว.',
+            push_m_pend_title: 'รายงานประจำวัน 📊', push_m_pend_body: 'ทีมของคุณมีงานค้าง ส่งรายงานไปที่อีเมลแล้ว.',
+            push_m_none_title: 'ไม่มีงานทีม 🏖️', push_m_none_body: 'ทีมของคุณไม่มีงานวันนี้'
+        }
+    };
+
+    const getEmailTemplate = (langDict, content) => `
+    <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+    <body style="margin:0; padding:10px; background-color:#f4f4f5; font-family:Helvetica, Arial, sans-serif; -webkit-text-size-adjust:none;">
+        <div style="max-width:500px; margin:0 auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.05); direction:${langDict.dir}; text-align:${langDict.align};">
+            ${content}
+        </div>
+    </body></html>`;
+
+    // Fetch target user (include company_id for COMPANY_MANAGER scoping)
+    const userRes = await pool.query(
+        'SELECT id, full_name, email, role, parent_manager_id, company_id, device_token, preferred_language, line_user_id FROM users WHERE id = $1',
+        [userId]
+    );
+    if (!userRes.rows.length) throw new Error(`User ${userId} not found`);
+    const u = userRes.rows[0];
+    const l = dict[u.preferred_language] || dict['en'];
+
+    if (u.role === 'EMPLOYEE') {
+        // ── Individual employee report ──────────────────────────────────────────
+        const tasksRes = await pool.query(
+            'SELECT * FROM tasks WHERE worker_id = $1 AND DATE(due_date) = CURRENT_DATE',
+            [userId]
+        );
+        const wTasks    = tasksRes.rows;
+        const completed = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+        const pending   = wTasks.filter(t => t.status === 'PENDING');
+        const isNone    = wTasks.length === 0;
+        const isPerfect = !isNone && pending.length === 0;
+
+        let tableHtml = '';
+        if (!isNone) {
+            tableHtml = `<table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:13px;">
+                <tr style="background:#f3f4f6; text-align:${l.align};">
+                    <th style="padding:8px 6px; border-bottom:1px solid #e5e7eb;">${l.th_task}</th>
+                    <th style="padding:8px 6px; border-bottom:1px solid #e5e7eb;">${l.th_status}</th>
+                </tr>`;
+            wTasks.forEach(t => {
+                const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                tableHtml += `<tr>
+                    <td style="padding:8px 6px; border-bottom:1px solid #e5e7eb; color:#374151;">${t.title}</td>
+                    <td style="padding:8px 6px; border-bottom:1px solid #e5e7eb; font-size:11px;">
+                        <span style="background:${isDone ? '#dcfce7' : '#fee2e2'}; color:${isDone ? '#166534' : '#991b1b'}; padding:3px 6px; border-radius:12px; white-space:nowrap;">${isDone ? l.status_done : l.status_not}</span>
+                    </td></tr>`;
+            });
+            tableHtml += `</table>`;
+        }
+
+        const emailSubj  = isNone ? l.none_subj      : (isPerfect ? l.perf_subj      : l.pend_subj);
+        const bodyTitle  = isNone ? l.w_none_title    : (isPerfect ? l.w_perf_title   : l.w_pend_title);
+        const bodyText   = isNone ? l.w_none_body     : (isPerfect ? l.w_perf_body    : l.w_pend_body);
+        const titleColor = isNone ? '#3b82f6'         : (isPerfect ? '#166534'        : '#991b1b');
+        const pushTitle  = isNone ? l.push_w_none_title : (isPerfect ? l.push_w_perf_title : l.push_w_pend_title);
+        const pushBody   = isNone ? l.push_w_none_body  : (isPerfect ? l.push_w_perf_body  : l.push_w_pend_body);
+
+        const htmlBody = getEmailTemplate(l, `
+            <div style="padding:15px;">
+                <h3 style="margin:0 0 5px 0; font-size:16px; color:${titleColor};">${bodyTitle}</h3>
+                <p style="margin:0; font-size:13px; color:#4b5563;">${u.full_name}, ${bodyText}</p>
+                ${tableHtml}
+                <div style="text-align:center; margin-top:20px;">
+                    <a href="https://air-manage-app.netlify.app/" style="display:inline-block; background:#714B67; color:#fff; padding:10px 20px; text-decoration:none; border-radius:6px; font-size:14px; font-weight:bold;">${l.btn_app}</a>
+                </div>
+            </div>`);
+
+        let lineMsg = `${pushTitle}\n${pushBody}`;
+        if (!isNone) {
+            lineMsg += `\n\n--- ${l.th_task} ---`;
+            wTasks.forEach(t => {
+                const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                lineMsg += `\n• ${t.title}: ${isDone ? l.status_done : l.status_not}`;
+            });
+            lineMsg += `\n\n${completed.length} ${l.out_of} ${wTasks.length}`;
+        }
+
+        await Promise.all([
+            u.email        ? transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: u.email, subject: emailSubj, html: htmlBody }).catch(e => console.error('❌ [scoped] Email error:', e.message)) : Promise.resolve(),
+            u.line_user_id ? sendLineMessage(u.line_user_id, lineMsg).catch(e => console.error('❌ [scoped] LINE error:', e.message)) : Promise.resolve(),
+            u.device_token ? admin.messaging().send({ token: u.device_token, notification: { title: pushTitle, body: pushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.error('❌ [scoped] FCM error:', e.message)) : Promise.resolve(),
+        ]);
+
+    } else {
+        // ── MANAGER or COMPANY_MANAGER: team report ────────────────────────────
+        let empQueryText, empQueryParams;
+        if (u.role === 'MANAGER') {
+            empQueryText   = "SELECT id, full_name, email, device_token, preferred_language, line_user_id FROM users WHERE parent_manager_id = $1 AND role = 'EMPLOYEE'";
+            empQueryParams = [userId];
+        } else {
+            // COMPANY_MANAGER — summarise ALL employees in their company
+            empQueryText   = "SELECT id, full_name, email, device_token, preferred_language, line_user_id FROM users WHERE company_id = $1 AND role = 'EMPLOYEE'";
+            empQueryParams = [u.company_id];
+        }
+
+        const empsRes  = await pool.query(empQueryText, empQueryParams);
+        const teamEmps = empsRes.rows;
+        if (!teamEmps.length) { console.log(`ℹ️ No employees found for user ${userId}, skipping scoped report`); return; }
+
+        const empIds     = teamEmps.map(e => e.id);
+        const tasksRes   = await pool.query('SELECT * FROM tasks WHERE worker_id = ANY($1) AND DATE(due_date) = CURRENT_DATE', [empIds]);
+        const todayTasks = tasksRes.rows;
+
+        let allTeamPerfect = true;
+        let allTeamNone    = true;
+        let leaderContent  = `<div>`;
+
+        teamEmps.forEach(emp => {
+            const wTasks    = todayTasks.filter(t => t.worker_id === emp.id);
+            const completed = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+            const isEmpNone    = wTasks.length === 0;
+            const isEmpPerfect = !isEmpNone && (completed.length === wTasks.length);
+            if (!isEmpNone)                   allTeamNone    = false;
+            if (!isEmpPerfect && !isEmpNone)  allTeamPerfect = false;
+
+            const empStatusColor = isEmpNone ? '#6b7280' : (isEmpPerfect ? '#166534' : '#991b1b');
+            const empBgColor     = isEmpNone ? '#f9fafb' : (isEmpPerfect ? '#f0fdf4' : '#fef2f2');
+            const empIcon        = isEmpNone ? '🏖️' : (isEmpPerfect ? '🌟' : '⚠️');
+            const empBadge       = isEmpNone ? l.status_none : `${completed.length} ${l.out_of} ${wTasks.length}`;
+
+            leaderContent += `
+                <div style="margin-bottom:12px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden;">
+                    <div style="background:${empBgColor}; padding:8px 10px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold; font-size:14px; color:${empStatusColor};">${empIcon} ${emp.full_name}</span>
+                        <span style="font-size:11px; color:#6b7280; background:#fff; padding:2px 6px; border-radius:10px; border:1px solid #ddd;">${empBadge}</span>
+                    </div>`;
+            if (!isEmpNone) {
+                leaderContent += `<table style="width:100%; border-collapse:collapse; font-size:12px;">
+                    <tr style="background:#f9fafb; text-align:${l.align}; color:#4b5563;">
+                        <th style="padding:6px; border-bottom:1px solid #eee;">${l.th_task}</th>
+                        <th style="padding:6px; border-bottom:1px solid #eee;">${l.th_status}</th>
+                    </tr>`;
+                wTasks.forEach(t => {
+                    const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                    leaderContent += `<tr>
+                        <td style="padding:6px; border-bottom:1px solid #eee;">${t.title}</td>
+                        <td style="padding:6px; border-bottom:1px solid #eee;">
+                            <span style="background:${isDone ? '#dcfce7' : '#fee2e2'}; color:${isDone ? '#166534' : '#991b1b'}; padding:2px 4px; border-radius:4px; white-space:nowrap; font-size:10px;">${isDone ? l.status_done : l.status_not}</span>
+                        </td></tr>`;
+                });
+                leaderContent += `</table>`;
+            }
+            leaderContent += `</div>`;
+        });
+        leaderContent += `</div>`;
+
+        const htmlBody  = getEmailTemplate(l, leaderContent);
+        const emailSubj = allTeamNone ? l.m_none_subj      : (allTeamPerfect ? l.m_perf_subj      : l.m_pend_subj);
+        const pushTitle = allTeamNone ? l.push_m_none_title : (allTeamPerfect ? l.push_m_perf_title : l.push_m_pend_title);
+        const pushBody  = allTeamNone ? l.push_m_none_body  : (allTeamPerfect ? l.push_m_perf_body  : l.push_m_pend_body);
+
+        let lineReport = `${pushTitle}\n${pushBody}\n`;
+        teamEmps.forEach(emp => {
+            const empTasks = todayTasks.filter(t => t.worker_id === emp.id);
+            const empDone  = empTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+            const empIcon  = empTasks.length === 0 ? '🏖️' : (empDone.length === empTasks.length ? '🌟' : '⚠️');
+            lineReport += `\n${empIcon} ${emp.full_name} (${empDone.length}/${empTasks.length})`;
+            empTasks.forEach(t => {
+                const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                lineReport += `\n  • ${t.title}: ${isDone ? l.status_done : l.status_not}`;
+            });
+        });
+
+        await Promise.all([
+            u.email        ? transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: u.email, subject: emailSubj, html: htmlBody }).catch(e => console.error('❌ [scoped] Email error:', e.message)) : Promise.resolve(),
+            u.line_user_id ? sendLineMessage(u.line_user_id, lineReport).catch(e => console.error('❌ [scoped] LINE error:', e.message)) : Promise.resolve(),
+            u.device_token ? admin.messaging().send({ token: u.device_token, notification: { title: pushTitle, body: pushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.error('❌ [scoped] FCM error:', e.message)) : Promise.resolve(),
+        ]);
+    }
+    console.log(`✅ [scoped] Daily report dispatched for user ${userId} (${u.role})`);
+};
+
+// POST /api/send-daily-report/:userId — send scoped daily report to a specific user
+app.post('/api/send-daily-report/:userId', authenticateToken, async (req, res) => {
+    try {
+        const targetId = parseInt(req.params.userId, 10);
+        if (!targetId) return res.status(400).json({ error: 'Invalid userId' });
+        await sendScopedDailyReport(targetId);
+        res.json({ success: true, message: `Report dispatched for user ${targetId}.` });
+    } catch (err) {
+        console.error('❌ send-daily-report failed:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.get('/api/rescue-boss', async (req, res) => {
     try {
         const bossEmail = "talyaisrael2025@gmail.com"; 
