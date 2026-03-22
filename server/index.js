@@ -1132,7 +1132,9 @@ app.put('/users/:id/assign-employees', authenticateToken, async (req, res) => {
 // BIG_BOSS assigns employees (by ID) to a MANAGER or SUPERVISOR within the same company.
 app.put('/users/:id/assign-employees-to-manager', authenticateToken, async (req, res) => {
     try {
-        if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'Unauthorized' });
+        const isBigBoss = req.user.role === 'BIG_BOSS';
+        const isCompanyManager = req.user.role === 'COMPANY_MANAGER';
+        if (!isBigBoss && !isCompanyManager) return res.status(403).json({ error: 'Unauthorized' });
 
         const managerId = parseInt(req.params.id);
         if (isNaN(managerId)) return res.status(400).json({ error: 'Invalid ID' });
@@ -1143,6 +1145,15 @@ app.put('/users/:id/assign-employees-to-manager', authenticateToken, async (req,
         );
         if (mgrRes.rows.length === 0) return res.status(404).json({ error: 'Manager not found' });
         const mgr = mgrRes.rows[0];
+
+        // COMPANY_MANAGER: ensure the target manager belongs to their own company
+        if (isCompanyManager) {
+            const callerRes = await pool.query(`SELECT company_id FROM users WHERE id = $1`, [req.user.id]);
+            const callerCompanyId = callerRes.rows[0]?.company_id;
+            if (!callerCompanyId || mgr.company_id !== callerCompanyId) {
+                return res.status(403).json({ error: 'Unauthorized: manager belongs to a different company' });
+            }
+        }
 
         const rawIds = req.body.employeeIds;
         const employeeIds = Array.isArray(rawIds)
@@ -1157,6 +1168,8 @@ app.put('/users/:id/assign-employees-to-manager', authenticateToken, async (req,
         await pool.query(`DELETE FROM employee_managers WHERE manager_id = $1`, [managerId]);
 
         if (employeeIds.length > 0) {
+            // Always scope employee updates to the manager's company_id, which for COMPANY_MANAGER
+            // has already been verified to match their own company above.
             await pool.query(
                 `UPDATE users SET parent_manager_id = $1
                  WHERE id = ANY($2::int[]) AND role = 'EMPLOYEE' AND company_id = $3`,
