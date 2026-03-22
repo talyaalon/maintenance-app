@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload, Send, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload, Send, Loader2, Globe } from 'lucide-react';
 
 const ConfigurationTab = ({ token, t, user, lang }) => { 
   const [activeSubTab, setActiveSubTab] = useState(() => {
@@ -24,8 +24,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
   const [expandedCategories, setExpandedCategories] = useState([]);
 
   const [showTreeModal, setShowTreeModal] = useState(false);
-  const [treeNodeType, setTreeNodeType] = useState('category'); 
+  const [treeNodeType, setTreeNodeType] = useState('category');
+  const [showTreeAltLangs, setShowTreeAltLangs] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showLocAltLangs, setShowLocAltLangs] = useState(false);
   const [showFieldsSettingsModal, setShowFieldsSettingsModal] = useState(false);
 
   const [categoryForm, setCategoryForm] = useState({ id: null, name_he: '', name_en: '', name_th: '', code: '', created_by: null });
@@ -284,6 +286,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       else setAssetForm(item
         ? { id: item.id, name_he: item.name_he || '', name_en: item.name_en || item.name || '', name_th: item.name_th || '', category_id: item.category_id || '', location_id: item.location_id || '', code: item.code || '', created_by: targetManagerId }
         : { id: null, name_he: '', name_en: '', name_th: '', category_id: item?.category_id || '', location_id: '', code: '', created_by: targetManagerId });
+      setShowTreeAltLangs(!!(item?.name_he || item?.name_th));
       setShowTreeModal(true);
   };
 
@@ -361,6 +364,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           const fullImgUrl = loc.image_url && loc.image_url.startsWith('/') ? `https://maintenance-app-staging.onrender.com${loc.image_url}` : loc.image_url;
 
           setLocationForm({ id: loc.id, name_he: loc.name_he || '', name_en: loc.name_en || loc.name || '', name_th: loc.name_th || '', address: parsedMap, existing_image: loc.image_url || '', created_by: targetManagerId });
+          setShowLocAltLangs(!!(loc.name_he || loc.name_th));
           setLocationImagePreview(fullImgUrl);
 
           let vals = {};
@@ -372,6 +376,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
           setDynamicFiles({});
       } else {
           setLocationForm({ id: null, name_he: '', name_en: '', name_th: '', address: '', existing_image: '', created_by: targetManagerId });
+          setShowLocAltLangs(false);
           setLocationImagePreview(null);
           setDynamicValues({});
           setDynamicFiles({});
@@ -710,20 +715,44 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                       {treeNodeType === 'category' ? (
                           <>
                               <div className="space-y-2">
-                                  <label className="block text-sm font-bold text-gray-700">{t.category_name_label || 'שם הקטגוריה'}</label>
-                                  <input type="text" dir="rtl" placeholder="שם בעברית" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={categoryForm.name_he} onChange={e => setCategoryForm({...categoryForm, name_he: e.target.value})} />
+                                  <div className="flex items-center justify-between">
+                                      <label className="block text-sm font-bold text-gray-700">{t.category_name_label || 'שם הקטגוריה'}</label>
+                                      <button type="button" onClick={() => setShowTreeAltLangs(p => !p)}
+                                          className="flex items-center gap-0.5 text-xs font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
+                                          <Globe size={12} />
+                                          <span>{showTreeAltLangs ? 'Hide' : '+ HE / TH'}</span>
+                                          <ChevronDown size={12} className={`transition-transform duration-200 ${showTreeAltLangs ? 'rotate-180' : ''}`} />
+                                      </button>
+                                  </div>
                                   <input type="text" dir="ltr" placeholder="Name in English" required className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={categoryForm.name_en} onChange={e => setCategoryForm({...categoryForm, name_en: e.target.value})} />
-                                  <input type="text" dir="ltr" placeholder="ชื่อภาษาไทย" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={categoryForm.name_th} onChange={e => setCategoryForm({...categoryForm, name_th: e.target.value})} />
+                                  {showTreeAltLangs && (
+                                      <>
+                                          <input type="text" dir="rtl" placeholder="שם בעברית" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={categoryForm.name_he} onChange={e => setCategoryForm({...categoryForm, name_he: e.target.value})} />
+                                          <input type="text" dir="ltr" placeholder="ชื่อภาษาไทย" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={categoryForm.name_th} onChange={e => setCategoryForm({...categoryForm, name_th: e.target.value})} />
+                                      </>
+                                  )}
                               </div>
                               <div><label className="block text-sm font-bold text-gray-700 mb-1">{t.category_code_label || 'קוד זיהוי (3 אותיות)'}</label><input type="text" required maxLength="3" className="w-full p-3 border rounded-lg bg-gray-50 uppercase font-mono" value={categoryForm.code} onChange={e => setCategoryForm({...categoryForm, code: e.target.value.toUpperCase()})} /></div>
                           </>
                       ) : (
                           <>
                               <div className="space-y-2">
-                                  <label className="block text-sm font-bold text-gray-700">{t.asset_name_label || 'שם הנכס'}</label>
-                                  <input type="text" dir="rtl" placeholder="שם בעברית" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={assetForm.name_he} onChange={e => setAssetForm({...assetForm, name_he: e.target.value})} />
+                                  <div className="flex items-center justify-between">
+                                      <label className="block text-sm font-bold text-gray-700">{t.asset_name_label || 'שם הנכס'}</label>
+                                      <button type="button" onClick={() => setShowTreeAltLangs(p => !p)}
+                                          className="flex items-center gap-0.5 text-xs font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
+                                          <Globe size={12} />
+                                          <span>{showTreeAltLangs ? 'Hide' : '+ HE / TH'}</span>
+                                          <ChevronDown size={12} className={`transition-transform duration-200 ${showTreeAltLangs ? 'rotate-180' : ''}`} />
+                                      </button>
+                                  </div>
                                   <input type="text" dir="ltr" placeholder="Name in English" required className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={assetForm.name_en} onChange={e => setAssetForm({...assetForm, name_en: e.target.value})} />
-                                  <input type="text" dir="ltr" placeholder="ชื่อภาษาไทย" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={assetForm.name_th} onChange={e => setAssetForm({...assetForm, name_th: e.target.value})} />
+                                  {showTreeAltLangs && (
+                                      <>
+                                          <input type="text" dir="rtl" placeholder="שם בעברית" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={assetForm.name_he} onChange={e => setAssetForm({...assetForm, name_he: e.target.value})} />
+                                          <input type="text" dir="ltr" placeholder="ชื่อภาษาไทย" className="w-full p-3 border rounded-lg bg-gray-50 text-sm" value={assetForm.name_th} onChange={e => setAssetForm({...assetForm, name_th: e.target.value})} />
+                                      </>
+                                  )}
                               </div>
                               <div><label className="block text-sm font-bold text-gray-700 mb-1">קטגוריה</label><select required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.category_id} onChange={e => setAssetForm({...assetForm, category_id: e.target.value})}><option value="">בחר...</option>{categories.filter(c => c.created_by === assetForm.created_by).map(c => <option key={c.id} value={c.id}>{c['name_' + lang] || c.name_en || c.name}</option>)}</select></div>
                               <div><label className="block text-sm font-bold text-gray-700 mb-1">מיקום</label><select required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.location_id} onChange={e => setAssetForm({...assetForm, location_id: e.target.value})}><option value="">בחר...</option>{locations.filter(l => l.created_by === assetForm.created_by).map(l => <option key={l.id} value={l.id}>{l['name_' + lang] || l.name_en || l.name}</option>)}</select></div>
@@ -757,10 +786,22 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
                       {/* ── Multilingual names ── */}
                       <div className="space-y-2">
-                          <label className="block text-sm font-bold text-gray-700">{t.location_name_label || 'שם המיקום'} <span className="text-red-500">*</span></label>
-                          <input type="text" dir="rtl" placeholder="שם בעברית" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none text-sm" value={locationForm.name_he} onChange={e => setLocationForm({...locationForm, name_he: e.target.value})} />
+                          <div className="flex items-center justify-between">
+                              <label className="block text-sm font-bold text-gray-700">{t.location_name_label || 'שם המיקום'} <span className="text-red-500">*</span></label>
+                              <button type="button" onClick={() => setShowLocAltLangs(p => !p)}
+                                  className="flex items-center gap-0.5 text-xs font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
+                                  <Globe size={12} />
+                                  <span>{showLocAltLangs ? 'Hide' : '+ HE / TH'}</span>
+                                  <ChevronDown size={12} className={`transition-transform duration-200 ${showLocAltLangs ? 'rotate-180' : ''}`} />
+                              </button>
+                          </div>
                           <input type="text" dir="ltr" placeholder="Name in English" required className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none text-sm" value={locationForm.name_en} onChange={e => setLocationForm({...locationForm, name_en: e.target.value})} />
-                          <input type="text" dir="ltr" placeholder="ชื่อภาษาไทย" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none text-sm" value={locationForm.name_th} onChange={e => setLocationForm({...locationForm, name_th: e.target.value})} />
+                          {showLocAltLangs && (
+                              <>
+                                  <input type="text" dir="rtl" placeholder="שם בעברית" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none text-sm" value={locationForm.name_he} onChange={e => setLocationForm({...locationForm, name_he: e.target.value})} />
+                                  <input type="text" dir="ltr" placeholder="ชื่อภาษาไทย" className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-purple-200 outline-none text-sm" value={locationForm.name_th} onChange={e => setLocationForm({...locationForm, name_th: e.target.value})} />
+                              </>
+                          )}
                       </div>
 
                       {/* ── Address / Google Maps ── */}

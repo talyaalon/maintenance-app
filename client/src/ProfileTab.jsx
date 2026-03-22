@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Save, X, LogOut, Eye, EyeOff, Globe } from 'lucide-react'; 
+import { Camera, Save, X, LogOut, Eye, EyeOff, Globe, ChevronDown } from 'lucide-react';
 
 const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showAltLangs, setShowAltLangs] = useState(!!(user?.full_name_he || user?.full_name_th));
   
   const [formData, setFormData] = useState({
     full_name: user.name || user.full_name || '',
@@ -44,6 +45,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
           line_user_id:       src.line_user_id  || '',
       });
       setPreviewImage(src.profile_picture_url || null);
+      setShowAltLangs(!!(src.full_name_he || src.full_name_th));
   }, [user]);
 
   const handleImageChange = (e) => {
@@ -168,17 +170,19 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
       <form onSubmit={handleSave} className="w-full bg-white p-2 rounded-xl border border-gray-200 space-y-1">
         
         <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{t.full_name_label || 'Full Name'}</label>
+            <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">{t.full_name_label || 'Full Name'}</label>
+                <button
+                    type="button"
+                    onClick={() => setShowAltLangs(p => !p)}
+                    className="flex items-center gap-0.5 text-[10px] font-medium text-[#714B67]/60 hover:text-[#714B67] transition"
+                >
+                    <Globe size={11} />
+                    <span>{showAltLangs ? (t.hide || 'Hide') : '+ HE / TH'}</span>
+                    <ChevronDown size={11} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
+                </button>
+            </div>
             <div className="space-y-1.5">
-                <input
-                    type="text"
-                    dir="rtl"
-                    placeholder={t.name_he_placeholder || 'שם בעברית'}
-                    className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
-                    value={formData.full_name_he}
-                    onChange={e => setFormData({...formData, full_name_he: e.target.value})}
-                    disabled={!isEditing}
-                />
                 <input
                     type="text"
                     dir="ltr"
@@ -188,15 +192,28 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
                     onChange={e => setFormData({...formData, full_name_en: e.target.value})}
                     disabled={!isEditing}
                 />
-                <input
-                    type="text"
-                    dir="ltr"
-                    placeholder={t.name_th_placeholder || 'ชื่อภาษาไทย'}
-                    className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
-                    value={formData.full_name_th}
-                    onChange={e => setFormData({...formData, full_name_th: e.target.value})}
-                    disabled={!isEditing}
-                />
+                {showAltLangs && (
+                    <>
+                        <input
+                            type="text"
+                            dir="rtl"
+                            placeholder={t.name_he_placeholder || 'שם בעברית'}
+                            className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                            value={formData.full_name_he}
+                            onChange={e => setFormData({...formData, full_name_he: e.target.value})}
+                            disabled={!isEditing}
+                        />
+                        <input
+                            type="text"
+                            dir="ltr"
+                            placeholder={t.name_th_placeholder || 'ชื่อภาษาไทย'}
+                            className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                            value={formData.full_name_th}
+                            onChange={e => setFormData({...formData, full_name_th: e.target.value})}
+                            disabled={!isEditing}
+                        />
+                    </>
+                )}
             </div>
         </div>
 

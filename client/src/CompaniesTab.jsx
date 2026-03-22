@@ -778,7 +778,12 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     </div>
                                 )}
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-slate-800 truncate">{userName(companyManager)}</p>
+                                    <p className="text-sm font-semibold text-slate-800 truncate">
+                                        {userName(companyManager)}
+                                        {companyManager?.full_name_th && lang !== 'th' && (
+                                            <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{companyManager.full_name_th}</span>
+                                        )}
+                                    </p>
                                     <span className="inline-block text-[10px] font-bold text-[#714B67] bg-[#714B67]/10 px-1.5 py-0.5 rounded mt-0.5">
                                         Company Manager
                                     </span>
@@ -908,7 +913,12 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                         {(userName(u)[0] || '?').toUpperCase()}
                                     </div>
                                 )}
-                                <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
+                                <span className="flex-1 min-w-0 truncate">
+                                    {userName(u)}
+                                    {u?.full_name_th && lang !== 'th' && (
+                                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{u.full_name_th}</span>
+                                    )}
+                                </span>
                                 <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{u?.role}</span>
                                 <RowActions
                                     onEdit={() => togglePanel(`edit-user:${u.id}`)}
@@ -986,7 +996,12 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                         {(userName(u)[0] || '?').toUpperCase()}
                                     </div>
                                 )}
-                                <span className="flex-1 min-w-0 truncate">{userName(u)}</span>
+                                <span className="flex-1 min-w-0 truncate">
+                                    {userName(u)}
+                                    {u?.full_name_th && lang !== 'th' && (
+                                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{u.full_name_th}</span>
+                                    )}
+                                </span>
                                 <RowActions
                                     onEdit={() => togglePanel(`edit-user:${u.id}`)}
                                     editOpen={openPanel === `edit-user:${u.id}`}
@@ -1042,7 +1057,12 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     renderItem={l => (
                         <>
                             <div className="flex items-center gap-2">
-                                <span className="flex-1 min-w-0 truncate">{itemName(l)}</span>
+                                <span className="flex-1 min-w-0 truncate">
+                                    {itemName(l)}
+                                    {l?.name_th && lang !== 'th' && (
+                                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{l.name_th}</span>
+                                    )}
+                                </span>
                                 <RowActions
                                     onEdit={() => togglePanel(`edit-loc:${l.id}`)}
                                     editOpen={openPanel === `edit-loc:${l.id}`}
@@ -1083,7 +1103,12 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     renderItem={c => (
                         <>
                             <div className="flex items-center gap-2">
-                                <span className="flex-1 min-w-0 truncate">{itemName(c)}</span>
+                                <span className="flex-1 min-w-0 truncate">
+                                    {itemName(c)}
+                                    {c?.name_th && lang !== 'th' && (
+                                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{c.name_th}</span>
+                                    )}
+                                </span>
                                 {c?.code && <span className="text-xs text-gray-400 font-mono shrink-0">{c.code}</span>}
                                 <RowActions
                                     onEdit={() => togglePanel(`edit-cat:${c.id}`)}
@@ -1127,7 +1152,12 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     renderItem={a => (
                         <>
                             <div className="flex items-center gap-2">
-                                <span className="flex-1 min-w-0 truncate">{itemName(a)}</span>
+                                <span className="flex-1 min-w-0 truncate">
+                                    {itemName(a)}
+                                    {a?.name_th && lang !== 'th' && (
+                                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{a.name_th}</span>
+                                    )}
+                                </span>
                                 {a?.code && <span className="text-xs text-gray-400 font-mono shrink-0">{a.code}</span>}
                                 <RowActions
                                     onEdit={() => togglePanel(`edit-asset:${a.id}`)}
