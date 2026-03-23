@@ -225,25 +225,25 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
     const moveToAvailable = (field) => setSelectedFields(prev => prev.filter(f => f.id !== field.id));
 
     return (
-        <div className="border border-green-200 rounded-xl bg-white shadow-sm overflow-hidden mb-4 animate-fade-in">
+        <div className="border border-[#714B67]/30 rounded-xl bg-white shadow-sm overflow-hidden mb-4 animate-fade-in">
 
             {/* ── Panel header ── */}
-            <div className="flex items-center justify-between bg-green-50 border-b border-green-200 px-4 py-2.5 gap-3">
+            <div className="flex items-center justify-between bg-[#fdf4ff] border-b border-[#714B67]/20 px-4 py-2.5 gap-3">
                 <div className="flex items-center gap-2 shrink-0">
-                    <FileSpreadsheet size={15} className="text-green-700" />
-                    <span className="text-xs font-bold text-green-800">{sectionLabel} — Excel</span>
+                    <FileSpreadsheet size={15} className="text-[#714B67]" />
+                    <span className="text-xs font-bold text-[#714B67]">{sectionLabel} — Excel</span>
                 </div>
 
-                <div className="flex bg-white border border-green-200 p-0.5 rounded-lg">
+                <div className="flex bg-white border border-[#714B67]/20 p-0.5 rounded-lg">
                     <button
                         onClick={() => setActiveTab('import')}
-                        className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'import' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'import' ? 'bg-[#714B67] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         {t?.import_update_tab || 'ייבוא / עדכון'}
                     </button>
                     <button
                         onClick={() => setActiveTab('export')}
-                        className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'export' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'export' ? 'bg-[#714B67] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         {t?.export_data_tab || 'ייצוא נתונים'}
                     </button>
@@ -334,7 +334,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                             <button
                                 onClick={handleImport}
                                 disabled={validationStatus !== 'valid' || isLoading}
-                                className="bg-green-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-green-700 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                                className="bg-[#714B67] text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-[#5a3b52] transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                             >
                                 {isLoading && validationStatus === 'valid' ? <Loader2 size={12} className="animate-spin" /> : null}
                                 {t?.upload_approved_btn || '2. העלה נתונים'}
@@ -415,7 +415,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                         <button
                             onClick={handleExport}
                             disabled={selectedFields.length === 0 || isLoading}
-                            className="bg-green-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-green-700 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                            className="bg-[#714B67] text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-[#5a3b52] transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                         >
                             {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
                             {t?.export_data || 'ייצוא נתונים'}
