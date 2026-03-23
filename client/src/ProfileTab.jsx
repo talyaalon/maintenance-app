@@ -157,7 +157,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
           )}
         </div>
         <h2 className="text-xl font-bold text-slate-900 mb-1">{formData.full_name || user.name}</h2>
-        <span className="bg-purple-100 text-purple-800 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
+        <span className="bg-[#ede8f0] text-[#4d2d5a] text-xs font-semibold px-3 py-1 rounded-md uppercase tracking-widest">
           {user?.role || 'User'}
         </span>
       </div>

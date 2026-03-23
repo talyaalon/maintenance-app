@@ -228,7 +228,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
         <div className="border border-[#714B67]/30 rounded-xl bg-white shadow-sm overflow-hidden mb-4 animate-fade-in">
 
             {/* ── Panel header ── */}
-            <div className="flex items-center justify-between bg-[#fdf4ff] border-b border-[#714B67]/20 px-4 py-2.5 gap-3">
+            <div className="flex items-center justify-between bg-white border-b border-gray-200 px-4 py-2.5 gap-3">
                 <div className="flex items-center gap-2 shrink-0">
                     <FileSpreadsheet size={15} className="text-[#714B67]" />
                     <span className="text-xs font-bold text-[#714B67]">{sectionLabel} — Excel</span>
@@ -280,7 +280,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                     </div>
 
                     {/* Template download */}
-                    <div className="flex justify-between items-center bg-[#fdf4ff] p-3 rounded-lg border border-[#714B67]/20">
+                    <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
                         <span className="text-xs text-[#714B67] font-medium">
                             ✨ {t?.template_download_hint || 'הורד תבנית Excel מותאמת אישית'}
                         </span>
@@ -294,7 +294,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
 
                     {/* Validation result — valid */}
                     {validationStatus === 'valid' && importResult && (
-                        <div className="bg-[#fdf4ff] border border-[#714B67]/20 p-2.5 rounded text-[#714B67] text-xs font-medium flex items-center gap-1.5">
+                        <div className="bg-green-50 border border-green-200 p-2.5 rounded text-green-700 text-xs font-medium flex items-center gap-1.5">
                             <CheckCircle size={14} />
                             {t?.file_valid_title || 'הקובץ תקין'} — {importResult.validCount} {t?.rows_ready || 'שורות מוכנות'}
                         </div>

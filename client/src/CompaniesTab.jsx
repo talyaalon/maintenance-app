@@ -24,7 +24,7 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
 );
 
 // ─── Section card with optional Add button + addPanel slot ────────────────────
-const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, addPanel, headerExtras }) => (
+const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, addPanel, headerExtras, excelPanel }) => (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-slate-50">
             <Icon size={16} className="text-[#714B67]" />
@@ -42,6 +42,9 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, 
                 </button>
             )}
         </div>
+        {excelPanel && (
+            <div className="px-3 py-2 border-b border-gray-100 bg-white">{excelPanel}</div>
+        )}
         <div className="divide-y divide-gray-100">
             {(items ?? []).length === 0 && !addPanel ? (
                 <p className="px-4 py-3 text-xs text-gray-400 italic">{emptyLabel}</p>
@@ -860,6 +863,9 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                             <FileSpreadsheet size={13} />
                         </button>
                     )}
+                    excelPanel={canUseExcel && openExcelSection === 'managers' && (
+                        <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                    )}
                     addPanel={openPanel === 'add-user-manager' ? (
                         <InlineUserForm
                             role="MANAGER"
@@ -952,10 +958,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </>
                     )}
                 />}
-                {(activeListView === 'all' || activeListView === 'managers') && openExcelSection === 'managers' && (
-                    <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
-                )}
-
                 {/* ── Employees ── */}
                 {(activeListView === 'all' || activeListView === 'employees') && <SectionCard
                     icon={Users}
@@ -971,6 +973,9 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         >
                             <FileSpreadsheet size={13} />
                         </button>
+                    )}
+                    excelPanel={canUseExcel && openExcelSection === 'employees' && (
+                        <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
                     )}
                     addPanel={openPanel === 'add-user-employee' ? (
                         <InlineUserForm
@@ -1049,10 +1054,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </>
                     )}
                 />}
-                {(activeListView === 'all' || activeListView === 'employees') && openExcelSection === 'employees' && (
-                    <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
-                )}
-
                 {/* ── Locations ── */}
                 {(activeListView === 'all' || activeListView === 'locations') && <SectionCard
                     icon={MapPin}
@@ -1068,6 +1069,9 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         >
                             <FileSpreadsheet size={13} />
                         </button>
+                    )}
+                    excelPanel={canUseExcel && openExcelSection === 'locations' && (
+                        <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
                     )}
                     addPanel={openPanel === 'add-loc' ? (
                         <InlineLocationForm
@@ -1109,10 +1113,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </>
                     )}
                 />}
-                {(activeListView === 'all' || activeListView === 'locations') && openExcelSection === 'locations' && (
-                    <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
-                )}
-
                 {/* ── Categories ── */}
                 {(activeListView === 'all' || activeListView === 'categories') && <SectionCard
                     icon={Tag}
@@ -1128,6 +1128,9 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         >
                             <FileSpreadsheet size={13} />
                         </button>
+                    )}
+                    excelPanel={canUseExcel && openExcelSection === 'categories' && (
+                        <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
                     )}
                     addPanel={openPanel === 'add-cat' ? (
                         <InlineCategoryForm
@@ -1170,10 +1173,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </>
                     )}
                 />}
-                {(activeListView === 'all' || activeListView === 'categories') && openExcelSection === 'categories' && (
-                    <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
-                )}
-
                 {/* ── Assets ── */}
                 {(activeListView === 'all' || activeListView === 'assets') && <SectionCard
                     icon={Box}
@@ -1189,6 +1188,9 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         >
                             <FileSpreadsheet size={13} />
                         </button>
+                    )}
+                    excelPanel={canUseExcel && openExcelSection === 'assets' && (
+                        <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
                     )}
                     addPanel={openPanel === 'add-asset' ? (
                         <InlineAssetForm
@@ -1235,9 +1237,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </>
                     )}
                 />}
-                {(activeListView === 'all' || activeListView === 'assets') && openExcelSection === 'assets' && (
-                    <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
-                )}
             </div>
 
             {/* Delete confirmation modal (kept as modal — just a confirmation, not an edit form) */}
