@@ -753,14 +753,15 @@ app.get('/users', authenticateToken, async (req, res) => {
             query += ` WHERE u.id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $1) AND u.role = 'EMPLOYEE'`;
             params.push(req.query.manager_id);
         } else if (req.user.role === 'MANAGER') {
-            if (req.query.teamOnly === 'true') {
-                // Return only employees directly assigned to this manager via M:M junction table
+            if (req.query.manager_id || req.query.teamOnly === 'true') {
+                // Strict M:M filter — only employees with an active row in the junction table.
+                // Legacy parent_manager_id is intentionally ignored here.
                 query += ` WHERE u.id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $1) AND u.role = 'EMPLOYEE'`;
             } else {
                 // AreaManager sees all users sharing their area (area_id = their own id)
                 query += ` WHERE u.area_id = $1`;
             }
-            params.push(req.user.id);
+            params.push(req.user.id); // always use the authenticated user's ID, never the query param
         } else if (req.user.role === 'COMPANY_MANAGER') {
             // Prefer company_id scoping (multi-tenant safe); fall back to area_id for legacy data
             // COMPANY_MANAGER has full admin access to ALL users (MANAGER, COMPANY_MANAGER, EMPLOYEE)
