@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
@@ -83,13 +83,59 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const [filterAssignee, setFilterAssignee] = useState('');
   const isTeamView = Array.isArray(subordinates);
 
+  // ── API-fetched filter options (role-scoped) ─────────────────────────────
+  const [apiLocations,  setApiLocations]  = useState([]);
+  const [apiCategories, setApiCategories] = useState([]);
+  const [apiEmployees,  setApiEmployees]  = useState([]);
+
+  const BASE = 'https://maintenance-app-staging.onrender.com';
+
+  useEffect(() => {
+    if (!token || !user?.id) return;
+    const h = { Authorization: `Bearer ${token}` };
+
+    fetch(`${BASE}/locations`,  { headers: h })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setApiLocations(Array.isArray(d) ? d : []))
+      .catch(() => {});
+
+    fetch(`${BASE}/categories`, { headers: h })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setApiCategories(Array.isArray(d) ? d : []))
+      .catch(() => {});
+
+    // EMPLOYEE sees no assignee filter — skip the extra request
+    if (user.role !== 'EMPLOYEE') {
+      // MANAGER: only their M:M-assigned employees
+      const empUrl = user.role === 'MANAGER'
+        ? `${BASE}/users?manager_id=${user.id}`
+        : `${BASE}/users`;
+      fetch(empUrl, { headers: h })
+        .then(r => r.ok ? r.json() : [])
+        .then(d => {
+          const arr = Array.isArray(d) ? d : [];
+          setApiEmployees(arr.filter(u => u.role === 'EMPLOYEE'));
+        })
+        .catch(() => {});
+    }
+  }, [token, user?.id, user?.role]);
+
+  // Localized name helpers
+  const localName = (item) => {
+    if (!item) return '';
+    if (lang === 'he') return item.name_he || item.name_en || item.name || '';
+    if (lang === 'th') return item.name_th || item.name_en || item.name || '';
+    return item.name_en || item.name || '';
+  };
+  const localEmpName = (emp) => {
+    if (!emp) return '';
+    if (lang === 'he') return emp.full_name_he || emp.full_name_en || emp.full_name || '';
+    if (lang === 'th') return emp.full_name_th || emp.full_name_en || emp.full_name || '';
+    return emp.full_name_en || emp.full_name || '';
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   const showAssigneeFilter = ['BIG_BOSS', 'COMPANY_MANAGER', 'MANAGER'].includes(user.role);
-  const uniqueLocations = [...new Set(tasks.filter(tk => tk.location_name).map(tk => tk.location_name))].sort();
-  const uniqueCategories = [...new Set(tasks.filter(tk => tk.category_name).map(tk => tk.category_name))].sort();
-  const uniqueAssignees = [...new Map(
-      tasks.filter(tk => tk.worker_id && tk.worker_name)
-           .map(tk => [String(tk.worker_id), { id: tk.worker_id, name: tk.worker_name }])
-  ).values()].sort((a, b) => a.name.localeCompare(b.name));
   const hasActiveFilters = !!(filterPriority || filterLocation || filterCategory || filterAssignee);
 
   const todayBkk = getBkkDateObj(new Date());
@@ -118,11 +164,11 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       );
   };
 
-  // Attribute filter helper — applied on top of search
+  // Attribute filter helper — location/category compared by ID for accuracy
   const applyFilters = (list) => list.filter(tk => {
       if (filterPriority && tk.urgency !== filterPriority) return false;
-      if (filterLocation && tk.location_name !== filterLocation) return false;
-      if (filterCategory && tk.category_name !== filterCategory) return false;
+      if (filterLocation && String(tk.location_id) !== String(filterLocation)) return false;
+      if (filterCategory && String(tk.category_id) !== String(filterCategory)) return false;
       if (filterAssignee && String(tk.worker_id) !== String(filterAssignee)) return false;
       return true;
   });
@@ -324,39 +370,39 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                   <option value="Normal">{t.urgency_normal || 'Normal'}</option>
               </select>
 
-              {/* Location */}
-              {uniqueLocations.length > 0 && (
+              {/* Location — API-fetched, company_id scoped per role */}
+              {apiLocations.length > 0 && (
                   <select
                       value={filterLocation}
                       onChange={e => setFilterLocation(e.target.value)}
                       className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterLocation ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
                   >
                       <option value="">{t.location || 'Location'}</option>
-                      {uniqueLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                      {apiLocations.map(loc => <option key={loc.id} value={loc.id}>{localName(loc)}</option>)}
                   </select>
               )}
 
-              {/* Category */}
-              {uniqueCategories.length > 0 && (
+              {/* Category — API-fetched, company_id scoped per role */}
+              {apiCategories.length > 0 && (
                   <select
                       value={filterCategory}
                       onChange={e => setFilterCategory(e.target.value)}
                       className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterCategory ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
                   >
                       <option value="">{t.category_label || 'Category'}</option>
-                      {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      {apiCategories.map(cat => <option key={cat.id} value={cat.id}>{localName(cat)}</option>)}
                   </select>
               )}
 
-              {/* Assignee — managers and above only */}
-              {showAssigneeFilter && uniqueAssignees.length > 0 && (
+              {/* Assignee — hidden for EMPLOYEE; MANAGER sees only their M:M employees */}
+              {showAssigneeFilter && apiEmployees.length > 0 && (
                   <select
                       value={filterAssignee}
                       onChange={e => setFilterAssignee(e.target.value)}
                       className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterAssignee ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
                   >
                       <option value="">{t.assigned_to || 'Assignee'}</option>
-                      {uniqueAssignees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                      {apiEmployees.map(emp => <option key={emp.id} value={emp.id}>{localEmpName(emp)}</option>)}
                   </select>
               )}
 

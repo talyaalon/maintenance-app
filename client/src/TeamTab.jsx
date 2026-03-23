@@ -82,7 +82,9 @@ const TeamTab = ({ token, t, user, lang }) => {
     // All managers/supervisors visible to the viewer (for parent dropdown)
     const activeManagers = (Array.isArray(team) ? team : []).filter(u => u?.role === 'MANAGER' || u?.role === 'BIG_BOSS' || u?.role === 'COMPANY_MANAGER');
 
-    useEffect(() => { fetchTeam(); }, []);
+    // Re-fetch whenever the authenticated user's identity changes so that a MANAGER
+    // always receives the correctly scoped ?manager_id=… URL from the first real render.
+    useEffect(() => { if (user?.id) fetchTeam(); }, [user?.id]);
 
     const fetchTeam = async () => {
         setIsLoadingTeam(true);

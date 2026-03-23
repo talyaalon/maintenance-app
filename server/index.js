@@ -753,15 +753,10 @@ app.get('/users', authenticateToken, async (req, res) => {
             query += ` WHERE u.id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $1) AND u.role = 'EMPLOYEE'`;
             params.push(req.query.manager_id);
         } else if (req.user.role === 'MANAGER') {
-            if (req.query.manager_id || req.query.teamOnly === 'true') {
-                // Strict M:M filter — only employees with an active row in the junction table.
-                // Legacy parent_manager_id is intentionally ignored here.
-                query += ` WHERE u.id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $1) AND u.role = 'EMPLOYEE'`;
-            } else {
-                // AreaManager sees all users sharing their area (area_id = their own id)
-                query += ` WHERE u.area_id = $1`;
-            }
-            params.push(req.user.id); // always use the authenticated user's ID, never the query param
+            // Always strict M:M — no area_id fallback. A MANAGER sees only employees
+            // explicitly linked to them in the employee_managers junction table.
+            query += ` WHERE u.id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $1) AND u.role = 'EMPLOYEE'`;
+            params.push(req.user.id); // always the authenticated user's ID, never the query param
         } else if (req.user.role === 'COMPANY_MANAGER') {
             // Prefer company_id scoping (multi-tenant safe); fall back to area_id for legacy data
             // COMPANY_MANAGER has full admin access to ALL users (MANAGER, COMPANY_MANAGER, EMPLOYEE)
@@ -1529,11 +1524,17 @@ app.get('/locations', authenticateToken, async (req, res) => {
                 }
             }
         } else {
-            // MANAGER, EMPLOYEE: restrict to their area
-            const areaId = getEffectiveAreaId(req.user);
-            if (areaId) {
-                query += ` WHERE (locations.area_id = $1 OR locations.area_id IS NULL)`;
-                params.push(areaId);
+            // MANAGER, EMPLOYEE: scope strictly to their company_id; area_id fallback only when company_id is unset
+            const companyId = req.user.company_id ?? null;
+            if (companyId) {
+                query += ` WHERE locations.company_id = $1`;
+                params.push(companyId);
+            } else {
+                const areaId = getEffectiveAreaId(req.user);
+                if (areaId) {
+                    query += ` WHERE (locations.area_id = $1 OR locations.area_id IS NULL)`;
+                    params.push(areaId);
+                }
             }
         }
         query += ` ORDER BY locations.name ASC`;
@@ -1672,10 +1673,17 @@ app.get('/categories', authenticateToken, async (req, res) => {
                 }
             }
         } else {
-            const areaId = getEffectiveAreaId(req.user);
-            if (areaId) {
-                query += ` WHERE (categories.area_id = $1 OR categories.area_id IS NULL)`;
-                params.push(areaId);
+            // MANAGER, EMPLOYEE: scope strictly to their company_id; area_id fallback only when company_id is unset
+            const companyId = req.user.company_id ?? null;
+            if (companyId) {
+                query += ` WHERE categories.company_id = $1`;
+                params.push(companyId);
+            } else {
+                const areaId = getEffectiveAreaId(req.user);
+                if (areaId) {
+                    query += ` WHERE (categories.area_id = $1 OR categories.area_id IS NULL)`;
+                    params.push(areaId);
+                }
             }
         }
         query += ` ORDER BY categories.name`;
@@ -1772,10 +1780,17 @@ app.get('/assets', authenticateToken, async (req, res) => {
                 }
             }
         } else {
-            const areaId = getEffectiveAreaId(req.user);
-            if (areaId) {
-                query += ` WHERE (assets.area_id = $1 OR assets.area_id IS NULL)`;
-                params.push(areaId);
+            // MANAGER, EMPLOYEE: scope strictly to their company_id; area_id fallback only when company_id is unset
+            const companyId = req.user.company_id ?? null;
+            if (companyId) {
+                query += ` WHERE assets.company_id = $1`;
+                params.push(companyId);
+            } else {
+                const areaId = getEffectiveAreaId(req.user);
+                if (areaId) {
+                    query += ` WHERE (assets.area_id = $1 OR assets.area_id IS NULL)`;
+                    params.push(areaId);
+                }
             }
         }
         query += ` ORDER BY assets.code`;
