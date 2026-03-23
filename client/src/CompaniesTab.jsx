@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Building2, Plus, ChevronRight, ChevronDown, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck, Send } from 'lucide-react';
-import ScopedTasksPanel from './ScopedTasksPanel';
+import ScopedTasksModal from './ScopedTasksModal';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -630,14 +630,24 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
         });
     };
 
-    const openTeamPanel = (u) => {
+    const openTeamPanel = async (u) => {
         const key = `team:${u.id}`;
         if (openPanel === key) { setOpenPanel(null); return; }
         setOpenPanel(key);
-        const preSelected = new Set(
-            (users ?? []).filter(e => e.role === 'EMPLOYEE' && e.parent_manager_id === u.id).map(e => e.id)
-        );
-        setAssignedEmployeeIds(preSelected);
+        // Fetch current M:M assignments from the junction table (source of truth).
+        // Falling back to parent_manager_id would miss employees assigned via M:M
+        // to multiple managers, causing a silent wipe on next save.
+        try {
+            const r = await fetch(`${BASE}/users?manager_id=${u.id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const assigned = await r.json().catch(() => []);
+            setAssignedEmployeeIds(new Set(Array.isArray(assigned) ? assigned.map(e => e.id) : []));
+        } catch {
+            setAssignedEmployeeIds(new Set(
+                (users ?? []).filter(e => e.role === 'EMPLOYEE' && e.parent_manager_id === u.id).map(e => e.id)
+            ));
+        }
     };
 
     const savePermissions = async (u) => {
@@ -970,13 +980,13 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                 />
                             )}
                             {openPanel === `tasks:${u.id}` && (
-                                <ScopedTasksPanel
+                                <ScopedTasksModal
                                     scopedUser={u}
                                     scopedUserRole={u?.role === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE'}
-                                    currentUser={{ company_id: cid }}
                                     token={token}
                                     lang={lang}
                                     t={t}
+                                    onClose={() => setOpenPanel(null)}
                                 />
                             )}
                         </>
@@ -1053,13 +1063,13 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                 />
                             )}
                             {openPanel === `tasks:${u.id}` && (
-                                <ScopedTasksPanel
+                                <ScopedTasksModal
                                     scopedUser={u}
                                     scopedUserRole="EMPLOYEE"
-                                    currentUser={{ company_id: cid }}
                                     token={token}
                                     lang={lang}
                                     t={t}
+                                    onClose={() => setOpenPanel(null)}
                                 />
                             )}
                         </>
