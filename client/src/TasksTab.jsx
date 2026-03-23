@@ -181,10 +181,16 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   };
 
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
-  const hideWaitingTab = user.role === 'MANAGER'
-      ? !!user.auto_approve_tasks
-      : !!user.manager_auto_approve_tasks;
+  // Only hide the Waiting Approval tab for MANAGERs who have auto-approve enabled.
+  // EMPLOYEEs (and all other roles) always see the tab — data scoping handles what they see.
+  const hideWaitingTab = user.role === 'MANAGER' && !!user.auto_approve_tasks;
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
+
+  // Filtered counts — tab badges reflect the currently active search/filter state
+  const filteredOverdueCount   = applyFilters(applySearch(overdueTasks)).length;
+  const filteredTodayCount     = applyFilters(applySearch(todayTasks)).length;
+  const filteredWaitingCount   = applyFilters(applySearch(waitingTasks)).length;
+  const filteredCompletedCount = applyFilters(applySearch(completedTasks)).length;
   const calendarTasks = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), selectedDate)));
 
   const renderOverdueView = () => {
@@ -422,10 +428,10 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} scopedCompanyId={scopedCompanyId} />}
 
       <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 mb-5 mx-auto max-w-3xl">
-          <TabButton active={mainTab === 'overdue'} onClick={() => setMainTab('overdue')} label={t.tab_overdue || 'Overdue'} icon={<AlertTriangle size={18}/>} count={overdueTasks.length} color="red" />
-          <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={todayTasks.length} color="purple" />
-          {!hideWaitingTab && <TabButton active={mainTab === 'waiting'} onClick={() => setMainTab('waiting')} label={t.tab_waiting} icon={<AlertCircle size={18}/>} count={waitingTasks.length} color="orange" />}
-          <TabButton active={mainTab === 'completed'} onClick={() => setMainTab('completed')} label={t.tab_completed} icon={<CheckCircle size={18}/>} count={completedTasks.length} color="green" />
+          <TabButton active={mainTab === 'overdue'} onClick={() => setMainTab('overdue')} label={t.tab_overdue || 'Overdue'} icon={<AlertTriangle size={18}/>} count={filteredOverdueCount} color="red" />
+          <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={filteredTodayCount} color="purple" />
+          {!hideWaitingTab && <TabButton active={mainTab === 'waiting'} onClick={() => setMainTab('waiting')} label={t.tab_waiting} icon={<AlertCircle size={18}/>} count={filteredWaitingCount} color="orange" />}
+          <TabButton active={mainTab === 'completed'} onClick={() => setMainTab('completed')} label={t.tab_completed} icon={<CheckCircle size={18}/>} count={filteredCompletedCount} color="green" />
       </div>
 
       {mainTab === 'todo' && (

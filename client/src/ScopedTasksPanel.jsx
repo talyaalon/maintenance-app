@@ -166,95 +166,97 @@ const ScopedTasksPanel = ({ scopedUser, scopedUserRole, currentUser, token, lang
                 </button>
             </div>
 
-            {/* ── Create task mini-form ────────────────────────────────────── */}
+            {/* ── Create task overlay modal ────────────────────────────────── */}
             {showCreate && (
-                <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase">New Task</p>
-                        <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600">
-                            <X size={12} />
-                        </button>
-                    </div>
+                <div className="fixed inset-0 z-[500] bg-black/50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-xl p-5 space-y-3 max-h-[90vh] overflow-y-auto animate-scale-in">
+                        <div className="flex items-center justify-between mb-1">
+                            <p className="text-sm font-bold text-slate-800">New Task</p>
+                            <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition">
+                                <X size={16} />
+                            </button>
+                        </div>
 
-                    <div>
-                        <label className={labelCls}>Title *</label>
-                        <input
-                            type="text"
-                            value={form.title}
-                            onChange={e => set('title', e.target.value)}
-                            className={inputCls}
-                        />
-                    </div>
-
-                    <div>
-                        <label className={labelCls}>Assign To</label>
-                        {isManagerScope ? (
-                            <select
-                                value={form.assigned_worker_id}
-                                onChange={e => set('assigned_worker_id', e.target.value)}
-                                className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]"
-                            >
-                                {assignableEmployees.length === 0 && (
-                                    <option value="">No employees assigned to this manager</option>
-                                )}
-                                {assignableEmployees.map(e => (
-                                    <option key={e.id} value={String(e.id)}>{userName(e)}</option>
-                                ))}
-                            </select>
-                        ) : (
+                        <div>
+                            <label className={labelCls}>Title *</label>
                             <input
                                 type="text"
-                                value={userName(scopedUser)}
-                                readOnly
-                                className="w-full p-2 border rounded-lg bg-gray-50 text-xs text-gray-500 cursor-not-allowed outline-none"
+                                value={form.title}
+                                onChange={e => set('title', e.target.value)}
+                                className={inputCls}
                             />
-                        )}
-                    </div>
+                        </div>
 
-                    <div>
-                        <label className={labelCls}>Due Date</label>
-                        <input
-                            type="datetime-local"
-                            value={form.due_date}
-                            onChange={e => set('due_date', e.target.value)}
-                            className={inputCls}
-                        />
-                    </div>
+                        <div>
+                            <label className={labelCls}>Assign To</label>
+                            {isManagerScope ? (
+                                <select
+                                    value={form.assigned_worker_id}
+                                    onChange={e => set('assigned_worker_id', e.target.value)}
+                                    className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]"
+                                >
+                                    {assignableEmployees.length === 0 && (
+                                        <option value="">No employees assigned to this manager</option>
+                                    )}
+                                    {assignableEmployees.map(e => (
+                                        <option key={e.id} value={String(e.id)}>{userName(e)}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <input
+                                    type="text"
+                                    value={userName(scopedUser)}
+                                    readOnly
+                                    className="w-full p-2 border rounded-lg bg-gray-50 text-xs text-gray-500 cursor-not-allowed outline-none"
+                                />
+                            )}
+                        </div>
 
-                    <div>
-                        <label className={labelCls}>Location *</label>
-                        <select
-                            value={form.location_id}
-                            onChange={e => set('location_id', e.target.value)}
-                            className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]"
-                        >
-                            <option value="">Select location…</option>
-                            {locations.map(l => (
-                                <option key={l.id} value={String(l.id)}>
-                                    {l['name_' + lang] || l.name_en || l.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                        <div>
+                            <label className={labelCls}>Due Date</label>
+                            <input
+                                type="datetime-local"
+                                value={form.due_date}
+                                onChange={e => set('due_date', e.target.value)}
+                                className={inputCls}
+                            />
+                        </div>
 
-                    <div>
-                        <label className={labelCls}>Description</label>
-                        <textarea
-                            value={form.description}
-                            onChange={e => set('description', e.target.value)}
-                            rows={2}
-                            className="w-full p-2 border rounded-lg bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-xs transition resize-none"
-                        />
-                    </div>
+                        <div>
+                            <label className={labelCls}>Location *</label>
+                            <select
+                                value={form.location_id}
+                                onChange={e => set('location_id', e.target.value)}
+                                className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]"
+                            >
+                                <option value="">Select location…</option>
+                                {locations.map(l => (
+                                    <option key={l.id} value={String(l.id)}>
+                                        {l['name_' + lang] || l.name_en || l.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
 
-                    <div className="flex gap-2 pt-1">
-                        <button onClick={() => setShowCreate(false)} className={cancelBtnCls}>
-                            {t?.cancel || 'Cancel'}
-                        </button>
-                        <button onClick={handleSubmit} disabled={submitting} className={saveBtnCls}>
-                            {submitting && <Loader2 size={10} className="animate-spin" />}
-                            Create Task
-                        </button>
+                        <div>
+                            <label className={labelCls}>Description</label>
+                            <textarea
+                                value={form.description}
+                                onChange={e => set('description', e.target.value)}
+                                rows={2}
+                                className="w-full p-2 border rounded-lg bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-xs transition resize-none"
+                            />
+                        </div>
+
+                        <div className="flex gap-2 pt-1">
+                            <button onClick={() => setShowCreate(false)} className={cancelBtnCls}>
+                                {t?.cancel || 'Cancel'}
+                            </button>
+                            <button onClick={handleSubmit} disabled={submitting} className={saveBtnCls}>
+                                {submitting && <Loader2 size={10} className="animate-spin" />}
+                                Create Task
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

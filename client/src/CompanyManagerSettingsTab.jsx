@@ -728,9 +728,9 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
         fetchData();
     }, [token, user?.company_id]);
 
-    // Exclude the logged-in user from the managers list — they appear in the self section
-    // Show both COMPANY_MANAGER peers and MANAGER users created within this company
-    const managers  = (users ?? []).filter(u => (u?.role === 'COMPANY_MANAGER' || u?.role === 'MANAGER') && u?.id !== user?.id);
+    // Exclude the logged-in user from the managers list — they appear in the self section.
+    // COMPANY_MANAGER should only see MANAGER users, NOT other co-admins (COMPANY_MANAGER peers).
+    const managers  = (users ?? []).filter(u => u?.role === 'MANAGER' && u?.id !== user?.id);
     const employees = (users ?? []).filter(u => u?.role === 'EMPLOYEE');
     const selfUser  = (users ?? []).find(u => u?.id === user?.id) ?? user;
 

@@ -1897,6 +1897,7 @@ app.get('/tasks', authenticateToken, async (req, res) => {
                    COALESCE(a.name_he, a.name) as asset_name_he,
                    COALESCE(a.name_th, a.name) as asset_name_th,
                    a.code as asset_code,
+                   c.id as category_id,
                    c.name as category_name,
                    COALESCE(c.name_en, c.name) as category_name_en,
                    COALESCE(c.name_he, c.name) as category_name_he,
@@ -2604,6 +2605,7 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
             SELECT t.*,
                    l.name as location_name,
                    a.name as asset_name,
+                   c.id as category_id,
                    c.name as category_name,
                    u.full_name as worker_name,
                    creator.full_name as manager_name
