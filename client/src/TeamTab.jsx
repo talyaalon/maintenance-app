@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Edit2, ChevronDown, ChevronUp, ChevronRight, User, X, Plus, Save, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Edit2, ChevronDown, ChevronUp, User, X, Plus, Save, Eye, EyeOff } from 'lucide-react';
 import TasksTab from './TasksTab';
+import ScopedTasksPanel from './ScopedTasksPanel';
 
 // ─── Branded delete-confirm modal ────────────────────────────────────────────
 const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
@@ -73,6 +74,8 @@ const TeamTab = ({ token, t, user, lang }) => {
     const [addAssignedEmployeeIds, setAddAssignedEmployeeIds] = useState(new Set());
 
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+    const [openPanel, setOpenPanel] = useState(null);
+    const togglePanel = (key) => setOpenPanel(prev => prev === key ? null : key);
     const [selectedMember, setSelectedMember] = useState(null);
     const [memberTasks, setMemberTasks] = useState([]);
     const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -422,8 +425,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     };
 
     // ─── Manager (AreaManager) Team view — M:M assigned employees ──────────────
-    // Uses parent_manager_id as the M:M proxy (kept in sync with employee_managers
-    // junction table by the server). Shows a clean clickable card list.
+    // Employee name is a clickable link that opens ScopedTasksPanel inline.
     const renderManagerTeamView = () => {
         const myEmployees = employees.filter(e => e?.parent_manager_id === user?.id);
 
@@ -445,25 +447,39 @@ const TeamTab = ({ token, t, user, lang }) => {
                 {myEmployees.map(emp => {
                     const displayName = emp['full_name_' + lang] || emp.full_name_en || emp.full_name || '?';
                     const initial = displayName.charAt(0).toUpperCase();
+                    const panelKey = `tasks:${emp.id}`;
                     return (
-                        <div
-                            key={emp.id}
-                            onClick={() => handleMemberClick(emp)}
-                            className="bg-white p-4 rounded-xl border border-gray-200 flex items-center gap-3 cursor-pointer hover:border-[#714B67]/40 hover:bg-[#fdf4ff]/50 transition active:scale-[0.99] shadow-sm"
-                        >
-                            <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-100 bg-slate-50 flex items-center justify-center">
-                                {emp.profile_picture_url ? (
-                                    <img src={emp.profile_picture_url} alt={displayName} className="w-full h-full object-cover" />
-                                ) : (
-                                    <span className="text-sm font-bold text-[#714B67]">{initial}</span>
-                                )}
+                        <div key={emp.id}>
+                            <div className="bg-white p-4 rounded-xl border border-gray-200 flex items-center gap-3 shadow-sm">
+                                <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-100 bg-slate-50 flex items-center justify-center">
+                                    {emp.profile_picture_url ? (
+                                        <img src={emp.profile_picture_url} alt={displayName} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-sm font-bold text-[#714B67]">{initial}</span>
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <button
+                                        onClick={() => togglePanel(panelKey)}
+                                        className="font-semibold text-sm leading-tight text-left hover:underline decoration-violet-400 hover:text-violet-700 transition-colors"
+                                        title="View Tasks"
+                                    >
+                                        {displayName}
+                                    </button>
+                                    <p className="text-xs text-gray-400 truncate mt-0.5">{emp.email}{emp.phone && ` · ${emp.phone}`}</p>
+                                </div>
+                                <RoleBadge role={emp.role} t={t} />
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-slate-800 text-sm leading-tight">{displayName}</p>
-                                <p className="text-xs text-gray-400 truncate mt-0.5">{emp.email}{emp.phone && ` · ${emp.phone}`}</p>
-                            </div>
-                            <RoleBadge role={emp.role} t={t} />
-                            <ChevronRight size={16} className="text-gray-300 shrink-0 ml-1" />
+                            {openPanel === panelKey && (
+                                <ScopedTasksPanel
+                                    scopedUser={emp}
+                                    scopedUserRole="EMPLOYEE"
+                                    currentUser={user}
+                                    token={token}
+                                    lang={lang}
+                                    t={t}
+                                />
+                            )}
                         </div>
                     );
                 })}

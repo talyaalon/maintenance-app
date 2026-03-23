@@ -1899,8 +1899,8 @@ app.get('/tasks', authenticateToken, async (req, res) => {
         }
 
         if (role === 'MANAGER') {
-            // AreaManager sees tasks of all users in their area (area_id = their own id)
-            query += ` WHERE t.worker_id IN (SELECT id FROM users WHERE area_id = $1)`;
+            // MANAGER sees tasks of all employees linked via the M:M employee_managers junction table
+            query += ` WHERE t.worker_id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $1)`;
             const result = await pool.query(query + ` ORDER BY t.due_date ASC`, [id]);
             return res.json(result.rows);
         }

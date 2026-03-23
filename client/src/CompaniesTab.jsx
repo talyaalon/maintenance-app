@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, Plus, ChevronRight, ChevronDown, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck, Send, ClipboardList } from 'lucide-react';
+import { Building2, Plus, ChevronRight, ChevronDown, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck, Send } from 'lucide-react';
 import ScopedTasksPanel from './ScopedTasksPanel';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
@@ -698,7 +698,7 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
 
     // ── Row action buttons ─────────────────────────────────────────────────────
     // editOpen: highlights pencil when edit panel is open for this row
-    const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen, onTeam, teamOpen, isManager, editOpen, onTasks, tasksOpen }) => (
+    const RowActions = ({ onEdit, onDelete, onSettings, settingsOpen, onTeam, teamOpen, isManager, editOpen }) => (
         <div className="ml-auto flex items-center gap-1 shrink-0">
             <button
                 onClick={onEdit}
@@ -725,13 +725,6 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                     <UserCheck size={12} />
                 </button>
             )}
-            <button
-                onClick={onTasks}
-                className={`p-1 rounded-lg transition ${tasksOpen ? 'bg-emerald-500 text-white' : 'hover:bg-gray-100 text-gray-400'}`}
-                title="View Tasks"
-            >
-                <ClipboardList size={12} />
-            </button>
             <button onClick={onDelete} className="p-1 rounded-lg hover:bg-red-50 text-red-400 transition" title="Delete">
                 <Trash2 size={12} />
             </button>
@@ -921,12 +914,16 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                         {(userName(u)[0] || '?').toUpperCase()}
                                     </div>
                                 )}
-                                <span className="flex-1 min-w-0 truncate">
+                                <button
+                                    onClick={() => togglePanel(`tasks:${u.id}`)}
+                                    className="flex-1 min-w-0 truncate text-left hover:underline decoration-violet-400 hover:text-violet-700 transition-colors"
+                                    title="View Tasks"
+                                >
                                     {userName(u)}
                                     {u?.full_name_th && lang !== 'th' && (
                                         <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{u.full_name_th}</span>
                                     )}
-                                </span>
+                                </button>
                                 <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{u?.role}</span>
                                 <RowActions
                                     onEdit={() => togglePanel(`edit-user:${u.id}`)}
@@ -937,8 +934,6 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     onTeam={() => openTeamPanel(u)}
                                     teamOpen={openPanel === `team:${u.id}`}
                                     isManager={u?.role === 'MANAGER'}
-                                    onTasks={() => togglePanel(`tasks:${u.id}`)}
-                                    tasksOpen={openPanel === `tasks:${u.id}`}
                                 />
                             </div>
                             {openPanel === `edit-user:${u.id}` && (
@@ -1016,12 +1011,16 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                         {(userName(u)[0] || '?').toUpperCase()}
                                     </div>
                                 )}
-                                <span className="flex-1 min-w-0 truncate">
+                                <button
+                                    onClick={() => togglePanel(`tasks:${u.id}`)}
+                                    className="flex-1 min-w-0 truncate text-left hover:underline decoration-violet-400 hover:text-violet-700 transition-colors"
+                                    title="View Tasks"
+                                >
                                     {userName(u)}
                                     {u?.full_name_th && lang !== 'th' && (
                                         <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{u.full_name_th}</span>
                                     )}
-                                </span>
+                                </button>
                                 <RowActions
                                     onEdit={() => togglePanel(`edit-user:${u.id}`)}
                                     editOpen={openPanel === `edit-user:${u.id}`}
@@ -1029,8 +1028,6 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     onSettings={() => openPermission(u)}
                                     settingsOpen={openPanel === `perm:${u.id}`}
                                     isManager={false}
-                                    onTasks={() => togglePanel(`tasks:${u.id}`)}
-                                    tasksOpen={openPanel === `tasks:${u.id}`}
                                 />
                             </div>
                             {openPanel === `edit-user:${u.id}` && (
