@@ -294,7 +294,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
 
                     {/* Validation result — valid */}
                     {validationStatus === 'valid' && importResult && (
-                        <div className="bg-green-50 border border-green-200 p-2.5 rounded text-green-800 text-xs font-medium flex items-center gap-1.5">
+                        <div className="bg-[#fdf4ff] border border-[#714B67]/20 p-2.5 rounded text-[#714B67] text-xs font-medium flex items-center gap-1.5">
                             <CheckCircle size={14} />
                             {t?.file_valid_title || 'הקובץ תקין'} — {importResult.validCount} {t?.rows_ready || 'שורות מוכנות'}
                         </div>

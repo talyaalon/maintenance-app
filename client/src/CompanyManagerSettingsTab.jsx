@@ -825,7 +825,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     headerExtras={canUseExcel && (
                         <button
                             onClick={() => toggleExcelSection('managers')}
-                            className={`ml-2 p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'managers' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            className={`ml-2 p-1.5 rounded-lg transition border-2 border-[#714B67] text-[#714B67] ${openExcelSection === 'managers' ? 'bg-[#fdf4ff] shadow-md' : 'bg-white shadow-sm hover:bg-[#fdf4ff] hover:shadow-md'}`}
                             title="Managers — Excel ייבוא / ייצוא"
                         >
                             <FileSpreadsheet size={14} />
@@ -934,7 +934,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     headerExtras={canUseExcel && (
                         <button
                             onClick={() => toggleExcelSection('employees')}
-                            className={`ml-2 p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'employees' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            className={`ml-2 p-1.5 rounded-lg transition border-2 border-[#714B67] text-[#714B67] ${openExcelSection === 'employees' ? 'bg-[#fdf4ff] shadow-md' : 'bg-white shadow-sm hover:bg-[#fdf4ff] hover:shadow-md'}`}
                             title="Employees — Excel ייבוא / ייצוא"
                         >
                             <FileSpreadsheet size={14} />
@@ -1028,7 +1028,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     headerExtras={canUseExcel && (
                         <button
                             onClick={() => toggleExcelSection('locations')}
-                            className={`ml-2 p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'locations' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            className={`ml-2 p-1.5 rounded-lg transition border-2 border-[#714B67] text-[#714B67] ${openExcelSection === 'locations' ? 'bg-[#fdf4ff] shadow-md' : 'bg-white shadow-sm hover:bg-[#fdf4ff] hover:shadow-md'}`}
                             title="Locations — Excel ייבוא / ייצוא"
                         >
                             <FileSpreadsheet size={14} />
@@ -1091,7 +1091,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     headerExtras={canUseExcel && (
                         <button
                             onClick={() => toggleExcelSection('categories')}
-                            className={`ml-2 p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'categories' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            className={`ml-2 p-1.5 rounded-lg transition border-2 border-[#714B67] text-[#714B67] ${openExcelSection === 'categories' ? 'bg-[#fdf4ff] shadow-md' : 'bg-white shadow-sm hover:bg-[#fdf4ff] hover:shadow-md'}`}
                             title="Categories — Excel ייבוא / ייצוא"
                         >
                             <FileSpreadsheet size={14} />
@@ -1147,7 +1147,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     headerExtras={canUseExcel && (
                         <button
                             onClick={() => toggleExcelSection('assets')}
-                            className={`ml-2 p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'assets' ? 'bg-green-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                            className={`ml-2 p-1.5 rounded-lg transition border-2 border-[#714B67] text-[#714B67] ${openExcelSection === 'assets' ? 'bg-[#fdf4ff] shadow-md' : 'bg-white shadow-sm hover:bg-[#fdf4ff] hover:shadow-md'}`}
                             title="Assets — Excel ייבוא / ייצוא"
                         >
                             <FileSpreadsheet size={14} />
