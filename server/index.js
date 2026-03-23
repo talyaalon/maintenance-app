@@ -1888,6 +1888,7 @@ app.get('/tasks', authenticateToken, async (req, res) => {
         let query = `
             SELECT t.*,
                    u.full_name as worker_name,
+                   cb.full_name as creator_name,
                    l.name as location_name,
                    COALESCE(l.name_en, l.name) as location_name_en,
                    COALESCE(l.name_he, l.name) as location_name_he,
@@ -1904,6 +1905,7 @@ app.get('/tasks', authenticateToken, async (req, res) => {
                    COALESCE(c.name_th, c.name) as category_name_th
             FROM tasks t
             LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN users cb ON t.created_by = cb.id
             LEFT JOIN locations l ON t.location_id = l.id
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN categories c ON a.category_id = c.id
@@ -2319,15 +2321,15 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
         
         let query = `
             SELECT t.id, t.title, t.description, t.urgency, t.status, t.due_date,
-                   t.images, 
+                   t.images,
                    u.full_name as worker_name,
-                   m.full_name as manager_name,
+                   cb.full_name as creator_name,
                    l.name as location_name,
                    a.name as asset_name, a.code as asset_code,
                    c.name as category_name
             FROM tasks t
             LEFT JOIN users u ON t.worker_id = u.id
-            LEFT JOIN users m ON u.parent_manager_id = m.id
+            LEFT JOIN users cb ON t.created_by = cb.id
             LEFT JOIN locations l ON t.location_id = l.id
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN categories c ON a.category_id = c.id
@@ -2608,13 +2610,13 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
                    c.id as category_id,
                    c.name as category_name,
                    u.full_name as worker_name,
-                   creator.full_name as manager_name
+                   creator.full_name as creator_name
             FROM tasks t
             LEFT JOIN locations l ON t.location_id = l.id
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN categories c ON a.category_id = c.id
             LEFT JOIN users u ON t.worker_id = u.id
-            LEFT JOIN users creator ON u.parent_manager_id = creator.id
+            LEFT JOIN users creator ON t.created_by = creator.id
             ${whereClause}
             ORDER BY t.due_date DESC
         `;

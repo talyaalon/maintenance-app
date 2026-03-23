@@ -20,7 +20,7 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
         { id: 'status', label: t.status_label || 'Status' },
         { id: 'due_date', label: t.date_label || 'Due Date' },
         { id: 'worker_name', label: t.assigned_to || 'Worker Name' },
-        { id: 'manager_name', label: t.col_manager_name || 'Manager Name' },
+        { id: 'creator_name', label: t.created_by_label || 'Created By' },
         { id: 'location_name', label: t.location || 'Location' },
         { id: 'asset_code', label: t.col_asset_code || 'Asset Code' },
         { id: 'asset_name', label: t.asset_name_label || 'Asset Name' },

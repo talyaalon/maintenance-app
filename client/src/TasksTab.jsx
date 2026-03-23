@@ -455,7 +455,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
               user={user}
               onRefresh={onRefresh}
               t={t}
-              allUsers={subordinates}
           />
       )}
 
@@ -511,7 +510,7 @@ const InlineAlert = ({ message, onClose }) => (
     </div>
 );
 
-const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers }) => {
+const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
     const [followUpDate, setFollowUpDate] = useState(getCurrentBkkTimeForInput);
@@ -579,24 +578,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
         </div>
     );
 
-    let displayManagerName = task.manager_name;
-    if (!displayManagerName && allUsers) {
-        const workerInfo = allUsers.find(u => String(u.id) === String(task.worker_id));
-        if (workerInfo) {
-            const managerInfo = allUsers.find(u => String(u.id) === String(workerInfo.parent_manager_id));
-            if (managerInfo) {
-                displayManagerName = managerInfo.full_name;
-            } else if (String(workerInfo.parent_manager_id) === String(user.id)) {
-                displayManagerName = user.full_name || user.name;
-            }
-        }
-    }
-    if (!displayManagerName && (user.role === 'MANAGER' || user.role === 'BIG_BOSS')) {
-        displayManagerName = user.full_name || user.name;
-    }
-    if (!displayManagerName) {
-        displayManagerName = task.manager_name || t.management || t.manager_label || 'Manager';
-    }
+    const displayCreatorName = task.creator_name || '—';
 
     return (
         <>
@@ -639,7 +621,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.category_label || "Category"}</span><span className="font-medium">{task.category_name || '-'}</span></div>
                         <div className="col-span-2 border-t pt-2 mt-2"></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.assigned_to}</span><span className="font-medium">{task.worker_name}</span></div>
-                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.manager_label || "Manager"}</span><span className="font-medium">{displayManagerName}</span></div>
+                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.created_by_label || "Created By"}</span><span className="font-medium">{displayCreatorName}</span></div>
                     </div>
 
                     {task.description && (
