@@ -81,6 +81,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const [filterLocation, setFilterLocation] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const isTeamView = Array.isArray(subordinates);
 
   // ── API-fetched filter options (role-scoped) ─────────────────────────────
@@ -362,65 +363,83 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
 
       {/* ── Filter Bar ──────────────────────────────────────────────────────── */}
       <div className="mb-4 max-w-3xl mx-auto">
-          <div className="flex flex-wrap gap-2 items-center">
-              <SlidersHorizontal size={14} className="text-[#714B67] shrink-0 mt-0.5" />
-
-              {/* Priority */}
-              <select
-                  value={filterPriority}
-                  onChange={e => setFilterPriority(e.target.value)}
-                  className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterPriority ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+          {/* Toggle row */}
+          <div className="flex items-center gap-2">
+              <button
+                  onClick={() => setIsFilterOpen(p => !p)}
+                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition shadow-sm ${isFilterOpen || hasActiveFilters ? 'bg-[#714B67] text-white border-[#714B67]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#714B67]/40 hover:text-[#714B67]'}`}
               >
-                  <option value="">{t.urgency_label || 'Priority'}</option>
-                  <option value="High">{t.urgency_high || 'High'}</option>
-                  <option value="Normal">{t.urgency_normal || 'Normal'}</option>
-              </select>
-
-              {/* Location — API-fetched, company_id scoped per role */}
-              {apiLocations.length > 0 && (
-                  <select
-                      value={filterLocation}
-                      onChange={e => setFilterLocation(e.target.value)}
-                      className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterLocation ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
-                  >
-                      <option value="">{t.location || 'Location'}</option>
-                      {apiLocations.map(loc => <option key={loc.id} value={loc.id}>{localName(loc)}</option>)}
-                  </select>
-              )}
-
-              {/* Category — API-fetched, company_id scoped per role */}
-              {apiCategories.length > 0 && (
-                  <select
-                      value={filterCategory}
-                      onChange={e => setFilterCategory(e.target.value)}
-                      className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterCategory ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
-                  >
-                      <option value="">{t.category_label || 'Category'}</option>
-                      {apiCategories.map(cat => <option key={cat.id} value={cat.id}>{localName(cat)}</option>)}
-                  </select>
-              )}
-
-              {/* Assignee — hidden for EMPLOYEE; MANAGER sees only their M:M employees */}
-              {showAssigneeFilter && apiEmployees.length > 0 && (
-                  <select
-                      value={filterAssignee}
-                      onChange={e => setFilterAssignee(e.target.value)}
-                      className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterAssignee ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
-                  >
-                      <option value="">{t.assigned_to || 'Assignee'}</option>
-                      {apiEmployees.map(emp => <option key={emp.id} value={emp.id}>{localEmpName(emp)}</option>)}
-                  </select>
-              )}
-
-              {/* Clear Filters */}
+                  <SlidersHorizontal size={13} />
+                  <span>{t.filter || 'Filter'}</span>
+                  {hasActiveFilters && !isFilterOpen && (
+                      <span className="ml-1 bg-white text-[#714B67] rounded-full px-1.5 py-0 text-[10px] font-bold leading-4">
+                          {[filterPriority, filterLocation, filterCategory, filterAssignee].filter(Boolean).length}
+                      </span>
+                  )}
+              </button>
               {hasActiveFilters && (
                   <button
                       onClick={clearFilters}
-                      className="shrink-0 flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-[#714B67]/10 text-[#714B67] font-semibold hover:bg-[#714B67]/20 transition"
+                      className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-[#714B67]/10 text-[#714B67] font-semibold hover:bg-[#714B67]/20 transition"
                   >
                       <X size={11} /> {t.clear_filters || 'Clear'}
                   </button>
               )}
+          </div>
+
+          {/* Collapsible dropdowns */}
+          <div
+              className="overflow-hidden transition-all duration-300 ease-in-out"
+              style={{ maxHeight: isFilterOpen ? '120px' : '0px', opacity: isFilterOpen ? 1 : 0 }}
+          >
+              <div className="flex flex-wrap gap-2 items-center pt-2">
+                  {/* Priority */}
+                  <select
+                      value={filterPriority}
+                      onChange={e => setFilterPriority(e.target.value)}
+                      className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterPriority ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                  >
+                      <option value="">{t.urgency_label || 'Priority'}</option>
+                      <option value="High">{t.urgency_high || 'High'}</option>
+                      <option value="Normal">{t.urgency_normal || 'Normal'}</option>
+                  </select>
+
+                  {/* Location — API-fetched, company_id scoped per role */}
+                  {apiLocations.length > 0 && (
+                      <select
+                          value={filterLocation}
+                          onChange={e => setFilterLocation(e.target.value)}
+                          className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterLocation ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                      >
+                          <option value="">{t.location || 'Location'}</option>
+                          {apiLocations.map(loc => <option key={loc.id} value={loc.id}>{localName(loc)}</option>)}
+                      </select>
+                  )}
+
+                  {/* Category — API-fetched, company_id scoped per role */}
+                  {apiCategories.length > 0 && (
+                      <select
+                          value={filterCategory}
+                          onChange={e => setFilterCategory(e.target.value)}
+                          className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterCategory ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                      >
+                          <option value="">{t.category_label || 'Category'}</option>
+                          {apiCategories.map(cat => <option key={cat.id} value={cat.id}>{localName(cat)}</option>)}
+                      </select>
+                  )}
+
+                  {/* Assignee — hidden for EMPLOYEE; MANAGER sees only their M:M employees */}
+                  {showAssigneeFilter && apiEmployees.length > 0 && (
+                      <select
+                          value={filterAssignee}
+                          onChange={e => setFilterAssignee(e.target.value)}
+                          className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterAssignee ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                      >
+                          <option value="">{t.assigned_to || 'Assignee'}</option>
+                          {apiEmployees.map(emp => <option key={emp.id} value={emp.id}>{localEmpName(emp)}</option>)}
+                      </select>
+                  )}
+              </div>
           </div>
       </div>
 

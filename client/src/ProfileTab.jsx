@@ -136,193 +136,216 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   };
 
   return (
-    <div className="px-3 sm:px-4 pt-2 pb-24 flex flex-col items-center max-w-lg mx-auto animate-fade-in">
+    <div className="px-3 sm:px-4 pt-4 pb-24 max-w-3xl mx-auto animate-fade-in">
 
-      <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2 self-start">{t.nav_profile || 'Profile'}</h1>
-
-      <div className="relative mb-2 group flex flex-col items-center">
-        <div className="relative">
-            {/* 🚀 תוקן צבע הרקע כאן לסגול המדויק */}
-            <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-sm ring-1 ring-gray-200 bg-slate-50 flex items-center justify-center">
-                {previewImage ? (
-                    <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                    <span className="text-4xl font-bold text-[#714B67]">
-                        {(formData.full_name || user.name || '?').charAt(0).toUpperCase()}
-                    </span>
-                )}
-            </div>
-            
-            {isEditing && (
-                <label className="absolute bottom-0 right-0 translate-y-1/4 translate-x-1/4 bg-[#714B67] p-2 rounded-full text-white cursor-pointer hover:bg-[#5a3b52] shadow-md transition-transform transform hover:scale-110 z-20">
-                    <Camera size={18} />
-                    <input type="file" hidden accept="image/*" onChange={handleImageChange} />
-                </label>
+      {/* ── Identity / Hero ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col items-center mb-6">
+        <div className="relative mb-3">
+          <div className="w-24 h-24 rounded-full overflow-hidden ring-4 ring-purple-50 border-4 border-white shadow-md bg-slate-50 flex items-center justify-center">
+            {previewImage ? (
+              <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-4xl font-bold text-[#714B67]">
+                {(formData.full_name || user.name || '?').charAt(0).toUpperCase()}
+              </span>
             )}
+          </div>
+          {isEditing && (
+            <label className="absolute bottom-0 right-0 translate-y-1/4 translate-x-1/4 bg-[#714B67] p-2 rounded-full text-white cursor-pointer hover:bg-[#5a3b52] shadow-md transition-transform transform hover:scale-110 z-20">
+              <Camera size={16} />
+              <input type="file" hidden accept="image/*" onChange={handleImageChange} />
+            </label>
+          )}
         </div>
-        
-        <div className="mt-2 text-center">
-            <h3 className="text-base sm:text-lg font-bold text-slate-900">{formData.full_name}</h3>
-            <p className="text-xs sm:text-sm text-slate-400 uppercase tracking-wide font-medium">{user?.role || 'User'}</p>
-        </div>
+        <h2 className="text-xl font-bold text-slate-900 mb-1">{formData.full_name || user.name}</h2>
+        <span className="bg-purple-100 text-purple-800 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
+          {user?.role || 'User'}
+        </span>
       </div>
 
-      <form onSubmit={handleSave} className="w-full bg-white p-2 rounded-xl border border-gray-200 space-y-1">
-        
+      <form onSubmit={handleSave} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-5">
+
+        {/* ── Names Group ────────────────────────────────────────────────────── */}
         <div>
-            <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">{t.full_name_label || 'Full Name'}</label>
-                <button
-                    type="button"
-                    onClick={() => setShowAltLangs(p => !p)}
-                    className="flex items-center gap-0.5 text-[10px] font-medium text-[#714B67]/60 hover:text-[#714B67] transition"
-                >
-                    <Globe size={11} />
-                    <span>{showAltLangs ? (t.hide || 'Hide') : '+ HE / TH'}</span>
-                    <ChevronDown size={11} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
-                </button>
-            </div>
-            <div className="space-y-1.5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t.full_name_label || 'Name'}</h3>
+            <button
+              type="button"
+              onClick={() => setShowAltLangs(p => !p)}
+              className="flex items-center gap-1 text-[10px] font-semibold text-[#714B67]/60 hover:text-[#714B67] transition"
+            >
+              <Globe size={11} />
+              <span>{showAltLangs ? (t.hide || 'Hide') : '+ HE / TH'}</span>
+              <ChevronDown size={11} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+          <div className="space-y-2.5">
+            <input
+              type="text"
+              dir="ltr"
+              placeholder={t.name_en_placeholder || 'Name in English'}
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-default"
+              value={formData.full_name_en}
+              onChange={e => setFormData({...formData, full_name_en: e.target.value})}
+              disabled={!isEditing}
+            />
+            {showAltLangs && (
+              <>
                 <input
-                    type="text"
-                    dir="ltr"
-                    placeholder={t.name_en_placeholder || 'Name in English'}
-                    className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
-                    value={formData.full_name_en}
-                    onChange={e => setFormData({...formData, full_name_en: e.target.value})}
-                    disabled={!isEditing}
+                  type="text"
+                  dir="rtl"
+                  placeholder={t.name_he_placeholder || 'שם בעברית'}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-default"
+                  value={formData.full_name_he}
+                  onChange={e => setFormData({...formData, full_name_he: e.target.value})}
+                  disabled={!isEditing}
                 />
-                {showAltLangs && (
-                    <>
-                        <input
-                            type="text"
-                            dir="rtl"
-                            placeholder={t.name_he_placeholder || 'שם בעברית'}
-                            className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
-                            value={formData.full_name_he}
-                            onChange={e => setFormData({...formData, full_name_he: e.target.value})}
-                            disabled={!isEditing}
-                        />
-                        <input
-                            type="text"
-                            dir="ltr"
-                            placeholder={t.name_th_placeholder || 'ชื่อภาษาไทย'}
-                            className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
-                            value={formData.full_name_th}
-                            onChange={e => setFormData({...formData, full_name_th: e.target.value})}
-                            disabled={!isEditing}
-                        />
-                    </>
-                )}
-            </div>
+                <input
+                  type="text"
+                  dir="ltr"
+                  placeholder={t.name_th_placeholder || 'ชื่อภาษาไทย'}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-default"
+                  value={formData.full_name_th}
+                  onChange={e => setFormData({...formData, full_name_th: e.target.value})}
+                  disabled={!isEditing}
+                />
+              </>
+            )}
+          </div>
         </div>
 
+        {/* ── Divider ─────────────────────────────────────────────────────────── */}
+        <div className="border-t border-gray-100" />
+
+        {/* ── Contact Group ──────────────────────────────────────────────────── */}
         <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{t.email_label || 'Email'}</label>
-            <input 
-                type="email" 
-                className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Contact</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">{t.email_label || 'Email'}</label>
+              <input
+                type="email"
+                dir="ltr"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-default"
                 value={formData.email}
                 onChange={e => setFormData({...formData, email: e.target.value})}
                 disabled={!isEditing}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">{t.phone_label || 'Phone Number'}</label>
+              <input
+                type="tel"
                 dir="ltr"
-            />
-        </div>
-
-        <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                {t.phone_label || "Phone Number"}
-            </label>
-            <input 
-                type="tel" 
-                className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                placeholder="050-0000000"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-default"
                 value={formData.phone}
                 onChange={e => setFormData({...formData, phone: e.target.value})}
                 disabled={!isEditing}
-                dir="ltr"
-                placeholder="050-0000000"
-            />
+              />
+            </div>
+          </div>
         </div>
 
+        {/* ── Divider ─────────────────────────────────────────────────────────── */}
+        <div className="border-t border-gray-100" />
+
+        {/* ── System Group ───────────────────────────────────────────────────── */}
         <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                {t.line_user_id || "LINE User ID"}
-            </label>
-            <input
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">System</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">{t.line_user_id || 'LINE User ID'}</label>
+              <input
                 type="text"
                 dir="ltr"
-                className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition"
+                placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-default"
                 value={formData.line_user_id}
                 onChange={e => setFormData({...formData, line_user_id: e.target.value})}
                 disabled={!isEditing}
-                placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-            />
-        </div>
-
-        <div className="relative">
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                {t.preferred_language || "Preferred Notifications Language"}
-            </label>
-            <div className="relative">
-                <Globe className={`absolute top-1/2 transform -translate-y-1/2 text-gray-400 ${lang === 'he' ? 'right-3' : 'left-3'}`} size={18} />
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">{t.preferred_language || 'Notification Language'}</label>
+              <div className="relative">
+                <Globe className={`absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${lang === 'he' ? 'right-3' : 'left-3'}`} size={16} />
                 <select
-                    className={`w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none disabled:bg-gray-100 disabled:text-gray-400 transition ${lang === 'he' ? 'pr-10' : 'pl-10'}`}
-                    value={formData.preferred_language}
-                    onChange={e => setFormData({...formData, preferred_language: e.target.value})}
-                    disabled={!isEditing}
+                  className={`w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-default ${lang === 'he' ? 'pr-10' : 'pl-10'}`}
+                  value={formData.preferred_language}
+                  onChange={e => setFormData({...formData, preferred_language: e.target.value})}
+                  disabled={!isEditing}
                 >
-                    <option value="he">עברית (Hebrew)</option>
-                    <option value="en">English</option>
-                    <option value="th">ภาษาไทย (Thai)</option>
+                  <option value="he">עברית (Hebrew)</option>
+                  <option value="en">English</option>
+                  <option value="th">ภาษาไทย (Thai)</option>
                 </select>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1.5">* {t.lang_note || 'Daily reports will be sent in this language'}</p>
             </div>
-            <p className="text-xs text-gray-400 mt-1">* {t.lang_note || "Daily reports will be sent in this language"}</p>
+          </div>
         </div>
 
+        {/* ── Password (edit mode only) ───────────────────────────────────────── */}
         {isEditing && (
-            <div className="animate-fade-in relative">
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{t.password_placeholder || "New Password"}</label>
-                <div className="relative">
-                    <input 
-                        type={showPassword ? "text" : "password"} 
-                        className="w-full p-2 bg-gray-50 rounded-lg border focus:ring-2 focus:ring-[#714B67]/30 outline-none pr-10 transition"
-                        value={formData.password}
-                        onChange={e => setFormData({...formData, password: e.target.value})}
-                        placeholder="********"
-                        autoComplete="new-password"
-                    />
-                    <button 
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className={`absolute top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-[#714B67] focus:outline-none transition ${lang === 'he' ? 'left-3' : 'right-3'}`}
-                    >
-                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                    </button>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">* {t.password_security_note || "Old password hidden for security"}</p>
+          <>
+            <div className="border-t border-gray-100" />
+            <div className="animate-fade-in">
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">{t.password_placeholder || 'New Password'}</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all pr-12"
+                  value={formData.password}
+                  onChange={e => setFormData({...formData, password: e.target.value})}
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className={`absolute top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#714B67] focus:outline-none transition ${lang === 'he' ? 'left-3' : 'right-3'}`}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1.5">* {t.password_security_note || 'Old password hidden for security'}</p>
             </div>
+          </>
         )}
 
-        <div className="pt-2 flex gap-3">
-            {isEditing ? (
-                <>
-                    <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-2.5 border border-gray-200 rounded-lg text-slate-600 hover:bg-gray-50 flex justify-center gap-2 transition text-sm font-medium">
-                        <X size={18} /> {t.cancel}
-                    </button>
-                    <button type="submit" className="flex-1 py-2.5 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] flex justify-center gap-2 shadow-sm transition active:scale-95 text-sm font-bold">
-                        <Save size={18} /> {t.save}
-                    </button>
-                </>
-            ) : (
-                <button type="button" onClick={() => setIsEditing(true)} className="w-full py-2.5 bg-[#714B67] text-white rounded-lg hover:bg-[#5a3b52] transition flex justify-center gap-2 items-center shadow-sm active:scale-95 text-sm font-bold">
-                      <Camera size={16} /> {t.edit_profile_btn || "Edit Profile"}
-                </button>
-            )}
+        {/* ── Action Buttons ─────────────────────────────────────────────────── */}
+        <div className="pt-1 flex gap-3">
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="flex-1 py-3 border border-gray-200 rounded-xl text-slate-600 hover:bg-gray-50 flex justify-center items-center gap-2 transition text-sm font-semibold"
+              >
+                <X size={17} /> {t.cancel}
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-3 bg-[#714B67] text-white rounded-xl hover:bg-[#5a3b52] flex justify-center items-center gap-2 shadow-md transition active:scale-95 text-sm font-bold"
+              >
+                <Save size={17} /> {t.save}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className="w-full py-3 bg-[#714B67] text-white rounded-xl hover:bg-[#5a3b52] flex justify-center items-center gap-2 shadow-md transition active:scale-95 text-sm font-bold"
+            >
+              <Camera size={16} /> {t.edit_profile_btn || 'Edit Profile'}
+            </button>
+          )}
         </div>
       </form>
-        
-      <button onClick={onLogout} className="mt-4 text-red-500 flex items-center gap-2 hover:bg-red-50 px-4 py-2 rounded-full transition font-bold">
-          <LogOut size={18} /> {t.logout || "Logout"}
+
+      <button onClick={onLogout} className="mt-5 mx-auto flex items-center gap-2 text-red-500 hover:bg-red-50 px-5 py-2.5 rounded-full transition font-semibold text-sm">
+        <LogOut size={17} /> {t.logout || 'Logout'}
       </button>
 
     </div>
