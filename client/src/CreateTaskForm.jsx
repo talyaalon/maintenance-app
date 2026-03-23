@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Calendar, Camera, Box } from 'lucide-react';
 
-const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang }) => {
+const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang, scopedCompanyId }) => {
   const [frequency, setFrequency] = useState('Once');
   const currentUser = user;
 
@@ -60,12 +60,13 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   useEffect(() => {
     const headers = { 'Authorization': `Bearer ${token}` };
 
-    // Backend handles area-based filtering for all non-BIG_BOSS roles automatically
-    fetch('https://maintenance-app-staging.onrender.com/locations', { headers })
+    // When rendering inside a scoped admin view, append company_id to restrict backend response
+    const cqParam = scopedCompanyId ? `?company_id=${scopedCompanyId}` : '';
+    fetch(`https://maintenance-app-staging.onrender.com/locations${cqParam}`, { headers })
         .then(res => res.json()).then(d => setLocations(Array.isArray(d) ? d : [])).catch(err => console.error("Error locations", err));
-    fetch('https://maintenance-app-staging.onrender.com/categories', { headers })
+    fetch(`https://maintenance-app-staging.onrender.com/categories${cqParam}`, { headers })
         .then(res => res.json()).then(d => setCategories(Array.isArray(d) ? d : [])).catch(err => console.error("Error categories", err));
-    fetch('https://maintenance-app-staging.onrender.com/assets', { headers })
+    fetch(`https://maintenance-app-staging.onrender.com/assets${cqParam}`, { headers })
         .then(res => res.json()).then(d => setAssets(Array.isArray(d) ? d : [])).catch(err => console.error("Error assets", err));
 
     if (isManager) {

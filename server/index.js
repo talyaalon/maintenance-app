@@ -2354,13 +2354,24 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
         const validTasks = [];
 
         const usersRes = await client.query('SELECT id, full_name FROM users');
-        const locationsRes = await client.query('SELECT id, name FROM locations');
-        const assetsRes = await client.query('SELECT id, name, code, category_id FROM assets');
-        
+        const locationsRes = await client.query('SELECT id, name, company_id FROM locations');
+        const assetsRes = await client.query('SELECT id, name, code, category_id, company_id FROM assets');
+
         const usersMap = new Map(usersRes.rows.map(u => [u.full_name.trim().toLowerCase(), u.id]));
-        const locMap = new Map(locationsRes.rows.map(l => [l.name.trim().toLowerCase(), l.id]));
+        const locMap = new Map(locationsRes.rows.map(l => [l.name.trim().toLowerCase(), { id: l.id, company_id: l.company_id }]));
         const assetCodeMap = new Map(assetsRes.rows.map(a => [a.code.trim().toLowerCase(), a]));
         const assetNameMap = new Map(assetsRes.rows.map(a => [a.name.trim().toLowerCase(), a]));
+
+        // Pre-fetch manager's assigned employee IDs for scope enforcement
+        let managerEmployeeIds = new Set();
+        if (req.user.role === 'MANAGER') {
+            const empRes = await client.query(
+                'SELECT employee_id FROM employee_managers WHERE manager_id = $1',
+                [req.user.id]
+            );
+            managerEmployeeIds = new Set(empRes.rows.map(r => r.employee_id));
+        }
+        const callerCompanyId = req.user.company_id ?? null;
 
         const getValue = (row, possibleKeys) => {
             for (const key of possibleKeys) {
@@ -2403,11 +2414,15 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                 const wName = workerName.toString().trim().toLowerCase();
                 if (usersMap.has(wName)) {
                     worker_id = usersMap.get(wName);
+                    // MANAGER scope: employee must be linked via employee_managers M:M table
+                    if (req.user.role === 'MANAGER' && !managerEmployeeIds.has(worker_id)) {
+                        rowErrors.push(`Row ${i + 1}: Worker '${workerName}' is not assigned to your team.`);
+                    }
                 } else {
                     rowErrors.push(`Row ${i + 1}: Worker '${workerName}' not found in system.`);
                 }
             } else {
-                worker_id = req.user.id; 
+                worker_id = req.user.id;
             }
 
             if (assetCode) {
@@ -2415,13 +2430,22 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                 if (assetCodeMap.has(aCode)) {
                     const asset = assetCodeMap.get(aCode);
                     asset_id = asset.id;
+                    // Company check: asset must belong to caller's company
+                    if (callerCompanyId && asset.company_id && String(asset.company_id) !== String(callerCompanyId)) {
+                        rowErrors.push(`Row ${i + 1}: Asset code '${assetCode}' does not belong to your company.`);
+                    }
                 } else {
                     rowErrors.push(`Row ${i + 1}: Asset Code '${assetCode}' not found.`);
                 }
             } else if (assetName) {
                 const aName = assetName.toString().trim().toLowerCase();
                 if (assetNameMap.has(aName)) {
-                    asset_id = assetNameMap.get(aName).id;
+                    const asset = assetNameMap.get(aName);
+                    asset_id = asset.id;
+                    // Company check: asset must belong to caller's company
+                    if (callerCompanyId && asset.company_id && String(asset.company_id) !== String(callerCompanyId)) {
+                        rowErrors.push(`Row ${i + 1}: Asset '${assetName}' does not belong to your company.`);
+                    }
                 } else {
                     rowErrors.push(`Row ${i + 1}: Asset Name '${assetName}' not found.`);
                 }
@@ -2430,7 +2454,12 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
             if (locName) {
                 const lName = locName.toString().trim().toLowerCase();
                 if (locMap.has(lName)) {
-                    location_id = locMap.get(lName);
+                    const locData = locMap.get(lName);
+                    location_id = locData.id;
+                    // Company check: location must belong to caller's company
+                    if (callerCompanyId && locData.company_id && String(locData.company_id) !== String(callerCompanyId)) {
+                        rowErrors.push(`Row ${i + 1}: Location '${locName}' does not belong to your company.`);
+                    }
                 } else {
                     rowErrors.push(`Row ${i + 1}: Location '${locName}' not found.`);
                 }

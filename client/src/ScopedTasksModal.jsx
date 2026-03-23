@@ -92,7 +92,8 @@ const ScopedTasksModal = ({ scopedUser, scopedUserRole, token, lang, t, onClose 
                         user={scopedUser}
                         onRefresh={fetchTasks}
                         lang={lang}
-                        subordinates={isManagerScope ? subordinates : undefined}
+                        subordinates={isManagerScope ? subordinates : [scopedUser]}
+                        scopedCompanyId={scopedUser.company_id}
                     />
                 </div>
             )}

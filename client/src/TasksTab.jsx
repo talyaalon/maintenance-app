@@ -68,7 +68,7 @@ const calendarStyles = `
   .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.25); color: white; }
 `;
 
-const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
+const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scopedCompanyId }) => {
   const [mainTab, setMainTab] = useState('todo');
   const [viewMode, setViewMode] = useState('daily');
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -280,7 +280,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       )}
 
       {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
-      {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} />}
+      {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} scopedCompanyId={scopedCompanyId} />}
 
       <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 mb-5 mx-auto max-w-3xl">
           <TabButton active={mainTab === 'overdue'} onClick={() => setMainTab('overdue')} label={t.tab_overdue || 'Overdue'} icon={<AlertTriangle size={18}/>} count={overdueTasks.length} color="red" />
