@@ -275,7 +275,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       if (viewMode === 'calendar') {
           return (
               <div className="animate-fade-in flex flex-col items-center">
-                  <div className="w-full overflow-x-auto">
+                  <div className="w-full max-w-3xl mx-auto">
                       <Calendar
                         onChange={setSelectedDate}
                         value={selectedDate}

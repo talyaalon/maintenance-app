@@ -138,82 +138,139 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
     };
 
     // ==========================================
-    // מנוע הולידציה המפלצתי (ההנדסה שביקשת)
+    // מנוע הולידציה הארגוני - 2-Step Enterprise Engine
     // ==========================================
     const validateAndMapData = () => {
         const errors = [];
         const validMappedTasks = [];
-        
+
+        if (previewData.length === 0) return { errors: ['הקובץ ריק.'], mapped: [] };
+
+        // ── Task 2B: Trim all string values & strip ghost (all-empty) rows ─────
+        const cleanedData = previewData
+            .map(row => {
+                const clean = {};
+                for (const k of Object.keys(row)) {
+                    clean[k] = typeof row[k] === 'string' ? row[k].trim() : row[k];
+                }
+                return clean;
+            })
+            .filter(row => Object.values(row).some(v => String(v).trim() !== ''));
+
+        if (cleanedData.length === 0) return { errors: ['הקובץ ריק.'], mapped: [] };
+
         // זיהוי שפה לפי עמודת עובד
-        if (previewData.length === 0) return { errors: ["הקובץ ריק."], mapped: [] };
-        const fileCols = Object.keys(previewData[0]);
-        
+        const fileCols = Object.keys(cleanedData[0]);
         const isHeb = fileCols.includes('שם העובד');
         const isEng = fileCols.includes('Worker Name');
         const isTha = fileCols.includes('ชื่อพนักงาน');
 
         if (!isHeb && !isEng && !isTha) {
-            return { errors: ["שגיאה קריטית: עמודות חובה לא זוהו. אנא השתמש בתבנית שהורדת."], mapped: [] };
+            return { errors: ['שגיאה קריטית: עמודות חובה לא זוהו. אנא השתמש בתבנית שהורדת.'], mapped: [] };
         }
 
         const keys = {
-            worker: isHeb ? 'שם העובד' : isEng ? 'Worker Name' : 'ชื่อพนักงาน',
-            manager: isHeb ? 'מנהל ישיר' : isEng ? 'Manager Name' : 'ชื่อผู้จัดการ',
-            title: isHeb ? 'שם המשימה' : isEng ? 'Task Title' : 'ชื่องาน',
-            location: isHeb ? 'מיקום' : isEng ? 'Location' : 'สถานที่',
-            freq: isHeb ? 'תדירות' : isEng ? 'Frequency' : 'ความถี่',
-            dates: isHeb ? 'תאריך או ימים' : isEng ? 'Date or Days' : 'วันที่หรือวัน',
-            urgency: isHeb ? 'דחיפות' : isEng ? 'Urgency' : 'ความเร่งด่วน',
-            cat: isHeb ? 'קטגוריה' : isEng ? 'Category' : 'หมวดหมู่',
-            asset: isHeb ? 'נכס' : isEng ? 'Asset' : 'ทรัพย์สิน',
-            images: isHeb ? 'תמונות (קישורים)' : isEng ? 'Images (URLs)' : 'รูปภาพ (ลิงก์)',
-            notes: isHeb ? 'הערות' : isEng ? 'Notes' : 'หมายเหตุ'
+            worker:   isHeb ? 'שם העובד'         : isEng ? 'Worker Name'   : 'ชื่อพนักงาน',
+            manager:  isHeb ? 'מנהל ישיר'         : isEng ? 'Manager Name'  : 'ชื่อผู้จัดการ',
+            title:    isHeb ? 'שם המשימה'         : isEng ? 'Task Title'    : 'ชื่องาน',
+            location: isHeb ? 'מיקום'             : isEng ? 'Location'      : 'สถานที่',
+            freq:     isHeb ? 'תדירות'            : isEng ? 'Frequency'     : 'ความถี่',
+            dates:    isHeb ? 'תאריך או ימים'     : isEng ? 'Date or Days'  : 'วันที่หรือวัน',
+            urgency:  isHeb ? 'דחיפות'            : isEng ? 'Urgency'       : 'ความเร่งด่วน',
+            cat:      isHeb ? 'קטגוריה'           : isEng ? 'Category'      : 'หมวดหมู่',
+            asset:    isHeb ? 'נכס'               : isEng ? 'Asset'         : 'ทรัพย์สิน',
+            images:   isHeb ? 'תמונות (קישורים)' : isEng ? 'Images (URLs)' : 'รูปภาพ (ลิงก์)',
+            notes:    isHeb ? 'הערות'             : isEng ? 'Notes'         : 'หมายเหตุ',
         };
 
-        previewData.forEach((row, index) => {
-            const rowNum = index + 2;
-            const empName = String(row[keys.worker] || '').trim();
-            const mgrName = String(row[keys.manager] || '').trim();
-            const taskName = String(row[keys.title] || '').trim();
-            const locName = String(row[keys.location] || '').trim();
-            const freqValue = String(row[keys.freq] || '').trim().toLowerCase();
-            const datesValue = String(row[keys.dates] || '').trim();
-            const imagesStr = String(row[keys.images] || '').trim();
-            
-            if (!empName || !mgrName || !taskName || !locName || !freqValue || !datesValue) {
-                errors.push(`שורה ${rowNum}: אחד או יותר משדות החובה ריקים.`);
-                return;
+        // ── Task 2D: Structured error message helpers ─────────────────────────
+        const eCol = (rowNum, col, msg) => `[Row ${rowNum}, Column '${col}']: ${msg}`;
+        const eRow = (rowNum, msg)       => `[Row ${rowNum}]: ${msg}`;
+
+        // Urgency allowed values
+        const HIGH_URGENCY   = ['דחוף', 'גבוהה', 'high', 'ด่วน'];
+        const NORMAL_URGENCY = ['רגילה', 'normal', 'ปกติ', ''];
+        const ALL_URGENCY    = [...HIGH_URGENCY, ...NORMAL_URGENCY];
+        const urgencyHint    = isHeb ? 'דחוף / רגילה' : isTha ? 'ด่วน / ปกติ' : 'High / Normal';
+
+        cleanedData.forEach((row, index) => {
+            const rowNum    = index + 2; // header = row 1
+            const rowErrors = [];        // per-row accumulator (Task 2C)
+
+            const empName    = String(row[keys.worker]   || '');
+            const mgrName    = String(row[keys.manager]  || '');
+            const taskName   = String(row[keys.title]    || '');
+            const locName    = String(row[keys.location] || '');
+            const freqRaw    = String(row[keys.freq]     || '');
+            const freqValue  = freqRaw.toLowerCase();
+            const datesValue = String(row[keys.dates]    || '');
+            const imagesStr  = String(row[keys.images]   || '');
+
+            // ── Mandatory field presence (per-column errors) ───────────────────
+            if (!empName)    rowErrors.push(eCol(rowNum, keys.worker,   'Field is required.'));
+            if (!mgrName)    rowErrors.push(eCol(rowNum, keys.manager,  'Field is required.'));
+            if (!taskName)   rowErrors.push(eCol(rowNum, keys.title,    'Field is required.'));
+            if (!locName)    rowErrors.push(eCol(rowNum, keys.location, 'Field is required.'));
+            if (!freqValue)  rowErrors.push(eCol(rowNum, keys.freq,     'Field is required.'));
+            if (!datesValue) rowErrors.push(eCol(rowNum, keys.dates,    'Field is required.'));
+
+            if (rowErrors.length > 0) { errors.push(...rowErrors); return; }
+
+            // ── Title DB length limit ─────────────────────────────────────────
+            if (taskName.length > 255) {
+                rowErrors.push(eCol(rowNum, keys.title, `Title exceeds the 255-character limit (${taskName.length} chars).`));
             }
 
-            // 1. עובד מול מנהל
+            // ── Urgency enum validation ────────────────────────────────────────
+            const urgencyRaw   = String(row[keys.urgency] || '');
+            const urgencyLower = urgencyRaw.toLowerCase();
+            if (!ALL_URGENCY.includes(urgencyLower)) {
+                rowErrors.push(eCol(rowNum, keys.urgency, `"${urgencyRaw}" is not valid. Allowed: ${urgencyHint}.`));
+            }
+            const isUrgent = HIGH_URGENCY.includes(urgencyLower);
+
+            // ── Employee & Manager — company-scoped + M:M team check ──────────
             const employee = users.find(u => u.full_name === empName && u.role === 'EMPLOYEE');
-            const manager = users.find(u => u.full_name === mgrName && ['MANAGER', 'BIG_BOSS'].includes(u.role));
+            const manager  = users.find(u => u.full_name === mgrName && ['MANAGER', 'BIG_BOSS'].includes(u.role));
 
-            if (!employee) errors.push(`שורה ${rowNum}: העובד "${empName}" לא קיים במערכת.`);
-            if (!manager) errors.push(`שורה ${rowNum}: המנהל "${mgrName}" לא קיים.`);
-            if (employee && manager && employee.parent_manager_id !== manager.id && manager.role !== 'BIG_BOSS') {
-                errors.push(`שורה ${rowNum}: סמכויות - העובד "${empName}" אינו מוגדר תחת המנהל "${mgrName}".`);
+            if (!employee) {
+                rowErrors.push(eCol(rowNum, keys.worker,  `Employee "${empName}" not found in the system.`));
+            }
+            if (!manager) {
+                rowErrors.push(eCol(rowNum, keys.manager, `Manager "${mgrName}" not found in the system.`));
+            }
+            if (employee && manager) {
+                if (employee.parent_manager_id !== manager.id && manager.role !== 'BIG_BOSS') {
+                    rowErrors.push(eRow(rowNum, `Employee "${empName}" is not assigned to manager "${mgrName}".`));
+                }
+                // Strict M:M scoping: logged-in MANAGER may only assign their own team
+                if (user.role === 'MANAGER' && employee.parent_manager_id !== user.id) {
+                    rowErrors.push(eRow(rowNum, `Employee "${empName}" is not assigned to your team.`));
+                }
             }
 
+            // ── Location — company-scoped via API ─────────────────────────────
             const location = locations.find(l => l.name === locName);
-            if (!location) errors.push(`שורה ${rowNum}: המיקום "${locName}" לא מוגדר במערכת.`);
+            if (!location) {
+                rowErrors.push(eCol(rowNum, keys.location, `Location "${locName}" not found in your company.`));
+            }
 
-            // 2. תרגום תדירויות ופיענוח תאריכים
+            // ── Frequency & Dates (EXISTING LOGIC — conditions unchanged) ──────
             let recurringType = 'once';
-            let parsedDays = []; // לשבועי
-            let monthlyDates = []; // לחודשי
-            let yearlyDates = []; // לשנתי
-            let finalDate = new Date(); // לחד פעמי
-            
-            const isOnce = ['חד פעמי', 'one-time', 'ครั้งเดียว'].includes(freqValue);
-            const isDaily = ['יומי', 'daily', 'รายวัน'].includes(freqValue);
-            const isWeekly = ['שבועי', 'weekly', 'รายสัปดาห์'].includes(freqValue);
-            const isMonthly = ['חודשי', 'monthly', 'รายเดือน'].includes(freqValue);
-            const isQuarterly = ['רבעוני', 'quarterly', 'รายไตรมาส'].includes(freqValue);
-            const isYearly = ['שנתי', 'yearly', 'รายปี'].includes(freqValue);
+            let parsedDays    = [];
+            let monthlyDates  = [];
+            let yearlyDates   = [];
+            let finalDate     = new Date();
 
-            const fullDateRegex = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/; // DD/MM/YYYY or DD-MM-YYYY
-            const shortDateRegex = /^(\d{1,2})[-/](\d{1,2})$/; // DD/MM or DD-MM
+            const fullDateRegex  = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/; // DD/MM/YYYY or DD-MM-YYYY
+            const shortDateRegex = /^(\d{1,2})[-/](\d{1,2})$/;             // DD/MM or DD-MM
+
+            const isOnce      = ['חד פעמי', 'one-time', 'ครั้งเดียว'].includes(freqValue);
+            const isDaily     = ['יומי', 'daily', 'รายวัน'].includes(freqValue);
+            const isWeekly    = ['שבועי', 'weekly', 'รายสัปดาห์'].includes(freqValue);
+            const isMonthly   = ['חודשי', 'monthly', 'รายเดือน'].includes(freqValue);
+            const isQuarterly = ['רבעוני', 'quarterly', 'รายไตรมาส'].includes(freqValue);
+            const isYearly    = ['שנתי', 'yearly', 'รายปี'].includes(freqValue);
 
             if (isOnce) {
                 recurringType = 'once';
@@ -223,125 +280,126 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                 } else if (!isNaN(Date.parse(datesValue))) {
                     finalDate = new Date(datesValue);
                 } else {
-                    errors.push(`שורה ${rowNum}: תאריך חד פעמי לא חוקי. השתמש בפורמט יום/חודש/שנה (למשל 25/12/2026 או 25-12-2026).`);
+                    rowErrors.push(eCol(rowNum, keys.dates, 'Invalid one-time date. Use format DD/MM/YYYY (e.g. 25/12/2026 or 25-12-2026).'));
                 }
-            }
-            else if (isDaily) {
+            } else if (isDaily) {
                 recurringType = 'daily';
                 const days = datesValue.split(',').map(d => parseInt(d.trim()));
                 const invalidDays = days.filter(d => isNaN(d) || d < 1 || d > 7);
                 if (invalidDays.length > 0) {
-                    errors.push(`שורה ${rowNum}: במשימה יומית מותר להזין ספרות 1 עד 7 מופרדות בפסיקים. (נמצא: ${invalidDays.join(',')})`);
+                    rowErrors.push(eCol(rowNum, keys.dates, `Daily tasks require digits 1–7 separated by commas (found: ${invalidDays.join(',')}).`));
                 } else {
                     parsedDays = days.map(d => d === 1 ? 0 : d === 2 ? 1 : d === 3 ? 2 : d === 4 ? 3 : d === 5 ? 4 : d === 6 ? 5 : 6);
                 }
-            }
-            else if (isWeekly) {
+            } else if (isWeekly) {
                 recurringType = 'weekly';
                 const days = datesValue.split(',').map(d => parseInt(d.trim()));
                 if (days.length > 1) {
-                    errors.push(`שורה ${rowNum}: במשימה שבועית יש להזין יום אחד בלבד (1-7).`);
+                    rowErrors.push(eCol(rowNum, keys.dates, 'Weekly tasks require exactly one day (1–7).'));
                 } else {
                     const invalidDays = days.filter(d => isNaN(d) || d < 1 || d > 7);
                     if (invalidDays.length > 0) {
-                        errors.push(`שורה ${rowNum}: במשימה שבועית מותר להזין ספרה אחת בין 1 ל-7. (נמצא: ${invalidDays.join(',')})`);
+                        rowErrors.push(eCol(rowNum, keys.dates, `Weekly tasks require a single digit between 1 and 7 (found: ${invalidDays.join(',')}).`));
                     } else {
                         parsedDays = days.map(d => d === 1 ? 0 : d === 2 ? 1 : d === 3 ? 2 : d === 4 ? 3 : d === 5 ? 4 : d === 6 ? 5 : 6);
                     }
                 }
-            }
-            else if (isMonthly) {
+            } else if (isMonthly) {
                 recurringType = 'monthly';
                 const days = datesValue.split(',').map(d => parseInt(d.trim()));
                 const invalidDays = days.filter(d => isNaN(d) || d < 1 || d > 31);
                 if (invalidDays.length > 0) {
-                    errors.push(`שורה ${rowNum}: במשימה חודשית יש להזין מספרים בין 1 ל-31 מופרדים בפסיקים.`);
+                    rowErrors.push(eCol(rowNum, keys.dates, 'Monthly tasks require numbers 1–31 separated by commas.'));
                 } else {
                     monthlyDates = days;
                 }
-            } 
-            else if (isQuarterly) {
+            } else if (isQuarterly) {
                 recurringType = 'quarterly';
                 const datesArr = datesValue.split(',').map(d => d.trim());
                 if (datesArr.length !== 4) {
-                    errors.push(`שורה ${rowNum}: משימה רבעונית חייבת לכלול בדיוק 4 תאריכים מופרדים בפסיקים (למשל 15/01, 15/04, 15/07, 15/10).`);
+                    rowErrors.push(eCol(rowNum, keys.dates, 'Quarterly tasks require exactly 4 dates in DD/MM format (e.g. 15/01, 15/04, 15/07, 15/10).'));
                 } else {
                     datesArr.forEach((d, qi) => {
                         const match = d.match(shortDateRegex);
                         if (match) {
-                            const day = match[1].padStart(2, '0');
+                            const day   = match[1].padStart(2, '0');
                             const month = parseInt(match[2]);
                             const quarterMonths = [[1,2,3],[4,5,6],[7,8,9],[10,11,12]];
                             if (!quarterMonths[qi].includes(month)) {
-                                errors.push(`שורה ${rowNum}: תאריך Q${qi+1} ("${d}") חייב להיות בחודשים ${quarterMonths[qi].join('/')}.`);
+                                rowErrors.push(eCol(rowNum, keys.dates, `Q${qi+1} date "${d}" must be in months ${quarterMonths[qi].join('/')}.`));
                             } else {
                                 yearlyDates.push(`${day}/${String(month).padStart(2,'0')}`);
                             }
                         } else {
-                            errors.push(`שורה ${rowNum}: תאריך רבעוני לא חוקי ("${d}"). השתמש בפורמט יום/חודש (למשל 15/01).`);
+                            rowErrors.push(eCol(rowNum, keys.dates, `Invalid quarterly date "${d}". Use format DD/MM (e.g. 15/01).`));
                         }
                     });
                 }
-            }
-            else if (isYearly) {
+            } else if (isYearly) {
                 recurringType = 'yearly';
                 const datesArr = datesValue.split(',').map(d => d.trim());
                 datesArr.forEach(d => {
                     const match = d.match(shortDateRegex);
                     if (match) {
-                        const day = match[1].padStart(2, '0');
+                        const day   = match[1].padStart(2, '0');
                         const month = match[2].padStart(2, '0');
                         yearlyDates.push(`${day}/${month}`);
                     } else {
-                        errors.push(`שורה ${rowNum}: תאריך שנתי לא חוקי ("${d}"). השתמש בפורמט יום/חודש (למשל 01/08 או 01-08).`);
+                        rowErrors.push(eCol(rowNum, keys.dates, `Invalid yearly date "${d}". Use format DD/MM (e.g. 01/08 or 01-08).`));
                     }
                 });
             } else {
-                errors.push(`שורה ${rowNum}: תדירות "${freqValue}" לא מוכרת.`);
+                rowErrors.push(eCol(rowNum, keys.freq, `Frequency "${freqRaw}" is not recognized. Use: One-time / Daily / Weekly / Monthly / Quarterly / Yearly.`));
             }
 
-            // 3. תמונות (פיצול לפסיקים)
+            // ── Images ────────────────────────────────────────────────────────
             let parsedImages = [];
             if (imagesStr) {
                 parsedImages = imagesStr.split(',').map(img => img.trim()).filter(img => img.startsWith('http'));
             }
 
-            // 4. קטגוריה ונכס
+            // ── Category & Asset — company-scoped via API ─────────────────────
             let catId = null, assetId = null;
-            const catName = String(row[keys.cat] || '').trim();
-            const assetName = String(row[keys.asset] || '').trim();
+            const catName   = String(row[keys.cat]   || '');
+            const assetName = String(row[keys.asset] || '');
 
             if (catName) {
                 const cat = categories.find(c => c.name === catName);
-                if (cat) catId = cat.id; else errors.push(`שורה ${rowNum}: קטגוריה "${catName}" לא קיימת.`);
+                if (cat) {
+                    catId = cat.id;
+                } else {
+                    rowErrors.push(eCol(rowNum, keys.cat, `Category "${catName}" not found in your company.`));
+                }
             }
             if (assetName && catId) {
                 const as = assets.find(a => a.name === assetName && a.category_id === catId);
-                if (as) assetId = as.id; else errors.push(`שורה ${rowNum}: הנכס "${assetName}" לא נמצא תחת קטגוריה זו.`);
+                if (as) {
+                    assetId = as.id;
+                } else {
+                    rowErrors.push(eCol(rowNum, keys.asset, `Asset "${assetName}" not found under the specified category.`));
+                }
             }
 
-            // דחיפות
-            const urgencyVal = String(row[keys.urgency] || '').trim();
-            const isUrgent = ['דחוף', 'גבוהה', 'high', 'ด่วน'].includes(urgencyVal.toLowerCase());
-
-            if (errors.length === 0) {
+            // ── Accumulate row errors; push to validMappedTasks only if clean ──
+            if (rowErrors.length === 0) {
                 validMappedTasks.push({
-                    title: taskName,
-                    urgency: isUrgent ? 'High' : 'Normal',
-                    description: String(row[keys.notes] || '').trim(),
-                    location_id: location?.id,
-                    worker_id: employee?.id,
-                    asset_id: assetId,
-                    is_recurring: recurringType !== 'once',
-                    recurring_type: recurringType !== 'once' ? recurringType : null,
-                    due_date: finalDate.toISOString(),
-                    selected_days: parsedDays,       // [0, 2, 4] for daily/weekly
-                    monthly_dates: monthlyDates,     // [1, 15] for monthly
-                    quarterly_dates: recurringType === 'quarterly' ? yearlyDates : [], // ["15/01", "15/04", ...]
-                    yearly_dates: recurringType === 'yearly' ? yearlyDates : [],       // ["01/08", "25/12"]
-                    images: parsedImages             // ["http://..", "http://.."]
+                    title:           taskName,
+                    urgency:         isUrgent ? 'High' : 'Normal',
+                    description:     String(row[keys.notes] || ''),
+                    location_id:     location?.id,
+                    worker_id:       employee?.id,
+                    asset_id:        assetId,
+                    is_recurring:    recurringType !== 'once',
+                    recurring_type:  recurringType !== 'once' ? recurringType : null,
+                    due_date:        finalDate.toISOString(),
+                    selected_days:   parsedDays,      // [0, 2, 4] for daily/weekly
+                    monthly_dates:   monthlyDates,    // [1, 15] for monthly
+                    quarterly_dates: recurringType === 'quarterly' ? yearlyDates : [], // ["15/01", ...]
+                    yearly_dates:    recurringType === 'yearly'    ? yearlyDates : [], // ["01/08", ...]
+                    images:          parsedImages,
                 });
             }
+            errors.push(...rowErrors);
         });
 
         return { errors, mapped: validMappedTasks };
