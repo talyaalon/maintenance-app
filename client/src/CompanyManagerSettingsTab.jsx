@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, MapPin, Tag, Box, Shield, Pencil, Trash2, Loader2, Plus, Settings, UserCheck, ChevronDown, LayoutGrid, Send, FileSpreadsheet } from 'lucide-react';
+import { Building2, Users, MapPin, Tag, Box, Shield, Pencil, Trash2, Loader2, Plus, Settings, UserCheck, LayoutGrid, Send, FileSpreadsheet } from 'lucide-react';
 import ScopedTasksModal from './ScopedTasksModal';
 import ConfigExcelPanel from './ConfigExcelPanel';
+import MultiLangNameInput from './MultiLangNameInput';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -69,7 +70,7 @@ const saveBtnCls   = "flex-1 py-1.5 text-xs bg-[#714B67] text-white rounded-lg f
 const cancelBtnCls = "flex-1 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition";
 
 // ─── Inline User Form (Edit or Add) ──────────────────────────────────────────
-const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, token, t, onClose, onSaved, isAddPanel = false }) => {
+const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, token, t, lang, onClose, onSaved, isAddPanel = false }) => {
     const isEdit = !!editUser;
     const [form, setForm] = useState({
         full_name_en: editUser?.full_name_en || editUser?.full_name || '',
@@ -82,7 +83,6 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
         line_user_id: editUser?.line_user_id || '',
     });
     const [saving, setSaving] = useState(false);
-    const [showAltLangs, setShowAltLangs] = useState(!!(editUser?.full_name_he || editUser?.full_name_th));
     const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
@@ -122,29 +122,14 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
                 {isEdit ? `Edit ${roleLabel}` : `Add ${roleLabel}`}
             </p>
-            <div>
-                <div className="flex items-center justify-between mb-0.5">
-                    <label className={labelCls}>Name (EN) *</label>
-                    <button type="button" onClick={() => setShowAltLangs(p => !p)}
-                        className="flex items-center gap-0.5 text-[9px] font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
-                        <span>{showAltLangs ? 'Hide' : '+ HE / TH'}</span>
-                        <ChevronDown size={10} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
-                    </button>
-                </div>
-                <input type="text" value={form.full_name_en} onChange={e => set('full_name_en', e.target.value)} className={inputCls} />
-            </div>
-            {showAltLangs && (
-                <>
-                    <div>
-                        <label className={labelCls}>Name (HE)</label>
-                        <input type="text" value={form.full_name_he} onChange={e => set('full_name_he', e.target.value)} className={inputCls} />
-                    </div>
-                    <div>
-                        <label className={labelCls}>Name (TH)</label>
-                        <input type="text" value={form.full_name_th} onChange={e => set('full_name_th', e.target.value)} className={inputCls} />
-                    </div>
-                </>
-            )}
+            <MultiLangNameInput
+                value={{ full_name_en: form.full_name_en, full_name_he: form.full_name_he, full_name_th: form.full_name_th }}
+                onChange={updated => setForm(p => ({ ...p, ...updated }))}
+                lang={lang || 'en'}
+                prefix="full_name"
+                label="Name *"
+                compact
+            />
             {[
                 { label: 'Email *',                                          key: 'email',        type: 'email' },
                 { label: isEdit ? 'Password (blank = keep)' : 'Password *', key: 'password',     type: 'password' },
@@ -177,7 +162,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
 };
 
 // ─── Inline Location Form ─────────────────────────────────────────────────────
-const InlineLocationForm = ({ editLocation, createdBy, token, t, onClose, onSaved, isAddPanel = false }) => {
+const InlineLocationForm = ({ editLocation, createdBy, token, t, lang, onClose, onSaved, isAddPanel = false }) => {
     const isEdit = !!editLocation;
     const [form, setForm] = useState({
         name_en:  editLocation?.name_en || editLocation?.name || '',
@@ -187,7 +172,6 @@ const InlineLocationForm = ({ editLocation, createdBy, token, t, onClose, onSave
     });
     const [imageFile, setImageFile] = useState(null);
     const [saving, setSaving] = useState(false);
-    const [showAltLangs, setShowAltLangs] = useState(!!(editLocation?.name_he || editLocation?.name_th));
     const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     useEffect(() => {
@@ -228,29 +212,14 @@ const InlineLocationForm = ({ editLocation, createdBy, token, t, onClose, onSave
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
                 {isEdit ? 'Edit Location' : 'Add Location'}
             </p>
-            <div>
-                <div className="flex items-center justify-between mb-0.5">
-                    <label className={labelCls}>Name (EN) *</label>
-                    <button type="button" onClick={() => setShowAltLangs(p => !p)}
-                        className="flex items-center gap-0.5 text-[9px] font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
-                        <span>{showAltLangs ? 'Hide' : '+ HE / TH'}</span>
-                        <ChevronDown size={10} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
-                    </button>
-                </div>
-                <input type="text" value={form.name_en} onChange={e => set('name_en', e.target.value)} className={inputCls} />
-            </div>
-            {showAltLangs && (
-                <>
-                    <div>
-                        <label className={labelCls}>Name (HE)</label>
-                        <input type="text" value={form.name_he} onChange={e => set('name_he', e.target.value)} className={inputCls} />
-                    </div>
-                    <div>
-                        <label className={labelCls}>Name (TH)</label>
-                        <input type="text" value={form.name_th} onChange={e => set('name_th', e.target.value)} className={inputCls} />
-                    </div>
-                </>
-            )}
+            <MultiLangNameInput
+                value={{ name_en: form.name_en, name_he: form.name_he, name_th: form.name_th }}
+                onChange={updated => setForm(p => ({ ...p, ...updated }))}
+                lang={lang || 'en'}
+                prefix="name"
+                label="Name *"
+                compact
+            />
             <div>
                 <label className={labelCls}>Address / Map Link</label>
                 <input type="text" value={form.address} onChange={e => set('address', e.target.value)} className={inputCls} />
@@ -275,7 +244,7 @@ const InlineLocationForm = ({ editLocation, createdBy, token, t, onClose, onSave
 };
 
 // ─── Inline Category Form ─────────────────────────────────────────────────────
-const InlineCategoryForm = ({ editCategory, createdBy, token, t, onClose, onSaved, isAddPanel = false }) => {
+const InlineCategoryForm = ({ editCategory, createdBy, token, t, lang, onClose, onSaved, isAddPanel = false }) => {
     const isEdit = !!editCategory;
     const [form, setForm] = useState({
         name_en: editCategory?.name_en || editCategory?.name || '',
@@ -284,7 +253,6 @@ const InlineCategoryForm = ({ editCategory, createdBy, token, t, onClose, onSave
         code:    editCategory?.code || '',
     });
     const [saving, setSaving] = useState(false);
-    const [showAltLangs, setShowAltLangs] = useState(!!(editCategory?.name_he || editCategory?.name_th));
     const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
@@ -315,29 +283,14 @@ const InlineCategoryForm = ({ editCategory, createdBy, token, t, onClose, onSave
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
                 {isEdit ? 'Edit Category' : 'Add Category'}
             </p>
-            <div>
-                <div className="flex items-center justify-between mb-0.5">
-                    <label className={labelCls}>Name (EN) *</label>
-                    <button type="button" onClick={() => setShowAltLangs(p => !p)}
-                        className="flex items-center gap-0.5 text-[9px] font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
-                        <span>{showAltLangs ? 'Hide' : '+ HE / TH'}</span>
-                        <ChevronDown size={10} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
-                    </button>
-                </div>
-                <input type="text" value={form.name_en} onChange={e => set('name_en', e.target.value)} className={inputCls} />
-            </div>
-            {showAltLangs && (
-                <>
-                    <div>
-                        <label className={labelCls}>Name (HE)</label>
-                        <input type="text" value={form.name_he} onChange={e => set('name_he', e.target.value)} className={inputCls} />
-                    </div>
-                    <div>
-                        <label className={labelCls}>Name (TH)</label>
-                        <input type="text" value={form.name_th} onChange={e => set('name_th', e.target.value)} className={inputCls} />
-                    </div>
-                </>
-            )}
+            <MultiLangNameInput
+                value={{ name_en: form.name_en, name_he: form.name_he, name_th: form.name_th }}
+                onChange={updated => setForm(p => ({ ...p, ...updated }))}
+                lang={lang || 'en'}
+                prefix="name"
+                label="Name *"
+                compact
+            />
             <div>
                 <label className={labelCls}>Code (3 chars) *</label>
                 <input type="text" value={form.code} maxLength={3}
@@ -356,7 +309,7 @@ const InlineCategoryForm = ({ editCategory, createdBy, token, t, onClose, onSave
 };
 
 // ─── Inline Asset Form ────────────────────────────────────────────────────────
-const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t, onClose, onSaved, isAddPanel = false }) => {
+const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t, lang, onClose, onSaved, isAddPanel = false }) => {
     const isEdit = !!editAsset;
     const [form, setForm] = useState({
         name_en:     editAsset?.name_en || editAsset?.name || '',
@@ -366,7 +319,6 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
         location_id: editAsset?.location_id ? String(editAsset.location_id) : '',
     });
     const [saving, setSaving] = useState(false);
-    const [showAltLangs, setShowAltLangs] = useState(!!(editAsset?.name_he || editAsset?.name_th));
     const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async () => {
@@ -398,29 +350,14 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
                 {isEdit ? 'Edit Asset' : 'Add Asset'}
             </p>
-            <div>
-                <div className="flex items-center justify-between mb-0.5">
-                    <label className={labelCls}>Name (EN) *</label>
-                    <button type="button" onClick={() => setShowAltLangs(p => !p)}
-                        className="flex items-center gap-0.5 text-[9px] font-medium text-[#714B67]/60 hover:text-[#714B67] transition">
-                        <span>{showAltLangs ? 'Hide' : '+ HE / TH'}</span>
-                        <ChevronDown size={10} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
-                    </button>
-                </div>
-                <input type="text" value={form.name_en} onChange={e => set('name_en', e.target.value)} className={inputCls} />
-            </div>
-            {showAltLangs && (
-                <>
-                    <div>
-                        <label className={labelCls}>Name (HE)</label>
-                        <input type="text" value={form.name_he} onChange={e => set('name_he', e.target.value)} className={inputCls} />
-                    </div>
-                    <div>
-                        <label className={labelCls}>Name (TH)</label>
-                        <input type="text" value={form.name_th} onChange={e => set('name_th', e.target.value)} className={inputCls} />
-                    </div>
-                </>
-            )}
+            <MultiLangNameInput
+                value={{ name_en: form.name_en, name_he: form.name_he, name_th: form.name_th }}
+                onChange={updated => setForm(p => ({ ...p, ...updated }))}
+                lang={lang || 'en'}
+                prefix="name"
+                label="Name *"
+                compact
+            />
             <div>
                 <label className={labelCls}>Category *</label>
                 <select value={form.category_id} onChange={e => set('category_id', e.target.value)}
@@ -819,6 +756,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             role="COMPANY_MANAGER"
                             token={token}
                             t={t}
+                            lang={lang}
                             onClose={() => setOpenPanel(null)}
                             onSaved={fetchData}
                         />
@@ -899,6 +837,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             parentManagerId={createdBy}
                             token={token}
                             t={t}
+                            lang={lang}
                             onClose={() => setOpenPanel(null)}
                             onSaved={fetchData}
                             isAddPanel
@@ -939,6 +878,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                                     role={u.role}
                                     token={token}
                                     t={t}
+                                    lang={lang}
                                     onClose={() => setOpenPanel(null)}
                                     onSaved={fetchData}
                                 />
@@ -1006,6 +946,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             parentManagerId={createdBy}
                             token={token}
                             t={t}
+                            lang={lang}
                             onClose={() => setOpenPanel(null)}
                             onSaved={fetchData}
                             isAddPanel
@@ -1042,6 +983,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                                     role="EMPLOYEE"
                                     token={token}
                                     t={t}
+                                    lang={lang}
                                     onClose={() => setOpenPanel(null)}
                                     onSaved={fetchData}
                                 />
@@ -1097,6 +1039,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             createdBy={createdBy}
                             token={token}
                             t={t}
+                            lang={lang}
                             onClose={() => setOpenPanel(null)}
                             onSaved={fetchData}
                             isAddPanel
@@ -1126,6 +1069,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                                     createdBy={createdBy}
                                     token={token}
                                     t={t}
+                                    lang={lang}
                                     onClose={() => setOpenPanel(null)}
                                     onSaved={fetchData}
                                 />
@@ -1158,6 +1102,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             createdBy={createdBy}
                             token={token}
                             t={t}
+                            lang={lang}
                             onClose={() => setOpenPanel(null)}
                             onSaved={fetchData}
                             isAddPanel
@@ -1180,6 +1125,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                                     createdBy={createdBy}
                                     token={token}
                                     t={t}
+                                    lang={lang}
                                     onClose={() => setOpenPanel(null)}
                                     onSaved={fetchData}
                                 />
@@ -1214,6 +1160,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                             locations={locations}
                             token={token}
                             t={t}
+                            lang={lang}
                             onClose={() => setOpenPanel(null)}
                             onSaved={fetchData}
                             isAddPanel
@@ -1238,6 +1185,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                                     locations={locations}
                                     token={token}
                                     t={t}
+                                    lang={lang}
                                     onClose={() => setOpenPanel(null)}
                                     onSaved={fetchData}
                                 />

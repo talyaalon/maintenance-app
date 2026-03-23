@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Save, X, LogOut, Eye, EyeOff, Globe, ChevronDown } from 'lucide-react';
+import { Camera, Save, X, LogOut, Eye, EyeOff, Globe } from 'lucide-react';
+import MultiLangNameInput from './MultiLangNameInput';
 
 const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showAltLangs, setShowAltLangs] = useState(!!(user?.full_name_he || user?.full_name_th));
   
   const [formData, setFormData] = useState({
     full_name: user.name || user.full_name || '',
@@ -45,7 +45,6 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
           line_user_id:       src.line_user_id  || '',
       });
       setPreviewImage(src.profile_picture_url || null);
-      setShowAltLangs(!!(src.full_name_he || src.full_name_th));
   }, [user]);
 
   const handleImageChange = (e) => {
@@ -167,51 +166,15 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
 
         {/* ── Names Group ────────────────────────────────────────────────────── */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t.full_name_label || 'Name'}</h3>
-            <button
-              type="button"
-              onClick={() => setShowAltLangs(p => !p)}
-              className="flex items-center gap-1 text-[10px] font-semibold text-[#714B67]/60 hover:text-[#714B67] transition"
-            >
-              <Globe size={11} />
-              <span>{showAltLangs ? (t.hide || 'Hide') : '+ HE / TH'}</span>
-              <ChevronDown size={11} className={`transition-transform duration-200 ${showAltLangs ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-          <div className="space-y-2.5">
-            <input
-              type="text"
-              dir="ltr"
-              placeholder={t.name_en_placeholder || 'Name in English'}
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-default"
-              value={formData.full_name_en}
-              onChange={e => setFormData({...formData, full_name_en: e.target.value})}
-              disabled={!isEditing}
-            />
-            {showAltLangs && (
-              <>
-                <input
-                  type="text"
-                  dir="rtl"
-                  placeholder={t.name_he_placeholder || 'שם בעברית'}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-default"
-                  value={formData.full_name_he}
-                  onChange={e => setFormData({...formData, full_name_he: e.target.value})}
-                  disabled={!isEditing}
-                />
-                <input
-                  type="text"
-                  dir="ltr"
-                  placeholder={t.name_th_placeholder || 'ชื่อภาษาไทย'}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-default"
-                  value={formData.full_name_th}
-                  onChange={e => setFormData({...formData, full_name_th: e.target.value})}
-                  disabled={!isEditing}
-                />
-              </>
-            )}
-          </div>
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">{t.full_name_label || 'Name'}</h3>
+          <MultiLangNameInput
+            value={{ full_name_en: formData.full_name_en, full_name_he: formData.full_name_he, full_name_th: formData.full_name_th }}
+            onChange={updated => setFormData(prev => ({ ...prev, ...updated }))}
+            lang={lang}
+            prefix="full_name"
+            disabled={!isEditing}
+            required
+          />
         </div>
 
         {/* ── Divider ─────────────────────────────────────────────────────────── */}
