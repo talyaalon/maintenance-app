@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trash2, Edit2, ChevronDown, ChevronUp, User, X, Plus, Save, Eye, EyeOff } from 'lucide-react';
 import TasksTab from './TasksTab';
-import ScopedTasksPanel from './ScopedTasksPanel';
+import ScopedTasksModal from './ScopedTasksModal';
 
 // ─── Branded delete-confirm modal ────────────────────────────────────────────
 const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
@@ -74,8 +74,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const [addAssignedEmployeeIds, setAddAssignedEmployeeIds] = useState(new Set());
 
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-    const [openPanel, setOpenPanel] = useState(null);
-    const togglePanel = (key) => setOpenPanel(prev => prev === key ? null : key);
+    const [scopedModalUser, setScopedModalUser] = useState(null);
     const [selectedMember, setSelectedMember] = useState(null);
     const [memberTasks, setMemberTasks] = useState([]);
     const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -88,7 +87,10 @@ const TeamTab = ({ token, t, user, lang }) => {
     const fetchTeam = async () => {
         setIsLoadingTeam(true);
         try {
-            const res = await fetch('https://maintenance-app-staging.onrender.com/users', {
+            const url = user?.role === 'MANAGER'
+                ? `https://maintenance-app-staging.onrender.com/users?manager_id=${user.id}`
+                : 'https://maintenance-app-staging.onrender.com/users';
+            const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const raw = res.ok ? await res.json().catch(() => []) : [];
@@ -425,16 +427,16 @@ const TeamTab = ({ token, t, user, lang }) => {
     };
 
     // ─── Manager (AreaManager) Team view — M:M assigned employees ──────────────
-    // Employee name is a clickable link that opens ScopedTasksPanel inline.
+    // Employee list is already M:M-scoped via fetchTeam (?manager_id=…).
+    // Clicking an employee name opens ScopedTasksModal (full-screen).
     const renderManagerTeamView = () => {
-        const myEmployees = employees.filter(e => e?.parent_manager_id === user?.id);
+        const myEmployees = employees; // already M:M-scoped via fetch
 
         if (myEmployees.length === 0) {
             return (
                 <div className="text-center py-12 text-gray-400">
                     <User size={48} className="mx-auto mb-3 text-gray-200" />
                     <p className="text-sm">{t?.no_employees_assigned || 'No employees assigned yet'}</p>
-                    <p className="text-xs mt-1 text-gray-300">{t?.add_team_member || 'Use Add User to assign employees'}</p>
                 </div>
             );
         }
@@ -447,39 +449,26 @@ const TeamTab = ({ token, t, user, lang }) => {
                 {myEmployees.map(emp => {
                     const displayName = emp['full_name_' + lang] || emp.full_name_en || emp.full_name || '?';
                     const initial = displayName.charAt(0).toUpperCase();
-                    const panelKey = `tasks:${emp.id}`;
                     return (
-                        <div key={emp.id}>
-                            <div className="bg-white p-4 rounded-xl border border-gray-200 flex items-center gap-3 shadow-sm">
-                                <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-100 bg-slate-50 flex items-center justify-center">
-                                    {emp.profile_picture_url ? (
-                                        <img src={emp.profile_picture_url} alt={displayName} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="text-sm font-bold text-[#714B67]">{initial}</span>
-                                    )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <button
-                                        onClick={() => togglePanel(panelKey)}
-                                        className="font-semibold text-sm leading-tight text-left hover:underline decoration-violet-400 hover:text-violet-700 transition-colors"
-                                        title="View Tasks"
-                                    >
-                                        {displayName}
-                                    </button>
-                                    <p className="text-xs text-gray-400 truncate mt-0.5">{emp.email}{emp.phone && ` · ${emp.phone}`}</p>
-                                </div>
-                                <RoleBadge role={emp.role} t={t} />
+                        <div key={emp.id} className="bg-white p-4 rounded-xl border border-gray-200 flex items-center gap-3 shadow-sm">
+                            <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-100 bg-slate-50 flex items-center justify-center">
+                                {emp.profile_picture_url ? (
+                                    <img src={emp.profile_picture_url} alt={displayName} className="w-full h-full object-cover" />
+                                ) : (
+                                    <span className="text-sm font-bold text-[#714B67]">{initial}</span>
+                                )}
                             </div>
-                            {openPanel === panelKey && (
-                                <ScopedTasksPanel
-                                    scopedUser={emp}
-                                    scopedUserRole="EMPLOYEE"
-                                    currentUser={user}
-                                    token={token}
-                                    lang={lang}
-                                    t={t}
-                                />
-                            )}
+                            <div className="flex-1 min-w-0">
+                                <button
+                                    onClick={() => setScopedModalUser(emp)}
+                                    className="font-semibold text-sm leading-tight text-left hover:underline decoration-violet-400 hover:text-violet-700 transition-colors"
+                                    title="View Tasks"
+                                >
+                                    {displayName}
+                                </button>
+                                <p className="text-xs text-gray-400 truncate mt-0.5">{emp.email}{emp.phone && ` · ${emp.phone}`}</p>
+                            </div>
+                            <RoleBadge role={emp.role} t={t} />
                         </div>
                     );
                 })}
@@ -500,19 +489,21 @@ const TeamTab = ({ token, t, user, lang }) => {
 
             <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4">{t.my_team_title || t.nav_team || 'Team'}</h1>
 
-            <div className="flex justify-end items-center mb-5">
-                <button
-                    className="bg-[#714B67] text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#5a3b52] transition flex items-center gap-1.5"
-                    onClick={() => setShowAddModal(true)}
-                >
-                    <Plus size={18}/> {t.add_team_member || "Add User"}
-                </button>
-            </div>
+            {user?.role !== 'MANAGER' && (
+                <div className="flex justify-end items-center mb-5">
+                    <button
+                        className="bg-[#714B67] text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#5a3b52] transition flex items-center gap-1.5"
+                        onClick={() => setShowAddModal(true)}
+                    >
+                        <Plus size={18}/> {t.add_team_member || "Add User"}
+                    </button>
+                </div>
+            )}
 
-            {/* Hierarchy Legend (Admin/AreaManager viewers only) */}
-            {(user?.role === 'BIG_BOSS' || user?.role === 'MANAGER') && (
+            {/* Hierarchy Legend (BIG_BOSS only) */}
+            {user?.role === 'BIG_BOSS' && (
                 <div className="flex gap-3 mb-4 flex-wrap text-xs text-gray-500">
-                    {user?.role === 'BIG_BOSS' && <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-400 inline-block"/> Admin</span>}
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-400 inline-block"/> Admin</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-indigo-400 inline-block"/> {t.role_area_manager || 'Area Manager'}</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-400 inline-block"/> {t.role_dept_manager || 'Dept Manager'}</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-400 inline-block"/> {t.role_employee || 'Employee'}</span>
@@ -571,6 +562,18 @@ const TeamTab = ({ token, t, user, lang }) => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Manager scoped employee tasks — full-screen modal */}
+            {scopedModalUser && (
+                <ScopedTasksModal
+                    scopedUser={scopedModalUser}
+                    scopedUserRole="EMPLOYEE"
+                    token={token}
+                    lang={lang}
+                    t={t}
+                    onClose={() => setScopedModalUser(null)}
+                />
             )}
 
             {/* Edit User Modal */}
