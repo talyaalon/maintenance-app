@@ -417,17 +417,17 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                   <>
                                       <button
                                           onClick={() => toggleExcelSection('categories')}
-                                          className={`p-1.5 rounded-lg transition border-2 border-[#714B67] text-[#714B67] ${openExcelSection === 'categories' ? 'bg-[#fdf4ff] shadow-md' : 'bg-white shadow-sm hover:bg-[#fdf4ff] hover:shadow-md'}`}
+                                          className={`p-1 rounded-lg transition border-none text-[#714B67] ${openExcelSection === 'categories' ? 'bg-[#fdf4ff]' : 'bg-white hover:bg-[#fdf4ff]'}`}
                                           title="Categories — Excel ייבוא / ייצוא"
                                       >
-                                          <FileSpreadsheet size={16} />
+                                          <FileSpreadsheet size={14} />
                                       </button>
                                       <button
                                           onClick={() => toggleExcelSection('assets')}
-                                          className={`p-1.5 rounded-lg transition border-2 border-[#714B67] text-[#714B67] ${openExcelSection === 'assets' ? 'bg-[#fdf4ff] shadow-md' : 'bg-white shadow-sm hover:bg-[#fdf4ff] hover:shadow-md'}`}
+                                          className={`p-1 rounded-lg transition border-none text-[#714B67] ${openExcelSection === 'assets' ? 'bg-[#fdf4ff]' : 'bg-white hover:bg-[#fdf4ff]'}`}
                                           title="Assets — Excel ייבוא / ייצוא"
                                       >
-                                          <FileSpreadsheet size={16} />
+                                          <FileSpreadsheet size={14} />
                                       </button>
                                   </>
                               )}
@@ -509,10 +509,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               {canUseExcel && (
                                   <button
                                       onClick={() => toggleExcelSection('managers')}
-                                      className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 transition border-2 border-[#714B67] text-[#714B67] ${openExcelSection === 'managers' ? 'bg-[#fdf4ff] shadow-md' : 'bg-white shadow-sm hover:bg-[#fdf4ff] hover:shadow-md'}`}
+                                      className={`p-1 rounded-lg flex items-center gap-1 transition border-none text-[#714B67] ${openExcelSection === 'managers' ? 'bg-[#fdf4ff]' : 'bg-white hover:bg-[#fdf4ff]'}`}
                                       title="Managers — Excel ייבוא / ייצוא"
                                   >
-                                      <FileSpreadsheet size={13} />
+                                      <FileSpreadsheet size={12} />
                                   </button>
                               )}
                           </div>
@@ -528,10 +528,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               {canUseExcel && (
                                   <button
                                       onClick={() => toggleExcelSection('employees')}
-                                      className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 transition border-2 border-[#714B67] text-[#714B67] ${openExcelSection === 'employees' ? 'bg-[#fdf4ff] shadow-md' : 'bg-white shadow-sm hover:bg-[#fdf4ff] hover:shadow-md'}`}
+                                      className={`p-1 rounded-lg flex items-center gap-1 transition border-none text-[#714B67] ${openExcelSection === 'employees' ? 'bg-[#fdf4ff]' : 'bg-white hover:bg-[#fdf4ff]'}`}
                                       title="Employees — Excel ייבוא / ייצוא"
                                   >
-                                      <FileSpreadsheet size={13} />
+                                      <FileSpreadsheet size={12} />
                                   </button>
                               )}
                           </div>
@@ -553,10 +553,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               {canUseExcel && (
                                   <button
                                       onClick={() => toggleExcelSection('locations')}
-                                      className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg flex items-center gap-1 transition border-2 border-[#714B67] text-[#714B67] ${openExcelSection === 'locations' ? 'bg-[#fdf4ff] shadow-md' : 'bg-white shadow-sm hover:bg-[#fdf4ff] hover:shadow-md'}`}
+                                      className={`p-1 rounded-lg flex items-center gap-1 transition border-none text-[#714B67] ${openExcelSection === 'locations' ? 'bg-[#fdf4ff]' : 'bg-white hover:bg-[#fdf4ff]'}`}
                                       title="Excel ייבוא / ייצוא"
                                   >
-                                      <FileSpreadsheet size={13} />
+                                      <FileSpreadsheet size={12} />
                                   </button>
                               )}
                               <button onClick={() => openLocationModal(targetManagerId)} className="bg-[#714B67] text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={13}/> <span>{t.add_location_btn || 'הוסף מיקום'}</span></button>
