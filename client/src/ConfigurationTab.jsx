@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload, Send, Loader2, Globe } from 'lucide-react';
+import { Plus, Trash2, Tag, Box, MapPin, Pencil, X, ChevronDown, ChevronRight, FolderTree, Image as ImageIcon, Map, Layers, User, ChevronUp, Settings, Upload, Send, Loader2, Globe, FileSpreadsheet } from 'lucide-react';
+import ConfigExcelPanel from './ConfigExcelPanel';
 
 const ConfigurationTab = ({ token, t, user, lang }) => { 
   const [activeSubTab, setActiveSubTab] = useState(() => {
@@ -19,6 +20,11 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
 
   // Top-level tab for Big Boss: 'workspaces' | 'permissions'
   const [bossMainTab, setBossMainTab] = useState('workspaces');
+
+  // Excel import/export panel: which section is currently open
+  const [openExcelSection, setOpenExcelSection] = useState(null);
+  const toggleExcelSection = (section) => setOpenExcelSection(prev => prev === section ? null : section);
+  const canUseExcel = ['BIG_BOSS', 'COMPANY_MANAGER'].includes(user?.role);
 
   const [expandedBossManager, setExpandedBossManager] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState([]);
@@ -409,8 +415,22 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                   <div className="animate-fade-in space-y-4">
                       <div className="flex justify-between items-center mb-4">
                           <h3 className="text-md font-bold text-gray-700">{t.hierarchy_tree_title || 'עץ היררכיה'}</h3>
-                          <button onClick={() => openTreeModal('category', targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={14}/> {t.add_category_btn || 'הוסף קטגוריה'}</button>
+                          <div className="flex items-center gap-2">
+                              {canUseExcel && (
+                                  <button
+                                      onClick={() => toggleExcelSection('categories')}
+                                      className={`p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'categories' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                                      title="Excel ייבוא / ייצוא"
+                                  >
+                                      <FileSpreadsheet size={16} />
+                                  </button>
+                              )}
+                              <button onClick={() => openTreeModal('category', targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={14}/> {t.add_category_btn || 'הוסף קטגוריה'}</button>
+                          </div>
                       </div>
+                      {openExcelSection === 'categories' && (
+                          <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} />
+                      )}
                       <div className="space-y-3">
                           {wCategories.length === 0 && <p className="text-gray-400 text-center text-sm py-4">{t.no_categories_for_manager || 'אין קטגוריות למנהל זה.'}</p>}
                           {wCategories.map(category => {
@@ -479,9 +499,21 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               {canManageFields && (
                                   <button onClick={() => setShowFieldsSettingsModal(true)} className="bg-gray-200 text-gray-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold hover:bg-gray-300 flex items-center gap-1 shadow-sm"><Settings size={13}/> <span>{t.field_settings || 'הגדרות שדות'}</span></button>
                               )}
+                              {canUseExcel && (
+                                  <button
+                                      onClick={() => toggleExcelSection('locations')}
+                                      className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow-sm flex items-center gap-1 transition ${openExcelSection === 'locations' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                                      title="Excel ייבוא / ייצוא"
+                                  >
+                                      <FileSpreadsheet size={13} />
+                                  </button>
+                              )}
                               <button onClick={() => openLocationModal(targetManagerId)} className="bg-[#714B67] text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={13}/> <span>{t.add_location_btn || 'הוסף מיקום'}</span></button>
                           </div>
                       </div>
+                      {openExcelSection === 'locations' && (
+                          <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} />
+                      )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {wLocations.length === 0 && <p className="text-gray-400 text-center text-sm py-4 col-span-2">{t.no_locations_for_manager || 'אין מיקומים למנהל זה.'}</p>}

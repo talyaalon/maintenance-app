@@ -334,7 +334,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                 >
                     <Search size={20} />
                 </button>
-                {(user.role === 'MANAGER' || user.role === 'BIG_BOSS') && (
+                {['BIG_BOSS', 'COMPANY_MANAGER'].includes(user.role) && (
                     <button onClick={() => setShowExcel(!showExcel)} className="p-2 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition shadow-sm">
                         <FileSpreadsheet size={20} />
                     </button>
