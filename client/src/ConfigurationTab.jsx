@@ -417,19 +417,31 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           <h3 className="text-md font-bold text-gray-700">{t.hierarchy_tree_title || 'עץ היררכיה'}</h3>
                           <div className="flex items-center gap-2">
                               {canUseExcel && (
-                                  <button
-                                      onClick={() => toggleExcelSection('categories')}
-                                      className={`p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'categories' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
-                                      title="Excel ייבוא / ייצוא"
-                                  >
-                                      <FileSpreadsheet size={16} />
-                                  </button>
+                                  <>
+                                      <button
+                                          onClick={() => toggleExcelSection('categories')}
+                                          className={`p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'categories' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                                          title="Categories — Excel ייבוא / ייצוא"
+                                      >
+                                          <FileSpreadsheet size={16} />
+                                      </button>
+                                      <button
+                                          onClick={() => toggleExcelSection('assets')}
+                                          className={`p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'assets' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                                          title="Assets — Excel ייבוא / ייצוא"
+                                      >
+                                          <FileSpreadsheet size={16} />
+                                      </button>
+                                  </>
                               )}
                               <button onClick={() => openTreeModal('category', targetManagerId)} className="bg-[#714B67] text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:opacity-90 flex items-center gap-1"><Plus size={14}/> {t.add_category_btn || 'הוסף קטגוריה'}</button>
                           </div>
                       </div>
                       {openExcelSection === 'categories' && (
-                          <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} />
+                          <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                      )}
+                      {openExcelSection === 'assets' && (
+                          <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
                       )}
                       <div className="space-y-3">
                           {wCategories.length === 0 && <p className="text-gray-400 text-center text-sm py-4">{t.no_categories_for_manager || 'אין קטגוריות למנהל זה.'}</p>}
@@ -512,7 +524,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           </div>
                       </div>
                       {openExcelSection === 'locations' && (
-                          <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} />
+                          <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
                       )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

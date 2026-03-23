@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Upload, Download, FileSpreadsheet, Plus, Trash2, Search, X } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { Upload, Download, FileSpreadsheet, Plus, Trash2, Search, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+
+const BASE = 'https://maintenance-app-staging.onrender.com';
 
 const SECTION_FIELDS = {
     categories: [
@@ -48,12 +51,40 @@ const SECTION_LABELS = {
     employees:  { he: 'עובדים',   en: 'Employees' },
 };
 
-const ConfigExcelPanel = ({ section, t, onClose }) => {
-    const [activeTab, setActiveTab]         = useState('import');
-    const [fileName, setFileName]           = useState('');
+// Sample rows used to generate the downloadable template per section
+const TEMPLATE_SAMPLE = {
+    categories: [
+        { name_he: 'חשמל',       name_en: 'Electrical', name_th: 'ไฟฟ้า',  code: 'ELEC' },
+        { name_he: 'אינסטלציה', name_en: 'Plumbing',   name_th: 'ประปา', code: 'PLMB' },
+    ],
+    assets: [
+        { name_he: 'מזגן ראשי', name_en: 'Main AC',     name_th: 'แอร์หลัก', code: 'ELEC-0001', category_id: 'ELEC',  location_id: 'LOC-0001' },
+        { name_he: 'משאבה',     name_en: 'Water Pump',  name_th: 'ปั๊มน้ำ',  code: 'PLMB-0001', category_id: 'PLMB',  location_id: 'LOC-0002' },
+    ],
+    locations: [
+        { name_he: 'קומה 1', name_en: 'Floor 1', name_th: 'ชั้น 1', code: 'LOC-0001', address: '123 Main St' },
+        { name_he: 'קומה 2', name_en: 'Floor 2', name_th: 'ชั้น 2', code: 'LOC-0002', address: '123 Main St' },
+    ],
+    managers: [
+        { full_name: 'David Cohen', email: 'david@example.com', phone: '0501234567', password: 'Temp1234!' },
+        { full_name: 'Sarah Levi',  email: 'sarah@example.com', phone: '0509876543', password: 'Temp1234!' },
+    ],
+    employees: [
+        { full_name: 'John Smith', email: 'john@example.com', phone: '0501111111', password: 'Temp1234!' },
+        { full_name: 'Jane Doe',   email: 'jane@example.com', phone: '0502222222', password: 'Temp1234!' },
+    ],
+};
+
+const ConfigExcelPanel = ({ section, t, onClose, token }) => {
+    const [activeTab, setActiveTab]               = useState('import');
+    const [fileName, setFileName]                 = useState('');
+    const [parsedRows, setParsedRows]             = useState([]);
     const [validationStatus, setValidationStatus] = useState('idle'); // idle | valid | error
-    const [searchTerm, setSearchTerm]       = useState('');
-    const [selectedFields, setSelectedFields] = useState([]);
+    const [importErrors, setImportErrors]         = useState([]);
+    const [importResult, setImportResult]         = useState(null);
+    const [isLoading, setIsLoading]               = useState(false);
+    const [searchTerm, setSearchTerm]             = useState('');
+    const [selectedFields, setSelectedFields]     = useState([]);
 
     const allFields       = SECTION_FIELDS[section] || [];
     const availableFields = allFields
@@ -62,19 +93,132 @@ const ConfigExcelPanel = ({ section, t, onClose }) => {
 
     const sectionLabel = SECTION_LABELS[section]?.he || section;
 
-    const handleFileUpload = (e) => {
+    const authHeaders = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+    };
+
+    // ── Parse an XLSX/CSV file into a JSON row array ──────────────────────────
+    const parseFile = (file) => new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const wb = XLSX.read(e.target.result, { type: 'binary' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                resolve(XLSX.utils.sheet_to_json(ws, { defval: '' }));
+            } catch { resolve([]); }
+        };
+        reader.readAsBinaryString(file);
+    });
+
+    const resetImportState = () => {
+        setValidationStatus('idle');
+        setImportErrors([]);
+        setImportResult(null);
+    };
+
+    const handleFileUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         setFileName(file.name);
-        setValidationStatus('idle');
+        resetImportState();
+        setParsedRows(await parseFile(file));
     };
 
-    const handleDrop = (e) => {
+    const handleDrop = async (e) => {
         e.preventDefault();
         const file = e.dataTransfer.files[0];
         if (!file) return;
         setFileName(file.name);
-        setValidationStatus('idle');
+        resetImportState();
+        setParsedRows(await parseFile(file));
+    };
+
+    // ── Step 1: dry-run validation ────────────────────────────────────────────
+    const handleValidate = async () => {
+        if (!parsedRows.length) return;
+        setIsLoading(true);
+        try {
+            const res  = await fetch(`${BASE}/${section}/bulk-import`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ rows: parsedRows, isDryRun: true }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setImportErrors([data.error || 'Validation failed']);
+                setValidationStatus('error');
+            } else if (data.errors?.length > 0) {
+                setImportErrors(data.errors);
+                setValidationStatus('error');
+            } else {
+                setImportErrors([]);
+                setValidationStatus('valid');
+                setImportResult({ validCount: data.validCount });
+            }
+        } catch {
+            setImportErrors(['Network error — please check your connection']);
+            setValidationStatus('error');
+        }
+        setIsLoading(false);
+    };
+
+    // ── Step 2: commit import ─────────────────────────────────────────────────
+    const handleImport = async () => {
+        if (validationStatus !== 'valid') return;
+        setIsLoading(true);
+        try {
+            const res  = await fetch(`${BASE}/${section}/bulk-import`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ rows: parsedRows, isDryRun: false }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setImportErrors([data.error || 'Import failed']);
+                setValidationStatus('error');
+            } else {
+                setImportResult(data);
+                setValidationStatus('idle');
+                setFileName('');
+                setParsedRows([]);
+            }
+        } catch {
+            setImportErrors(['Network error — please check your connection']);
+            setValidationStatus('error');
+        }
+        setIsLoading(false);
+    };
+
+    // ── Export: fetch data then generate XLSX client-side ────────────────────
+    const handleExport = async () => {
+        if (!selectedFields.length) return;
+        setIsLoading(true);
+        try {
+            const fields = selectedFields.map(f => f.id).join(',');
+            const res    = await fetch(`${BASE}/${section}/export?fields=${fields}`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Export failed');
+            const rows = await res.json();
+            const ws   = XLSX.utils.json_to_sheet(rows);
+            const wb   = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, sectionLabel);
+            XLSX.writeFile(wb, `${section}_export.xlsx`);
+        } catch (err) {
+            alert(err.message || 'Export failed');
+        }
+        setIsLoading(false);
+    };
+
+    // ── Template download ─────────────────────────────────────────────────────
+    const handleDownloadTemplate = () => {
+        const sample = TEMPLATE_SAMPLE[section] || [];
+        if (!sample.length) return;
+        const ws = XLSX.utils.json_to_sheet(sample);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Template');
+        XLSX.writeFile(wb, `${section}_template.xlsx`);
     };
 
     const moveToSelected  = (field) => setSelectedFields(prev => [...prev, field]);
@@ -82,6 +226,7 @@ const ConfigExcelPanel = ({ section, t, onClose }) => {
 
     return (
         <div className="border border-green-200 rounded-xl bg-white shadow-sm overflow-hidden mb-4 animate-fade-in">
+
             {/* ── Panel header ── */}
             <div className="flex items-center justify-between bg-green-50 border-b border-green-200 px-4 py-2.5 gap-3">
                 <div className="flex items-center gap-2 shrink-0">
@@ -89,7 +234,6 @@ const ConfigExcelPanel = ({ section, t, onClose }) => {
                     <span className="text-xs font-bold text-green-800">{sectionLabel} — Excel</span>
                 </div>
 
-                {/* Tab switcher */}
                 <div className="flex bg-white border border-green-200 p-0.5 rounded-lg">
                     <button
                         onClick={() => setActiveTab('import')}
@@ -135,22 +279,44 @@ const ConfigExcelPanel = ({ section, t, onClose }) => {
                         />
                     </div>
 
-                    {/* Template download banner */}
+                    {/* Template download */}
                     <div className="flex justify-between items-center bg-[#fdf4ff] p-3 rounded-lg border border-[#714B67]/20">
                         <span className="text-xs text-[#714B67] font-medium">
                             ✨ {t?.template_download_hint || 'הורד תבנית Excel מותאמת אישית'}
                         </span>
                         <button
+                            onClick={handleDownloadTemplate}
                             className="bg-[#714B67] text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-[#5a3b52] shadow-sm flex items-center gap-1 transition"
                         >
                             <Download size={12} /> {t?.download_template_btn || 'הורד תבנית'}
                         </button>
                     </div>
 
-                    {/* Validation status — placeholder states */}
-                    {validationStatus === 'valid' && (
-                        <div className="bg-green-50 border border-green-200 p-2.5 rounded text-green-800 text-xs font-medium">
-                            ✓ {t?.file_valid_title || 'הקובץ תקין ומוכן להעלאה'}
+                    {/* Validation result — valid */}
+                    {validationStatus === 'valid' && importResult && (
+                        <div className="bg-green-50 border border-green-200 p-2.5 rounded text-green-800 text-xs font-medium flex items-center gap-1.5">
+                            <CheckCircle size={14} />
+                            {t?.file_valid_title || 'הקובץ תקין'} — {importResult.validCount} {t?.rows_ready || 'שורות מוכנות'}
+                        </div>
+                    )}
+
+                    {/* Import success */}
+                    {importResult?.inserted !== undefined && (
+                        <div className="bg-blue-50 border border-blue-200 p-2.5 rounded text-blue-800 text-xs font-medium flex items-center gap-1.5">
+                            <CheckCircle size={14} />
+                            {t?.import_success || 'הייבוא הושלם'}: {importResult.inserted} {t?.inserted || 'נוספו'}, {importResult.updated} {t?.updated || 'עודכנו'}
+                        </div>
+                    )}
+
+                    {/* Errors list */}
+                    {importErrors.length > 0 && (
+                        <div className="bg-red-50 border border-red-200 p-2.5 rounded text-red-800 text-xs space-y-0.5 max-h-28 overflow-y-auto">
+                            {importErrors.map((e, i) => (
+                                <div key={i} className="flex items-start gap-1">
+                                    <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                                    <span>{e}</span>
+                                </div>
+                            ))}
                         </div>
                     )}
 
@@ -158,15 +324,19 @@ const ConfigExcelPanel = ({ section, t, onClose }) => {
                     {fileName && (
                         <div className="flex gap-2 pt-1">
                             <button
-                                onClick={() => setValidationStatus('valid')}
-                                className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700 transition flex items-center gap-1"
+                                onClick={handleValidate}
+                                disabled={isLoading || !parsedRows.length}
+                                className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700 transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
+                                {isLoading && validationStatus === 'idle' ? <Loader2 size={12} className="animate-spin" /> : null}
                                 {t?.validate_import || '1. בדוק תקינות'}
                             </button>
                             <button
-                                disabled={validationStatus !== 'valid'}
-                                className="bg-green-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-green-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                onClick={handleImport}
+                                disabled={validationStatus !== 'valid' || isLoading}
+                                className="bg-green-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-green-700 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                             >
+                                {isLoading && validationStatus === 'valid' ? <Loader2 size={12} className="animate-spin" /> : null}
                                 {t?.upload_approved_btn || '2. העלה נתונים'}
                             </button>
                         </div>
@@ -178,7 +348,7 @@ const ConfigExcelPanel = ({ section, t, onClose }) => {
             {activeTab === 'export' && (
                 <div className="p-4 space-y-3">
                     <div className="flex gap-3" style={{ height: '200px' }}>
-                        {/* Available fields column */}
+                        {/* Available fields */}
                         <div className="flex-1 flex flex-col min-h-0">
                             <h4 className="text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">
                                 {t?.available_fields_label || 'Available Fields'}
@@ -212,12 +382,11 @@ const ConfigExcelPanel = ({ section, t, onClose }) => {
                             </div>
                         </div>
 
-                        {/* Selected fields column */}
+                        {/* Selected fields */}
                         <div className="flex-1 flex flex-col min-h-0">
                             <h4 className="text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">
                                 {t?.fields_to_export_label || 'Export Fields'}
                             </h4>
-                            {/* spacer to align with search box */}
                             <div className="mb-1.5" style={{ height: '30px' }} />
                             <div className="flex-1 overflow-y-auto border border-gray-200 rounded bg-white">
                                 {selectedFields.map(field => (
@@ -242,13 +411,14 @@ const ConfigExcelPanel = ({ section, t, onClose }) => {
                         </div>
                     </div>
 
-                    {/* Export action */}
                     <div className="flex justify-start">
                         <button
-                            disabled={selectedFields.length === 0}
+                            onClick={handleExport}
+                            disabled={selectedFields.length === 0 || isLoading}
                             className="bg-green-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-green-700 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                         >
-                            <Download size={12} /> {t?.export_data || 'ייצוא נתונים'}
+                            {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                            {t?.export_data || 'ייצוא נתונים'}
                         </button>
                     </div>
                 </div>

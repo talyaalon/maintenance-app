@@ -3396,6 +3396,583 @@ app.put('/companies/:id', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==========================================
+// 📊 Config Bulk Import / Export  (locations, categories, assets, managers, employees)
+// ==========================================
+
+// Helper: resolve the area_id + company_id that every inserted row must carry,
+// based on the authenticated caller.  Enforces company-scoping for non-BIG_BOSS roles.
+async function resolveCallerScope(reqUser) {
+    const { role, id, area_id } = reqUser;
+    // CRITICAL: always pull company_id from the JWT, never from the request body
+    let insertCompanyId = reqUser.company_id ?? null;
+    let insertAreaId    = area_id ?? null;
+
+    if (role === 'MANAGER') {
+        insertAreaId = id;                         // MANAGER's area = their own id
+        if (!insertCompanyId) {
+            const r = await pool.query('SELECT company_id FROM users WHERE id = $1', [id]);
+            insertCompanyId = r.rows[0]?.company_id ?? null;
+        }
+    }
+    // COMPANY_MANAGER and others: already populated from JWT above
+    return { insertAreaId, insertCompanyId };
+}
+
+// ─── Locations ──────────────────────────────────────────────────────────────
+
+app.get('/locations/export', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { role, company_id, area_id } = req.user;
+        const ALLOWED = ['id', 'name_he', 'name_en', 'name_th', 'code', 'address'];
+        const requested = req.query.fields
+            ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
+            : ALLOWED;
+        if (!requested.length) return res.status(400).json({ error: 'No valid fields requested' });
+
+        const cols = requested.map(f => `locations.${f}`).join(', ');
+        let query = `SELECT ${cols} FROM locations WHERE 1=1`;
+        const params = [];
+        let pi = 1;
+
+        if (role !== 'BIG_BOSS') {
+            if (company_id)    { query += ` AND locations.company_id = $${pi++}`; params.push(company_id); }
+            else if (area_id)  { query += ` AND locations.area_id    = $${pi++}`; params.push(area_id);    }
+            else               { query += ' AND 1=0'; }
+        }
+        query += ' ORDER BY locations.name ASC';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('GET /locations/export error:', err.message);
+        res.status(500).json({ error: 'Export failed' });
+    }
+});
+
+app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
+    const { rows, isDryRun } = req.body;
+    if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const callerId = req.user.id;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const errors = [];
+        const validRows = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const ri  = i + 1;
+            const name_en = (row.name_en || row['Name (EN)'] || '').toString().trim();
+            const name_he = (row.name_he || row['שם בעברית']  || '').toString().trim();
+            const name_th = (row.name_th || row['ชื่อ (TH)']  || '').toString().trim();
+            const primaryName = name_en || name_he || name_th;
+            const code    = (row.code    || row['Code']    || '').toString().trim() || null;
+            const address = (row.address || row['Address'] || '').toString().trim() || null;
+            const rowId   = row.id ? parseInt(row.id, 10) : null;
+
+            if (!primaryName) { errors.push(`Row ${ri}: at least one name field is required`); continue; }
+            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, code, address });
+        }
+
+        if (errors.length > 0 || isDryRun) {
+            await client.query('ROLLBACK');
+            return res.json({ errors, validCount: validRows.length });
+        }
+
+        let inserted = 0, updated = 0;
+        for (const vr of validRows) {
+            if (vr.rowId) {
+                // Relational-integrity check: existing row must belong to caller's company
+                if (insertCompanyId) {
+                    const chk = await client.query('SELECT company_id FROM locations WHERE id = $1', [vr.rowId]);
+                    if (!chk.rows[0] || String(chk.rows[0].company_id) !== String(insertCompanyId)) {
+                        await client.query('ROLLBACK');
+                        return res.status(403).json({ error: `Location id=${vr.rowId} does not belong to your company` });
+                    }
+                }
+                await client.query(
+                    'UPDATE locations SET name=$1, name_he=$2, name_en=$3, name_th=$4, code=COALESCE($5,code), address=$6 WHERE id=$7',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.code, vr.address, vr.rowId]
+                );
+                updated++;
+            } else {
+                // Auto-generate LOC-XXXX code when none provided
+                let finalCode = vr.code;
+                if (!finalCode) {
+                    const ex = await client.query("SELECT code FROM locations WHERE code LIKE 'LOC-%'");
+                    let max = 0;
+                    ex.rows.forEach(r => { const n = parseInt((r.code || '').split('-')[1]); if (!isNaN(n) && n > max) max = n; });
+                    finalCode = `LOC-${String(max + 1).padStart(4, '0')}`;
+                }
+                await client.query(
+                    'INSERT INTO locations (name, name_he, name_en, name_th, code, address, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, finalCode, vr.address, callerId, insertAreaId, insertCompanyId]
+                );
+                inserted++;
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ errors: [], validCount: validRows.length, inserted, updated });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('POST /locations/bulk-import error:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// ─── Categories ─────────────────────────────────────────────────────────────
+
+app.get('/categories/export', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { role, company_id, area_id } = req.user;
+        const ALLOWED = ['id', 'name_he', 'name_en', 'name_th', 'code'];
+        const requested = req.query.fields
+            ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
+            : ALLOWED;
+        if (!requested.length) return res.status(400).json({ error: 'No valid fields requested' });
+
+        const cols = requested.map(f => `categories.${f}`).join(', ');
+        let query = `SELECT ${cols} FROM categories WHERE 1=1`;
+        const params = [];
+        let pi = 1;
+
+        if (role !== 'BIG_BOSS') {
+            if (company_id)    { query += ` AND categories.company_id = $${pi++}`; params.push(company_id); }
+            else if (area_id)  { query += ` AND categories.area_id    = $${pi++}`; params.push(area_id);    }
+            else               { query += ' AND 1=0'; }
+        }
+        query += ' ORDER BY categories.name ASC';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('GET /categories/export error:', err.message);
+        res.status(500).json({ error: 'Export failed' });
+    }
+});
+
+app.post('/categories/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
+    const { rows, isDryRun } = req.body;
+    if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const callerId = req.user.id;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const errors = [];
+        const validRows = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const ri  = i + 1;
+            const name_en = (row.name_en || row['Name (EN)'] || '').toString().trim();
+            const name_he = (row.name_he || row['שם בעברית']  || '').toString().trim();
+            const name_th = (row.name_th || row['ชื่อ (TH)']  || '').toString().trim();
+            const primaryName = name_en || name_he || name_th;
+            const code  = (row.code || row['Code'] || '').toString().trim() || null;
+            const rowId = row.id ? parseInt(row.id, 10) : null;
+
+            if (!primaryName) { errors.push(`Row ${ri}: at least one name field is required`); continue; }
+            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, code });
+        }
+
+        if (errors.length > 0 || isDryRun) {
+            await client.query('ROLLBACK');
+            return res.json({ errors, validCount: validRows.length });
+        }
+
+        let inserted = 0, updated = 0;
+        for (const vr of validRows) {
+            if (vr.rowId) {
+                if (insertCompanyId) {
+                    const chk = await client.query('SELECT company_id FROM categories WHERE id = $1', [vr.rowId]);
+                    if (!chk.rows[0] || String(chk.rows[0].company_id) !== String(insertCompanyId)) {
+                        await client.query('ROLLBACK');
+                        return res.status(403).json({ error: `Category id=${vr.rowId} does not belong to your company` });
+                    }
+                }
+                await client.query(
+                    'UPDATE categories SET name=$1, name_he=$2, name_en=$3, name_th=$4, code=COALESCE($5,code) WHERE id=$6',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.code, vr.rowId]
+                );
+                updated++;
+            } else {
+                await client.query(
+                    'INSERT INTO categories (name, name_he, name_en, name_th, code, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.code, callerId, insertAreaId, insertCompanyId]
+                );
+                inserted++;
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ errors: [], validCount: validRows.length, inserted, updated });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('POST /categories/bulk-import error:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// ─── Assets ─────────────────────────────────────────────────────────────────
+
+app.get('/assets/export', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { role, company_id, area_id } = req.user;
+        const ALLOWED = ['id', 'name_he', 'name_en', 'name_th', 'code', 'category_id', 'location_id'];
+        const requested = req.query.fields
+            ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
+            : ALLOWED;
+        if (!requested.length) return res.status(400).json({ error: 'No valid fields requested' });
+
+        const cols = requested.map(f => `assets.${f}`).join(', ');
+        let query = `SELECT ${cols} FROM assets WHERE 1=1`;
+        const params = [];
+        let pi = 1;
+
+        if (role !== 'BIG_BOSS') {
+            if (company_id)    { query += ` AND assets.company_id = $${pi++}`; params.push(company_id); }
+            else if (area_id)  { query += ` AND assets.area_id    = $${pi++}`; params.push(area_id);    }
+            else               { query += ' AND 1=0'; }
+        }
+        query += ' ORDER BY assets.code';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('GET /assets/export error:', err.message);
+        res.status(500).json({ error: 'Export failed' });
+    }
+});
+
+app.post('/assets/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
+    const { rows, isDryRun } = req.body;
+    if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const callerId = req.user.id;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Pre-fetch company-scoped categories and locations for FK resolution
+        const fkParams = insertCompanyId ? [insertCompanyId] : [];
+        const fkWhere  = insertCompanyId ? ' WHERE company_id = $1' : '';
+        const catsRes  = await client.query(`SELECT id, code, name FROM categories${fkWhere}`, fkParams);
+        const locsRes  = await client.query(`SELECT id, code, name FROM locations${fkWhere}`,  fkParams);
+        const catByCode = new Map(catsRes.rows.map(r => [(r.code  || '').trim().toLowerCase(), r.id]));
+        const catByName = new Map(catsRes.rows.map(r => [(r.name  || '').trim().toLowerCase(), r.id]));
+        const locByCode = new Map(locsRes.rows.map(r => [(r.code  || '').trim().toLowerCase(), r.id]));
+        const locByName = new Map(locsRes.rows.map(r => [(r.name  || '').trim().toLowerCase(), r.id]));
+
+        const errors   = [];
+        const validRows = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const ri  = i + 1;
+            const rowErrors = [];
+            const name_en = (row.name_en || row['Name (EN)'] || '').toString().trim();
+            const name_he = (row.name_he || row['שם בעברית']  || '').toString().trim();
+            const name_th = (row.name_th || row['ชื่อ (TH)']  || '').toString().trim();
+            const primaryName = name_en || name_he || name_th;
+            const code  = (row.code  || row['Code']  || '').toString().trim() || null;
+            const rowId = row.id ? parseInt(row.id, 10) : null;
+
+            if (!primaryName) rowErrors.push(`Row ${ri}: at least one name field is required`);
+
+            // FK: category — resolve by code or name, must belong to caller's company
+            let category_id = null;
+            const catRaw = (row.category_id || row['Category'] || '').toString().trim();
+            if (catRaw) {
+                category_id = catByCode.get(catRaw.toLowerCase()) || catByName.get(catRaw.toLowerCase()) || null;
+                if (!category_id) rowErrors.push(`Row ${ri}: Category '${catRaw}' not found in your company`);
+            }
+
+            // FK: location — resolve by code or name, must belong to caller's company
+            let location_id = null;
+            const locRaw = (row.location_id || row['Location'] || '').toString().trim();
+            if (locRaw) {
+                location_id = locByCode.get(locRaw.toLowerCase()) || locByName.get(locRaw.toLowerCase()) || null;
+                if (!location_id) rowErrors.push(`Row ${ri}: Location '${locRaw}' not found in your company`);
+            }
+
+            if (rowErrors.length > 0) { errors.push(...rowErrors); continue; }
+            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, code, category_id, location_id });
+        }
+
+        if (errors.length > 0 || isDryRun) {
+            await client.query('ROLLBACK');
+            return res.json({ errors, validCount: validRows.length });
+        }
+
+        let inserted = 0, updated = 0;
+        for (const vr of validRows) {
+            if (vr.rowId) {
+                if (insertCompanyId) {
+                    const chk = await client.query('SELECT company_id FROM assets WHERE id = $1', [vr.rowId]);
+                    if (!chk.rows[0] || String(chk.rows[0].company_id) !== String(insertCompanyId)) {
+                        await client.query('ROLLBACK');
+                        return res.status(403).json({ error: `Asset id=${vr.rowId} does not belong to your company` });
+                    }
+                }
+                await client.query(
+                    'UPDATE assets SET name=$1, name_he=$2, name_en=$3, name_th=$4, code=COALESCE($5,code), category_id=COALESCE($6,category_id), location_id=COALESCE($7,location_id) WHERE id=$8',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.code, vr.category_id, vr.location_id, vr.rowId]
+                );
+                updated++;
+            } else {
+                // Auto-generate code from category prefix
+                let finalCode = vr.code;
+                if (!finalCode) {
+                    const catCode = vr.category_id
+                        ? ((await client.query('SELECT code FROM categories WHERE id = $1', [vr.category_id])).rows[0]?.code || 'GEN').toUpperCase()
+                        : 'GEN';
+                    const pattern = `^${catCode}-[0-9]+$`;
+                    const ex = await client.query('SELECT code FROM assets WHERE code ~ $1', [pattern]);
+                    let maxNum = 0;
+                    ex.rows.forEach(r => { const n = parseInt((r.code || '').split('-')[1]); if (!isNaN(n) && n > maxNum) maxNum = n; });
+                    finalCode = `${catCode}-${String(maxNum + 1).padStart(4, '0')}`;
+                }
+                await client.query(
+                    'INSERT INTO assets (name, name_he, name_en, name_th, code, category_id, location_id, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, finalCode, vr.category_id, vr.location_id, callerId, insertAreaId, insertCompanyId]
+                );
+                inserted++;
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ errors: [], validCount: validRows.length, inserted, updated });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('POST /assets/bulk-import error:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// ─── Managers ───────────────────────────────────────────────────────────────
+
+app.get('/managers/export', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { role, company_id, area_id } = req.user;
+        const ALLOWED = ['id', 'full_name', 'email', 'phone'];
+        const requested = req.query.fields
+            ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
+            : ALLOWED;
+        if (!requested.length) return res.status(400).json({ error: 'No valid fields requested' });
+
+        const cols = requested.map(f => `u.${f}`).join(', ');
+        let query = `SELECT ${cols} FROM users u WHERE u.role = 'MANAGER'`;
+        const params = [];
+        let pi = 1;
+
+        if (role !== 'BIG_BOSS') {
+            if (company_id)    { query += ` AND u.company_id = $${pi++}`; params.push(company_id); }
+            else if (area_id)  { query += ` AND u.area_id    = $${pi++}`; params.push(area_id);    }
+            else               { query += ' AND 1=0'; }
+        }
+        query += ' ORDER BY u.full_name';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('GET /managers/export error:', err.message);
+        res.status(500).json({ error: 'Export failed' });
+    }
+});
+
+app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
+    // MANAGERs cannot create peer managers — only BIG_BOSS and COMPANY_MANAGER
+    if (req.user.role === 'MANAGER') return res.status(403).json({ error: 'MANAGERs cannot bulk-import managers' });
+
+    const { rows, isDryRun } = req.body;
+    if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+
+    const { insertCompanyId } = await resolveCallerScope(req.user);
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const errors   = [];
+        const validRows = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const ri  = i + 1;
+            const full_name = (row.full_name || row['Full Name'] || '').toString().trim();
+            const email     = (row.email     || row['Email']     || '').toString().trim().toLowerCase();
+            const phone     = (row.phone     || row['Phone']     || '').toString().trim() || null;
+            const password  = (row.password  || '').toString().trim();
+            const rowId     = row.id ? parseInt(row.id, 10) : null;
+
+            if (!full_name)              { errors.push(`Row ${ri}: full_name is required`);                  continue; }
+            if (!rowId && !email)        { errors.push(`Row ${ri}: email is required for new managers`);     continue; }
+            if (!rowId && !password)     { errors.push(`Row ${ri}: password is required for new managers`);  continue; }
+            validRows.push({ rowId, full_name, email, phone, password });
+        }
+
+        if (errors.length > 0 || isDryRun) {
+            await client.query('ROLLBACK');
+            return res.json({ errors, validCount: validRows.length });
+        }
+
+        let inserted = 0, updated = 0;
+        for (const vr of validRows) {
+            if (vr.rowId) {
+                // Security: target manager must belong to caller's company
+                if (insertCompanyId) {
+                    const chk = await client.query("SELECT company_id FROM users WHERE id = $1 AND role = 'MANAGER'", [vr.rowId]);
+                    if (!chk.rows[0] || String(chk.rows[0].company_id) !== String(insertCompanyId)) {
+                        await client.query('ROLLBACK');
+                        return res.status(403).json({ error: `Manager id=${vr.rowId} does not belong to your company` });
+                    }
+                }
+                const setClauses = ['full_name=$1', 'full_name_en=$1'];
+                const vals = [vr.full_name];
+                let pi = 2;
+                if (vr.email)  { setClauses.push(`email=$${pi++}`);  vals.push(vr.email);  }
+                if (vr.phone !== null) { setClauses.push(`phone=$${pi++}`); vals.push(vr.phone); }
+                if (vr.password) { const hp = await bcrypt.hash(vr.password, 10); setClauses.push(`password=$${pi++}`); vals.push(hp); }
+                vals.push(vr.rowId);
+                await client.query(`UPDATE users SET ${setClauses.join(', ')} WHERE id=$${pi}`, vals);
+                updated++;
+            } else {
+                const hashedPw = await bcrypt.hash(vr.password, 10);
+                const newMgr = await client.query(
+                    `INSERT INTO users (full_name, full_name_en, email, password, role, phone, company_id)
+                     VALUES ($1,$1,$2,$3,'MANAGER',$4,$5) RETURNING id`,
+                    [vr.full_name, vr.email, hashedPw, vr.phone, insertCompanyId]
+                );
+                // MANAGER's area_id = their own id (defines their area)
+                await client.query('UPDATE users SET area_id = id WHERE id = $1', [newMgr.rows[0].id]);
+                inserted++;
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ errors: [], validCount: validRows.length, inserted, updated });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') return res.status(400).json({ error: 'Duplicate email — one or more emails already exist' });
+        console.error('POST /managers/bulk-import error:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// ─── Employees ───────────────────────────────────────────────────────────────
+
+app.get('/employees/export', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { role, company_id, area_id, id: callerId } = req.user;
+        const ALLOWED = ['id', 'full_name', 'email', 'phone'];
+        const requested = req.query.fields
+            ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
+            : ALLOWED;
+        if (!requested.length) return res.status(400).json({ error: 'No valid fields requested' });
+
+        const cols = requested.map(f => `u.${f}`).join(', ');
+        let query = `SELECT ${cols} FROM users u WHERE u.role = 'EMPLOYEE'`;
+        const params = [];
+        let pi = 1;
+
+        if (role === 'MANAGER') {
+            // Strict M:M scope — only employees explicitly linked to this manager
+            query += ` AND u.id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $${pi++})`;
+            params.push(callerId);
+        } else if (role !== 'BIG_BOSS') {
+            if (company_id)    { query += ` AND u.company_id = $${pi++}`; params.push(company_id); }
+            else if (area_id)  { query += ` AND u.area_id    = $${pi++}`; params.push(area_id);    }
+            else               { query += ' AND 1=0'; }
+        }
+        query += ' ORDER BY u.full_name';
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('GET /employees/export error:', err.message);
+        res.status(500).json({ error: 'Export failed' });
+    }
+});
+
+app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
+    const { rows, isDryRun } = req.body;
+    if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const callerId = req.user.id;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const errors   = [];
+        const validRows = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const ri  = i + 1;
+            const full_name = (row.full_name || row['Full Name'] || '').toString().trim();
+            const email     = (row.email     || row['Email']     || '').toString().trim().toLowerCase();
+            const phone     = (row.phone     || row['Phone']     || '').toString().trim() || null;
+            const password  = (row.password  || '').toString().trim();
+            const rowId     = row.id ? parseInt(row.id, 10) : null;
+
+            if (!full_name)          { errors.push(`Row ${ri}: full_name is required`);                  continue; }
+            if (!rowId && !email)    { errors.push(`Row ${ri}: email is required for new employees`);    continue; }
+            if (!rowId && !password) { errors.push(`Row ${ri}: password is required for new employees`); continue; }
+
+            // For updates: verify employee belongs to caller's company
+            if (rowId && insertCompanyId) {
+                const chk = await client.query("SELECT company_id FROM users WHERE id = $1 AND role = 'EMPLOYEE'", [rowId]);
+                if (!chk.rows[0] || String(chk.rows[0].company_id) !== String(insertCompanyId)) {
+                    errors.push(`Row ${ri}: Employee id=${rowId} does not belong to your company`);
+                    continue;
+                }
+            }
+            // For MANAGER: updated employee must already be in their M:M team
+            if (rowId && req.user.role === 'MANAGER') {
+                const chk = await client.query('SELECT 1 FROM employee_managers WHERE manager_id = $1 AND employee_id = $2', [callerId, rowId]);
+                if (chk.rowCount === 0) { errors.push(`Row ${ri}: Employee id=${rowId} is not in your team`); continue; }
+            }
+            validRows.push({ rowId, full_name, email, phone, password });
+        }
+
+        if (errors.length > 0 || isDryRun) {
+            await client.query('ROLLBACK');
+            return res.json({ errors, validCount: validRows.length });
+        }
+
+        let inserted = 0, updated = 0;
+        for (const vr of validRows) {
+            if (vr.rowId) {
+                const setClauses = ['full_name=$1', 'full_name_en=$1'];
+                const vals = [vr.full_name];
+                let pi = 2;
+                if (vr.email) { setClauses.push(`email=$${pi++}`); vals.push(vr.email); }
+                if (vr.phone !== null) { setClauses.push(`phone=$${pi++}`); vals.push(vr.phone); }
+                if (vr.password) { const hp = await bcrypt.hash(vr.password, 10); setClauses.push(`password=$${pi++}`); vals.push(hp); }
+                vals.push(vr.rowId);
+                await client.query(`UPDATE users SET ${setClauses.join(', ')} WHERE id=$${pi}`, vals);
+                updated++;
+            } else {
+                const hashedPw = await bcrypt.hash(vr.password, 10);
+                const newEmp = await client.query(
+                    `INSERT INTO users (full_name, full_name_en, email, password, role, phone, company_id, area_id, parent_manager_id)
+                     VALUES ($1,$1,$2,$3,'EMPLOYEE',$4,$5,$6,$7) RETURNING id`,
+                    [vr.full_name, vr.email, hashedPw, vr.phone, insertCompanyId, insertAreaId, callerId]
+                );
+                // M:M link: employee ↔ importing manager (MANAGER or COMPANY_MANAGER)
+                await client.query(
+                    'INSERT INTO employee_managers (employee_id, manager_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+                    [newEmp.rows[0].id, callerId]
+                );
+                inserted++;
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ errors: [], validCount: validRows.length, inserted, updated });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        if (err.code === '23505') return res.status(400).json({ error: 'Duplicate email — one or more emails already exist' });
+        console.error('POST /employees/bulk-import error:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
 app.listen(port, async () => {
     // Ensure all required columns exist without requiring a manual /fix-db call
     try {

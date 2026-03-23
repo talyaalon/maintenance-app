@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, MapPin, Tag, Box, Shield, Pencil, Trash2, Loader2, Plus, Settings, UserCheck, ChevronDown, LayoutGrid, Send } from 'lucide-react';
+import { Building2, Users, MapPin, Tag, Box, Shield, Pencil, Trash2, Loader2, Plus, Settings, UserCheck, ChevronDown, LayoutGrid, Send, FileSpreadsheet } from 'lucide-react';
 import ScopedTasksModal from './ScopedTasksModal';
+import ConfigExcelPanel from './ConfigExcelPanel';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -597,7 +598,9 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
     //             "edit-loc:{id}"  | "edit-cat:{id}" | "edit-asset:{id}" |
     //             "add-user-manager" | "add-user-employee" |
     //             "add-loc"          | "add-cat"            | "add-asset"
-    const [openPanel, setOpenPanel] = useState(null);
+    const [openPanel, setOpenPanel]             = useState(null);
+    const [openExcelSection, setOpenExcelSection] = useState(null);
+    const toggleExcelSection = (s) => setOpenExcelSection(prev => prev === s ? null : s);
 
     // ── Active list filter — 'all' = show all; string key = show only that section ──
     const [activeListView, setActiveListView] = useState('all');
@@ -966,6 +969,22 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     )}
                 />}
 
+                {/* ── Managers Excel import/export ── */}
+                {(activeListView === 'all' || activeListView === 'managers') && (
+                    <div className="flex justify-end -mt-2 mb-1">
+                        <button
+                            onClick={() => toggleExcelSection('managers')}
+                            className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition shadow-sm ${openExcelSection === 'managers' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            title="Managers — Excel ייבוא / ייצוא"
+                        >
+                            <FileSpreadsheet size={13} /> Excel
+                        </button>
+                    </div>
+                )}
+                {openExcelSection === 'managers' && (
+                    <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                )}
+
                 {/* ── Employees ── */}
                 {(activeListView === 'all' || activeListView === 'employees') && <SectionCard
                     icon={Users}
@@ -1044,6 +1063,22 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </>
                     )}
                 />}
+
+                {/* ── Employees Excel import/export ── */}
+                {(activeListView === 'all' || activeListView === 'employees') && (
+                    <div className="flex justify-end -mt-2 mb-1">
+                        <button
+                            onClick={() => toggleExcelSection('employees')}
+                            className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition shadow-sm ${openExcelSection === 'employees' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            title="Employees — Excel ייבוא / ייצוא"
+                        >
+                            <FileSpreadsheet size={13} /> Excel
+                        </button>
+                    </div>
+                )}
+                {openExcelSection === 'employees' && (
+                    <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                )}
 
                 {/* ── Locations ── */}
                 {(activeListView === 'all' || activeListView === 'locations') && <SectionCard
