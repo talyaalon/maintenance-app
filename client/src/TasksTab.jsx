@@ -468,7 +468,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
     const [modalError, setModalError] = useState('');
     const [showStuck, setShowStuck] = useState(false);
 
-    const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS') && task.status === 'WAITING_APPROVAL';
+    const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS' || user.role === 'COMPANY_MANAGER') && task.status === 'WAITING_APPROVAL';
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
     const canShowStuck = task.status === 'PENDING' && !task.is_stuck && canComplete;
 
@@ -701,6 +701,10 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
     const [error, setError] = useState('');
 
     const handleSubmit = async () => {
+        if (!note.trim()) {
+            setError(t.alert_required || 'A reason is required.');
+            return;
+        }
         setLoading(true);
         setError('');
         const formData = new FormData();

@@ -2212,6 +2212,9 @@ app.put('/tasks/:id/stuck', authenticateToken, upload.single('stuck_file'), asyn
     try {
         const { id } = req.params;
         const { stuck_description } = req.body;
+        if (!stuck_description || !stuck_description.trim()) {
+            return res.status(400).json({ error: "Stuck description (reason) is required." });
+        }
         const stuckFileUrl = req.file ? req.file.path : null;
 
         // Check manager's stuck_skip_approval flag
@@ -2272,12 +2275,15 @@ app.post('/tasks/:id/follow-up', authenticateToken, async (req, res) => {
         const pt = parentTask.rows[0];
 
         await pool.query(
-            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, parent_task_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7)`,
-            [`Follow up: ${pt.title}`, pt.location_id, pt.worker_id, 'High', due_date, description, parentId]
+            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, parent_task_id, company_id)
+             VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8)`,
+            [`Follow up: ${pt.title}`, pt.location_id, pt.worker_id, 'High', due_date, description, parentId, pt.company_id]
         );
-        
-        await pool.query(`UPDATE tasks SET status = 'COMPLETED', completion_note = 'Follow up created for ${due_date}' WHERE id = $1`, [parentId]);
+
+        await pool.query(
+            `UPDATE tasks SET status = 'COMPLETED', completion_note = $1 WHERE id = $2`,
+            [`Follow up created for ${due_date}`, parentId]
+        );
 
         res.json({ success: true });
     } catch (err) { console.error(err); res.status(500).send('Error'); }
