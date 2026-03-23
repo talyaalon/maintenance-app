@@ -773,7 +773,9 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     <h2 className="text-lg font-bold text-slate-800">
                         {user?.company_name || t?.nav_config || 'Settings'}
                     </h2>
-                    <p className="text-xs text-gray-400">{t?.company_detail_subtitle || 'Company Dashboard'}</p>
+                    <p className="text-xs text-gray-400">
+                        {user?.name ? `Welcome, ${user.name}` : (t?.company_detail_subtitle || 'Company Dashboard')}
+                    </p>
                 </div>
             </div>
 

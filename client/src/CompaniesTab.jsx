@@ -605,7 +605,7 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
         fetchData();
     }, [cid, token]);
 
-    const companyManager = (users ?? []).find(u => u?.role === 'COMPANY_MANAGER') ?? null;
+    const companyManagers = (users ?? []).filter(u => u?.role === 'COMPANY_MANAGER');
     const managers  = (users ?? []).filter(u => u?.role === 'MANAGER' || u?.role === 'SUPERVISOR');
     const employees = (users ?? []).filter(u => u?.role === 'EMPLOYEE');
     const primaryManagerId = (users ?? []).find(u => u?.role === 'MANAGER')?.id ?? managers[0]?.id ?? null;
@@ -771,28 +771,40 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                 </div>
             </div>
 
-            {/* Company Manager card — always visible */}
+            {/* Company Managers card — supports multiple co-admins */}
             <div className="bg-white rounded-2xl border border-[#714B67]/20 overflow-hidden mb-5">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-[#714B67]/5">
                     <Shield size={16} className="text-[#714B67]" />
-                    <h3 className="text-sm font-bold text-slate-700">Company Manager</h3>
+                    <h3 className="text-sm font-bold text-slate-700">Company Managers</h3>
+                    <span className="ml-auto text-xs font-semibold text-[#714B67] bg-[#714B67]/10 px-2 py-0.5 rounded-full">
+                        {companyManagers.length}
+                    </span>
+                    <button
+                        onClick={() => togglePanel('add-user-cm')}
+                        className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#714B67] text-white text-[10px] font-bold hover:bg-[#5a3b52] transition"
+                    >
+                        <Plus size={11} /> Add
+                    </button>
                 </div>
-                <div className="px-4 py-3">
-                    {companyManager ? (
-                        <>
+                <div className="divide-y divide-gray-100">
+                    {companyManagers.length === 0 && openPanel !== 'add-user-cm' && (
+                        <p className="px-4 py-3 text-xs text-gray-400 italic">No Company Managers Assigned</p>
+                    )}
+                    {companyManagers.map(cm => (
+                        <div key={cm.id} className="px-4 py-2.5">
                             <div className="flex items-center gap-2">
-                                {companyManager.profile_picture_url ? (
-                                    <img src={companyManager.profile_picture_url} className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200" alt="" />
+                                {cm.profile_picture_url ? (
+                                    <img src={cm.profile_picture_url} className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200" alt="" />
                                 ) : (
                                     <div className="w-8 h-8 rounded-full bg-[#714B67]/10 flex items-center justify-center text-sm font-bold text-[#714B67] shrink-0">
-                                        {(userName(companyManager)[0] || '?').toUpperCase()}
+                                        {(userName(cm)[0] || '?').toUpperCase()}
                                     </div>
                                 )}
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-slate-800 truncate">
-                                        {userName(companyManager)}
-                                        {companyManager?.full_name_th && lang !== 'th' && (
-                                            <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{companyManager.full_name_th}</span>
+                                        {userName(cm)}
+                                        {cm?.full_name_th && lang !== 'th' && (
+                                            <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{cm.full_name_th}</span>
                                         )}
                                     </p>
                                     <span className="inline-block text-[10px] font-bold text-[#714B67] bg-[#714B67]/10 px-1.5 py-0.5 rounded mt-0.5">
@@ -800,16 +812,16 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     </span>
                                 </div>
                                 <RowActions
-                                    onEdit={() => togglePanel(`edit-user:${companyManager.id}`)}
-                                    editOpen={openPanel === `edit-user:${companyManager.id}`}
-                                    onSettings={() => openPermission(companyManager)}
-                                    settingsOpen={openPanel === `perm:${companyManager.id}`}
-                                    onDelete={() => setDeleteConfirm({ type: 'users', id: companyManager.id, name: userName(companyManager) })}
+                                    onEdit={() => togglePanel(`edit-user:${cm.id}`)}
+                                    editOpen={openPanel === `edit-user:${cm.id}`}
+                                    onSettings={() => openPermission(cm)}
+                                    settingsOpen={openPanel === `perm:${cm.id}`}
+                                    onDelete={() => setDeleteConfirm({ type: 'users', id: cm.id, name: userName(cm) })}
                                 />
                             </div>
-                            {openPanel === `edit-user:${companyManager.id}` && (
+                            {openPanel === `edit-user:${cm.id}` && (
                                 <InlineUserForm
-                                    editUser={companyManager}
+                                    editUser={cm}
                                     role="COMPANY_MANAGER"
                                     token={token}
                                     t={t}
@@ -817,43 +829,34 @@ const CompanyDetail = ({ company, token, t, lang, onBack }) => {
                                     onSaved={fetchData}
                                 />
                             )}
-                            {openPanel === `perm:${companyManager.id}` && (
+                            {openPanel === `perm:${cm.id}` && (
                                 <PermissionAccordion
                                     permForm={permForm}
                                     setPermForm={setPermForm}
-                                    onSave={() => savePermissions(companyManager)}
+                                    onSave={() => savePermissions(cm)}
                                     onClose={() => setOpenPanel(null)}
                                     saving={permSaving}
                                     t={t}
-                                    onSendReport={() => sendDailyReport(companyManager)}
-                                    reportSending={reportSendingIds.has(companyManager.id)}
+                                    onSendReport={() => sendDailyReport(cm)}
+                                    reportSending={reportSendingIds.has(cm.id)}
                                 />
                             )}
-                        </>
-                    ) : (
-                        <>
-                            <div className="flex items-center justify-between gap-3">
-                                <p className="text-sm text-gray-400 italic">No Company Manager Assigned</p>
-                                <button
-                                    onClick={() => togglePanel('add-user-cm')}
-                                    className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${openPanel === 'add-user-cm' ? 'bg-[#714B67] text-white' : 'text-[#714B67] bg-[#714B67]/10 hover:bg-[#714B67]/20'}`}
-                                >
-                                    <span className="text-base leading-none">+</span> Add Company Manager
-                                </button>
-                            </div>
-                            {openPanel === 'add-user-cm' && (
-                                <InlineUserForm
-                                    role="COMPANY_MANAGER"
-                                    companyId={cid}
-                                    token={token}
-                                    t={t}
-                                    onClose={() => setOpenPanel(null)}
-                                    onSaved={fetchData}
-                                />
-                            )}
-                        </>
-                    )}
+                        </div>
+                    ))}
                 </div>
+                {openPanel === 'add-user-cm' && (
+                    <div className="px-4 py-2.5 border-t border-slate-200 bg-slate-50">
+                        <InlineUserForm
+                            role="COMPANY_MANAGER"
+                            companyId={cid}
+                            token={token}
+                            t={t}
+                            onClose={() => setOpenPanel(null)}
+                            onSaved={fetchData}
+                            isAddPanel
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Stats row — 'all' = show everything; string key = isolate that section */}
