@@ -209,7 +209,6 @@ function App() {
               return [
                   { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
                   { key: 'companies', label: t.nav_companies,            Icon: Building2 },
-                  { key: 'settings',  label: t.nav_config,               Icon: Settings },
                   { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
               ];
           case 'COMPANY_MANAGER':
