@@ -2073,33 +2073,66 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 });
 
 app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
+    // Only elevated roles may perform bulk task imports
+    if (!['BIG_BOSS', 'COMPANY_MANAGER', 'MANAGER'].includes(req.user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions for bulk task import.' });
+    }
     try {
         const { tasks } = req.body;
         if (!tasks || !Array.isArray(tasks)) return res.status(400).json({ error: "לא נשלחו משימות תקינות." });
+
+        // ── SECURITY: resolve caller scope ──────────────────────────────────
+        const callerRole      = req.user.role;
+        const callerCompanyId = req.user.company_id ?? null;
+        const callerId        = req.user.id;
+
+        // Pre-fetch MANAGER's employee IDs for scope enforcement
+        let managerEmployeeIds = null;
+        if (callerRole === 'MANAGER') {
+            const empRes = await pool.query(
+                'SELECT employee_id FROM employee_managers WHERE manager_id = $1', [callerId]
+            );
+            managerEmployeeIds = new Set(empRes.rows.map(r => r.employee_id));
+        }
 
         let insertedCount = 0;
         const notificationsMap = {};
 
         for (const task of tasks) {
+            // ── Worker ownership check ─────────────────────────────────────
+            if (callerRole === 'MANAGER') {
+                if (!managerEmployeeIds.has(Number(task.worker_id))) {
+                    return res.status(403).json({ error: `Worker id=${task.worker_id} is not assigned to your team.` });
+                }
+            } else if (callerCompanyId) {
+                // COMPANY_MANAGER: worker must belong to same company
+                const wCheck = await pool.query(
+                    'SELECT company_id FROM users WHERE id = $1', [task.worker_id]
+                );
+                if (!wCheck.rows[0] || String(wCheck.rows[0].company_id) !== String(callerCompanyId)) {
+                    return res.status(403).json({ error: `Worker id=${task.worker_id} does not belong to your company.` });
+                }
+            }
+
             if (!notificationsMap[task.worker_id]) notificationsMap[task.worker_id] = 0;
 
             if (!task.is_recurring) {
                 await pool.query(
-                    `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id, images) 
-                     VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8)`,
-                    [task.title, task.location_id, task.worker_id, task.urgency, task.due_date, task.description, task.asset_id, task.images]
+                    `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id, images, company_id)
+                     VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9)`,
+                    [task.title, task.location_id, task.worker_id, task.urgency, task.due_date, task.description, task.asset_id, task.images, callerCompanyId]
                 );
                 insertedCount++;
                 notificationsMap[task.worker_id]++;
             } else {
                 const start = new Date(task.due_date);
                 const end = new Date(start);
-                end.setFullYear(end.getFullYear() + 1); 
-                
+                end.setFullYear(end.getFullYear() + 1);
+
                 const tasksToInsert = [];
                 for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                     let match = false;
-                    
+
                     if ((task.recurring_type === 'daily' || task.recurring_type === 'weekly') && task.selected_days.includes(d.getDay())) match = true;
 
                     if (task.recurring_type === 'monthly' && task.monthly_dates.includes(d.getDate())) match = true;
@@ -2113,15 +2146,15 @@ app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
                         const dayMonthStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
                         if (task.yearly_dates.includes(dayMonthStr)) match = true;
                     }
-                    
+
                     if (match) tasksToInsert.push(new Date(d));
                 }
 
                 for (const date of tasksToInsert) {
                     await pool.query(
-                        `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id, images) 
-                         VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8)`,
-                        [task.title + ' (מחזורי)', task.location_id, task.worker_id, task.urgency, date.toISOString(), task.description, task.asset_id, task.images]
+                        `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, status, asset_id, images, company_id)
+                         VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9)`,
+                        [task.title + ' (מחזורי)', task.location_id, task.worker_id, task.urgency, date.toISOString(), task.description, task.asset_id, task.images, callerCompanyId]
                     );
                 }
                 insertedCount += tasksToInsert.length;
@@ -2318,7 +2351,8 @@ app.delete('/tasks/delete-all', authenticateToken, async (req, res) => {
 app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     try {
         const { worker_id, start_date, end_date, status } = req.query;
-        
+        const { role, id: callerId, company_id } = req.user;
+
         let query = `
             SELECT t.id, t.title, t.description, t.urgency, t.status, t.due_date,
                    t.images,
@@ -2335,22 +2369,36 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
             LEFT JOIN categories c ON a.category_id = c.id
             WHERE 1=1
         `;
-        
+
         const params = [];
         let pIndex = 1;
 
-        if (worker_id && worker_id !== 'all') { 
-            query += ` AND t.worker_id = $${pIndex++}`; 
-            params.push(worker_id); 
+        // ── SECURITY: enforce role-based scope FIRST ──────────────────────────
+        if (role === 'EMPLOYEE') {
+            query += ` AND t.worker_id = $${pIndex++}`;
+            params.push(callerId);
+        } else if (role === 'MANAGER') {
+            query += ` AND t.worker_id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $${pIndex++})`;
+            params.push(callerId);
+        } else if (role === 'COMPANY_MANAGER' && company_id) {
+            query += ` AND t.worker_id IN (SELECT id FROM users WHERE company_id = $${pIndex++})`;
+            params.push(company_id);
         }
-        
-        if (start_date) { 
-            query += ` AND t.due_date >= $${pIndex++}`; 
-            params.push(start_date); 
+        // BIG_BOSS: no scope restriction
+
+        // ── Optional caller-supplied filters (respected within role's scope) ──
+        if (worker_id && worker_id !== 'all') {
+            query += ` AND t.worker_id = $${pIndex++}`;
+            params.push(worker_id);
         }
-        if (end_date) { 
-            query += ` AND t.due_date <= $${pIndex++}`; 
-            params.push(end_date); 
+
+        if (start_date) {
+            query += ` AND t.due_date >= $${pIndex++}`;
+            params.push(start_date);
+        }
+        if (end_date) {
+            query += ` AND t.due_date <= $${pIndex++}`;
+            params.push(end_date);
         }
 
         if (status && status !== 'all') {
@@ -2369,21 +2417,41 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
 });
 
 app.post('/tasks/import-process', authenticateToken, async (req, res) => {
-    const { tasks, isDryRun } = req.body; 
+    // Only elevated roles may perform bulk task imports
+    if (!['BIG_BOSS', 'COMPANY_MANAGER', 'MANAGER'].includes(req.user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions for bulk task import.' });
+    }
+    const { tasks, isDryRun } = req.body;
     const client = await pool.connect();
-    
+
     try {
         await client.query('BEGIN');
-        
-        const errors = []; 
+
+        const errors   = [];
         const validTasks = [];
+        const callerCompanyId = req.user.company_id ?? null;
+        const callerId        = req.user.id;
 
-        const usersRes = await client.query('SELECT id, full_name FROM users');
-        const locationsRes = await client.query('SELECT id, name, company_id FROM locations');
-        const assetsRes = await client.query('SELECT id, name, code, category_id, company_id FROM assets');
+        // ── Scope user lookup to caller's company (BIG_BOSS sees all) ───────
+        let usersRes;
+        if (req.user.role === 'BIG_BOSS') {
+            usersRes = await client.query('SELECT id, full_name, company_id FROM users');
+        } else if (callerCompanyId) {
+            usersRes = await client.query(
+                'SELECT id, full_name, company_id FROM users WHERE company_id = $1', [callerCompanyId]
+            );
+        } else {
+            usersRes = await client.query('SELECT id, full_name, company_id FROM users WHERE id = $1', [callerId]);
+        }
 
-        const usersMap = new Map(usersRes.rows.map(u => [u.full_name.trim().toLowerCase(), u.id]));
-        const locMap = new Map(locationsRes.rows.map(l => [l.name.trim().toLowerCase(), { id: l.id, company_id: l.company_id }]));
+        // ── Scope location/asset lookups to caller's company ─────────────────
+        const locParams  = callerCompanyId ? [callerCompanyId] : [];
+        const locWhere   = callerCompanyId ? ' WHERE company_id = $1' : '';
+        const locationsRes = await client.query(`SELECT id, name, company_id FROM locations${locWhere}`, locParams);
+        const assetsRes    = await client.query(`SELECT id, name, code, category_id, company_id FROM assets${locWhere}`, locParams);
+
+        const usersMap    = new Map(usersRes.rows.map(u => [u.full_name.trim().toLowerCase(), u.id]));
+        const locMap      = new Map(locationsRes.rows.map(l => [l.name.trim().toLowerCase(), { id: l.id, company_id: l.company_id }]));
         const assetCodeMap = new Map(assetsRes.rows.map(a => [a.code.trim().toLowerCase(), a]));
         const assetNameMap = new Map(assetsRes.rows.map(a => [a.name.trim().toLowerCase(), a]));
 
@@ -2391,12 +2459,10 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
         let managerEmployeeIds = new Set();
         if (req.user.role === 'MANAGER') {
             const empRes = await client.query(
-                'SELECT employee_id FROM employee_managers WHERE manager_id = $1',
-                [req.user.id]
+                'SELECT employee_id FROM employee_managers WHERE manager_id = $1', [callerId]
             );
             managerEmployeeIds = new Set(empRes.rows.map(r => r.employee_id));
         }
-        const callerCompanyId = req.user.company_id ?? null;
 
         const getValue = (row, possibleKeys) => {
             for (const key of possibleKeys) {
@@ -2443,11 +2509,19 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                     if (req.user.role === 'MANAGER' && !managerEmployeeIds.has(worker_id)) {
                         rowErrors.push(`Row ${i + 1}: Worker '${workerName}' is not assigned to your team.`);
                     }
+                    // COMPANY_MANAGER scope: worker must belong to same company (already enforced by
+                    // the scoped usersRes query above, but double-check for belt-and-suspenders safety)
+                    if (req.user.role === 'COMPANY_MANAGER' && callerCompanyId) {
+                        const workerRow = usersRes.rows.find(u => u.id === worker_id);
+                        if (!workerRow || String(workerRow.company_id) !== String(callerCompanyId)) {
+                            rowErrors.push(`Row ${i + 1}: Worker '${workerName}' does not belong to your company.`);
+                        }
+                    }
                 } else {
                     rowErrors.push(`Row ${i + 1}: Worker '${workerName}' not found in system.`);
                 }
             } else {
-                worker_id = req.user.id;
+                worker_id = callerId;
             }
 
             if (assetCode) {
@@ -2503,7 +2577,8 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
                     worker_id,
                     location_id,
                     asset_id,
-                    images
+                    images,
+                    company_id: callerCompanyId,   // CRITICAL: always injected from JWT, never from client
                 });
             }
         }
@@ -2525,27 +2600,35 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
 
             for (const t of validTasks) {
                 if (t.id) {
+                    // Ownership check: existing task must belong to caller's company before updating
+                    if (t.company_id) {
+                        const ownership = await client.query('SELECT company_id FROM tasks WHERE id = $1', [t.id]);
+                        if (ownership.rows[0] && String(ownership.rows[0].company_id) !== String(t.company_id)) {
+                            await client.query('ROLLBACK');
+                            return res.status(403).json({ error: `Task id=${t.id} does not belong to your company.` });
+                        }
+                    }
                     const check = await client.query('SELECT id FROM tasks WHERE id = $1', [t.id]);
                     if (check.rows.length > 0) {
                         await client.query(
-                            `UPDATE tasks SET 
-                                title = $1, description = $2, urgency = $3, due_date = $4, 
+                            `UPDATE tasks SET
+                                title = $1, description = $2, urgency = $3, due_date = $4,
                                 worker_id = $5, asset_id = $6, location_id = $7, images = $8, status = $9
                              WHERE id = $10`,
                             [t.title, t.description, t.urgency, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images, t.status, t.id]
                         );
                     } else {
                         await client.query(
-                            `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images) 
-                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                            [t.title, t.description, t.urgency, t.status, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images]
+                            `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                            [t.title, t.description, t.urgency, t.status, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images, t.company_id]
                         );
                     }
                 } else {
                     await client.query(
-                        `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images) 
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                        [t.title, t.description, t.urgency, t.status, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images]
+                        `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                        [t.title, t.description, t.urgency, t.status, t.due_date, t.worker_id, t.asset_id, t.location_id, t.images, t.company_id]
                     );
                 }
             }

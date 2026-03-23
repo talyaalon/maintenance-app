@@ -84,7 +84,8 @@ const ScopedTasksModal = ({ scopedUser, scopedUserRole, token, lang, t, onClose 
                     <Loader2 size={32} className="animate-spin text-[#714B67]" />
                 </div>
             ) : (
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto bg-slate-50">
+                    <div className="max-w-4xl mx-auto">
                     <TasksTab
                         tasks={tasks}
                         t={t}
@@ -95,6 +96,7 @@ const ScopedTasksModal = ({ scopedUser, scopedUserRole, token, lang, t, onClose 
                         subordinates={isManagerScope ? subordinates : [scopedUser]}
                         scopedCompanyId={scopedUser.company_id}
                     />
+                    </div>
                 </div>
             )}
         </div>

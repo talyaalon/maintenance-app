@@ -409,6 +409,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
               <div className="flex gap-1.5 mb-4 bg-gray-100 p-1 rounded-xl border border-gray-200">
                   <button onClick={() => setActiveSubTab('tree')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'tree' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><FolderTree size={16}/> {t.tab_categories_assets || 'קטגוריות ונכסים'}</button>
                   <button onClick={() => setActiveSubTab('locations')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'locations' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><MapPin size={16}/> {t.nav_locations || 'מיקומים'}</button>
+                  <button onClick={() => setActiveSubTab('users')} className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeSubTab === 'users' ? 'bg-white text-[#714B67] shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}><User size={16}/> {t.tab_users || 'משתמשים'}</button>
               </div>
 
               {activeSubTab === 'tree' && (
@@ -499,6 +500,48 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                   </div>
                               );
                           })}
+                      </div>
+                  </div>
+              )}
+
+              {activeSubTab === 'users' && (
+                  <div className="animate-fade-in space-y-6">
+                      {/* ── Managers section ── */}
+                      <div>
+                          <div className="flex justify-between items-center mb-3">
+                              <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2"><User size={15} className="text-[#714B67]"/> {t.managers_title || 'מנהלים'}</h3>
+                              {canUseExcel && (
+                                  <button
+                                      onClick={() => toggleExcelSection('managers')}
+                                      className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow-sm flex items-center gap-1 transition ${openExcelSection === 'managers' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                                      title="Managers — Excel ייבוא / ייצוא"
+                                  >
+                                      <FileSpreadsheet size={13} />
+                                  </button>
+                              )}
+                          </div>
+                          {openExcelSection === 'managers' && (
+                              <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                          )}
+                      </div>
+
+                      {/* ── Employees section ── */}
+                      <div>
+                          <div className="flex justify-between items-center mb-3">
+                              <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2"><User size={15} className="text-blue-500"/> {t.employees_title || 'עובדים'}</h3>
+                              {canUseExcel && (
+                                  <button
+                                      onClick={() => toggleExcelSection('employees')}
+                                      className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow-sm flex items-center gap-1 transition ${openExcelSection === 'employees' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                                      title="Employees — Excel ייבוא / ייצוא"
+                                  >
+                                      <FileSpreadsheet size={13} />
+                                  </button>
+                              )}
+                          </div>
+                          {openExcelSection === 'employees' && (
+                              <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                          )}
                       </div>
                   </div>
               )}
