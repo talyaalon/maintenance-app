@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
 import TaskCard from './TaskCard';
@@ -77,7 +77,20 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterAssignee, setFilterAssignee] = useState('');
   const isTeamView = Array.isArray(subordinates);
+
+  const showAssigneeFilter = ['BIG_BOSS', 'COMPANY_MANAGER', 'MANAGER'].includes(user.role);
+  const uniqueLocations = [...new Set(tasks.filter(tk => tk.location_name).map(tk => tk.location_name))].sort();
+  const uniqueCategories = [...new Set(tasks.filter(tk => tk.category_name).map(tk => tk.category_name))].sort();
+  const uniqueAssignees = [...new Map(
+      tasks.filter(tk => tk.worker_id && tk.worker_name)
+           .map(tk => [String(tk.worker_id), { id: tk.worker_id, name: tk.worker_name }])
+  ).values()].sort((a, b) => a.name.localeCompare(b.name));
+  const hasActiveFilters = !!(filterPriority || filterLocation || filterCategory || filterAssignee);
 
   const todayBkk = getBkkDateObj(new Date());
 
@@ -105,15 +118,31 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       );
   };
 
+  // Attribute filter helper — applied on top of search
+  const applyFilters = (list) => list.filter(tk => {
+      if (filterPriority && tk.urgency !== filterPriority) return false;
+      if (filterLocation && tk.location_name !== filterLocation) return false;
+      if (filterCategory && tk.category_name !== filterCategory) return false;
+      if (filterAssignee && String(tk.worker_id) !== String(filterAssignee)) return false;
+      return true;
+  });
+
+  const clearFilters = () => {
+      setFilterPriority('');
+      setFilterLocation('');
+      setFilterCategory('');
+      setFilterAssignee('');
+  };
+
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
   const hideWaitingTab = user.role === 'MANAGER'
       ? !!user.auto_approve_tasks
       : !!user.manager_auto_approve_tasks;
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
-  const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), selectedDate));
+  const calendarTasks = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), selectedDate)));
 
   const renderOverdueView = () => {
-      const filtered = applySearch(overdueTasks);
+      const filtered = applyFilters(applySearch(overdueTasks));
       return (
           <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
               {filtered.length === 0 ? (
@@ -139,7 +168,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
 
   const renderTodoView = () => {
       if (viewMode === 'daily') {
-          const filtered = applySearch(todayTasks);
+          const filtered = applyFilters(applySearch(todayTasks));
           return (
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
                   <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200 text-center mb-5">
@@ -169,7 +198,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
           return (
               <div className="space-y-4 animate-fade-in max-h-[65vh] overflow-y-auto max-w-2xl mx-auto pr-1 pb-28">
                   {next7Days.map(day => {
-                      const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), day));
+                      const dayTasks = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), day)));
                       const isToday = isSameDay(day, todayBkk);
                       return (
                           <div key={day.toString()} className={`rounded-xl border transition-all ${isToday ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200 bg-white'}`}>
@@ -201,7 +230,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                         locale={getLocale(lang)}
                         tileContent={({ date, view }) => {
                             if (view === 'month') {
-                                const count = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), date)).length;
+                                const count = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), date))).length;
                                 if (count > 0) return <div className="flex flex-col items-center"><span className="task-count-badge">{count} {count === 1 ? (t.task_singular || "Task") : (t.tasks_plural || "Tasks")}</span></div>;
                             }
                         }}
@@ -220,7 +249,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   };
 
   const renderApprovalView = () => {
-      const filtered = applySearch(waitingTasks);
+      const filtered = applyFilters(applySearch(waitingTasks));
       return (
           <div className="space-y-4 animate-fade-in max-w-3xl mx-auto pb-28">
               {filtered.length === 0 && <div className="text-center py-10 text-gray-400"><p>{waitingTasks.length === 0 ? t.no_tasks_waiting : (t.no_search_results || 'No matching tasks.')}</p></div>}
@@ -230,7 +259,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   };
 
   const renderCompletedView = () => {
-      const filtered = applySearch(completedTasks);
+      const filtered = applyFilters(applySearch(completedTasks));
       return (
           <div className="space-y-3 animate-fade-in max-w-3xl mx-auto pb-28">
               {filtered.length === 0 && <p className="text-center text-gray-500 mt-10">{completedTasks.length === 0 ? t.no_tasks_completed : (t.no_search_results || 'No matching tasks.')}</p>}
@@ -278,6 +307,70 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
               />
           </div>
       )}
+
+      {/* ── Filter Bar ──────────────────────────────────────────────────────── */}
+      <div className="mb-4 max-w-3xl mx-auto">
+          <div className="flex flex-wrap gap-2 items-center">
+              <SlidersHorizontal size={14} className="text-[#714B67] shrink-0 mt-0.5" />
+
+              {/* Priority */}
+              <select
+                  value={filterPriority}
+                  onChange={e => setFilterPriority(e.target.value)}
+                  className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterPriority ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+              >
+                  <option value="">{t.urgency_label || 'Priority'}</option>
+                  <option value="High">{t.urgency_high || 'High'}</option>
+                  <option value="Normal">{t.urgency_normal || 'Normal'}</option>
+              </select>
+
+              {/* Location */}
+              {uniqueLocations.length > 0 && (
+                  <select
+                      value={filterLocation}
+                      onChange={e => setFilterLocation(e.target.value)}
+                      className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterLocation ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                  >
+                      <option value="">{t.location || 'Location'}</option>
+                      {uniqueLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                  </select>
+              )}
+
+              {/* Category */}
+              {uniqueCategories.length > 0 && (
+                  <select
+                      value={filterCategory}
+                      onChange={e => setFilterCategory(e.target.value)}
+                      className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterCategory ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                  >
+                      <option value="">{t.category_label || 'Category'}</option>
+                      {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+              )}
+
+              {/* Assignee — managers and above only */}
+              {showAssigneeFilter && uniqueAssignees.length > 0 && (
+                  <select
+                      value={filterAssignee}
+                      onChange={e => setFilterAssignee(e.target.value)}
+                      className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterAssignee ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                  >
+                      <option value="">{t.assigned_to || 'Assignee'}</option>
+                      {uniqueAssignees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                  </select>
+              )}
+
+              {/* Clear Filters */}
+              {hasActiveFilters && (
+                  <button
+                      onClick={clearFilters}
+                      className="shrink-0 flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-[#714B67]/10 text-[#714B67] font-semibold hover:bg-[#714B67]/20 transition"
+                  >
+                      <X size={11} /> {t.clear_filters || 'Clear'}
+                  </button>
+              )}
+          </div>
+      </div>
 
       {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
       {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} scopedCompanyId={scopedCompanyId} />}
