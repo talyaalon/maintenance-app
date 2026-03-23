@@ -23,7 +23,7 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
 );
 
 // ─── Section card with optional Add button + addPanel slot ────────────────────
-const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, addPanel }) => (
+const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, addPanel, headerExtras }) => (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-slate-50">
             <Icon size={16} className="text-[#714B67]" />
@@ -31,6 +31,7 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, 
             <span className="ml-auto text-xs font-semibold text-[#714B67] bg-[#714B67]/10 px-2 py-0.5 rounded-full">
                 {(items ?? []).length}
             </span>
+            {headerExtras}
             {onAdd && (
                 <button
                     onClick={onAdd}
@@ -601,6 +602,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
     const [openPanel, setOpenPanel]             = useState(null);
     const [openExcelSection, setOpenExcelSection] = useState(null);
     const toggleExcelSection = (s) => setOpenExcelSection(prev => prev === s ? null : s);
+    const canUseExcel = ['BIG_BOSS', 'COMPANY_MANAGER'].includes(user?.role);
 
     // ── Active list filter — 'all' = show all; string key = show only that section ──
     const [activeListView, setActiveListView] = useState('all');
@@ -882,6 +884,15 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     items={managers}
                     emptyLabel={t?.no_managers || 'No managers assigned'}
                     onAdd={() => togglePanel('add-user-manager')}
+                    headerExtras={canUseExcel && (
+                        <button
+                            onClick={() => toggleExcelSection('managers')}
+                            className={`ml-2 p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'managers' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            title="Managers — Excel ייבוא / ייצוא"
+                        >
+                            <FileSpreadsheet size={14} />
+                        </button>
+                    )}
                     addPanel={openPanel === 'add-user-manager' ? (
                         <InlineUserForm
                             role="MANAGER"
@@ -969,19 +980,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     )}
                 />}
 
-                {/* ── Managers Excel import/export ── */}
-                {(activeListView === 'all' || activeListView === 'managers') && (
-                    <div className="flex justify-end -mt-2 mb-1">
-                        <button
-                            onClick={() => toggleExcelSection('managers')}
-                            className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition shadow-sm ${openExcelSection === 'managers' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
-                            title="Managers — Excel ייבוא / ייצוא"
-                        >
-                            <FileSpreadsheet size={13} /> Excel
-                        </button>
-                    </div>
-                )}
-                {openExcelSection === 'managers' && (
+                {(activeListView === 'all' || activeListView === 'managers') && openExcelSection === 'managers' && (
                     <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
                 )}
 
@@ -992,6 +991,15 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     items={employees}
                     emptyLabel={t?.no_employees || 'No employees assigned'}
                     onAdd={() => togglePanel('add-user-employee')}
+                    headerExtras={canUseExcel && (
+                        <button
+                            onClick={() => toggleExcelSection('employees')}
+                            className={`ml-2 p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'employees' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            title="Employees — Excel ייבוא / ייצוא"
+                        >
+                            <FileSpreadsheet size={14} />
+                        </button>
+                    )}
                     addPanel={openPanel === 'add-user-employee' ? (
                         <InlineUserForm
                             role="EMPLOYEE"
@@ -1064,19 +1072,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     )}
                 />}
 
-                {/* ── Employees Excel import/export ── */}
-                {(activeListView === 'all' || activeListView === 'employees') && (
-                    <div className="flex justify-end -mt-2 mb-1">
-                        <button
-                            onClick={() => toggleExcelSection('employees')}
-                            className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition shadow-sm ${openExcelSection === 'employees' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
-                            title="Employees — Excel ייבוא / ייצוא"
-                        >
-                            <FileSpreadsheet size={13} /> Excel
-                        </button>
-                    </div>
-                )}
-                {openExcelSection === 'employees' && (
+                {(activeListView === 'all' || activeListView === 'employees') && openExcelSection === 'employees' && (
                     <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
                 )}
 
@@ -1087,6 +1083,15 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     items={locations}
                     emptyLabel={t?.no_locations || 'No locations'}
                     onAdd={() => togglePanel('add-loc')}
+                    headerExtras={canUseExcel && (
+                        <button
+                            onClick={() => toggleExcelSection('locations')}
+                            className={`ml-2 p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'locations' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            title="Locations — Excel ייבוא / ייצוא"
+                        >
+                            <FileSpreadsheet size={14} />
+                        </button>
+                    )}
                     addPanel={openPanel === 'add-loc' ? (
                         <InlineLocationForm
                             createdBy={createdBy}
@@ -1128,6 +1133,9 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </>
                     )}
                 />}
+                {(activeListView === 'all' || activeListView === 'locations') && openExcelSection === 'locations' && (
+                    <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                )}
 
                 {/* ── Categories ── */}
                 {(activeListView === 'all' || activeListView === 'categories') && <SectionCard
@@ -1136,6 +1144,15 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     items={categories}
                     emptyLabel={t?.no_categories || 'No categories'}
                     onAdd={() => togglePanel('add-cat')}
+                    headerExtras={canUseExcel && (
+                        <button
+                            onClick={() => toggleExcelSection('categories')}
+                            className={`ml-2 p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'categories' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                            title="Categories — Excel ייבוא / ייצוא"
+                        >
+                            <FileSpreadsheet size={14} />
+                        </button>
+                    )}
                     addPanel={openPanel === 'add-cat' ? (
                         <InlineCategoryForm
                             createdBy={createdBy}
@@ -1170,6 +1187,9 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </>
                     )}
                 />}
+                {(activeListView === 'all' || activeListView === 'categories') && openExcelSection === 'categories' && (
+                    <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                )}
 
                 {/* ── Assets ── */}
                 {(activeListView === 'all' || activeListView === 'assets') && <SectionCard
@@ -1178,6 +1198,15 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     items={assets}
                     emptyLabel={t?.no_assets || 'No assets'}
                     onAdd={() => togglePanel('add-asset')}
+                    headerExtras={canUseExcel && (
+                        <button
+                            onClick={() => toggleExcelSection('assets')}
+                            className={`ml-2 p-1.5 rounded-lg transition shadow-sm ${openExcelSection === 'assets' ? 'bg-green-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                            title="Assets — Excel ייבוא / ייצוא"
+                        >
+                            <FileSpreadsheet size={14} />
+                        </button>
+                    )}
                     addPanel={openPanel === 'add-asset' ? (
                         <InlineAssetForm
                             createdBy={createdBy}
@@ -1216,6 +1245,9 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </>
                     )}
                 />}
+                {(activeListView === 'all' || activeListView === 'assets') && openExcelSection === 'assets' && (
+                    <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                )}
             </div>
 
             {/* Delete confirmation modal (kept as modal — just a confirmation) */}
