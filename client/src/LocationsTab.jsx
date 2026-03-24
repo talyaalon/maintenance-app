@@ -294,13 +294,17 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
                                 ) : (
                                     <div>
                                         <h3 className="font-bold text-gray-800 text-lg leading-tight">{getLocName(loc)}</h3>
-                                        {(loc.name_he || loc.name_en || loc.name_th) && (
-                                            <p className="text-xs text-gray-400 mt-0.5 flex gap-2 flex-wrap">
-                                                {loc.name_he && loc.name_he !== getLocName(loc) && <span dir="rtl">{loc.name_he}</span>}
-                                                {loc.name_en && loc.name_en !== getLocName(loc) && <span dir="ltr">{loc.name_en}</span>}
-                                                {loc.name_th && loc.name_th !== getLocName(loc) && <span dir="ltr">{loc.name_th}</span>}
-                                            </p>
-                                        )}
+                                        {(() => {
+                                            // Show a single secondary-language subtitle so Thai never bleeds into the Hebrew UI
+                                            const secondary = lang !== 'en'
+                                                ? (loc.name_en && loc.name_en !== getLocName(loc) ? loc.name_en : null)
+                                                : (loc.name_he && loc.name_he !== getLocName(loc) ? loc.name_he : null);
+                                            return secondary ? (
+                                                <p className="text-xs text-gray-400 mt-0.5">
+                                                    <span dir={lang === 'en' ? 'rtl' : 'ltr'}>{secondary}</span>
+                                                </p>
+                                            ) : null;
+                                        })()}
                                         <p className="text-xs text-gray-400 mt-1">
                                             {t.created_by_label || 'Created by'}: {loc.creator_name || '—'}
                                         </p>

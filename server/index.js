@@ -3674,6 +3674,18 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
                 errors.push(`Row ${ri}: image_url must be a valid URL starting with http:// or https://`);
                 continue;
             }
+            // Duplicate-name check (new rows only): block commit-time unique-constraint failures early
+            if (!rowId) {
+                const dupQ  = insertCompanyId
+                    ? 'SELECT id FROM locations WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id=$2'
+                    : 'SELECT id FROM locations WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id IS NULL';
+                const dupP  = insertCompanyId ? [primaryName, insertCompanyId] : [primaryName];
+                const dupR  = await client.query(dupQ, dupP);
+                if (dupR.rows.length > 0) {
+                    errors.push(`Row ${ri}: Location '${primaryName}' already exists in your company`);
+                    continue;
+                }
+            }
             validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, mapUrl, imageUrl });
         }
 
@@ -3781,6 +3793,18 @@ app.post('/categories/bulk-import', authenticateToken, requireAdmin, async (req,
             if (!primaryName) { errors.push(`Row ${ri}: at least one name field is required`); continue; }
             if (code && !CATEGORY_CODE_RE.test(code)) {
                 errors.push(`Row ${ri}: code must be 1-5 English letters`); continue;
+            }
+            // Duplicate-name check (new rows only)
+            if (!rowId) {
+                const dupQ  = insertCompanyId
+                    ? 'SELECT id FROM categories WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id=$2'
+                    : 'SELECT id FROM categories WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id IS NULL';
+                const dupP  = insertCompanyId ? [primaryName, insertCompanyId] : [primaryName];
+                const dupR  = await client.query(dupQ, dupP);
+                if (dupR.rows.length > 0) {
+                    errors.push(`Row ${ri}: Category '${primaryName}' already exists in your company`);
+                    continue;
+                }
             }
             validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, code });
         }
@@ -3905,6 +3929,16 @@ app.post('/assets/bulk-import', authenticateToken, requireAdmin, async (req, res
             if (locRaw) {
                 location_id = locByCode.get(locRaw.toLowerCase()) || locByName.get(locRaw.toLowerCase()) || null;
                 if (!location_id) rowErrors.push(`Row ${ri}: Location '${locRaw}' not found in your company`);
+            }
+
+            // Duplicate-name check (new rows only)
+            if (!rowId && rowErrors.length === 0) {
+                const dupQ  = insertCompanyId
+                    ? 'SELECT id FROM assets WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id=$2'
+                    : 'SELECT id FROM assets WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id IS NULL';
+                const dupP  = insertCompanyId ? [primaryName, insertCompanyId] : [primaryName];
+                const dupR  = await client.query(dupQ, dupP);
+                if (dupR.rows.length > 0) rowErrors.push(`Row ${ri}: Asset '${primaryName}' already exists in your company`);
             }
 
             if (rowErrors.length > 0) { errors.push(...rowErrors); continue; }
@@ -4271,6 +4305,20 @@ app.listen(port, async () => {
         await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_stuck BOOLEAN DEFAULT FALSE');
         await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_description TEXT');
         await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_file_url TEXT');
+
+        // ── Widen categories.code to VARCHAR(5) — fixes "value too long for character varying(3)" on commit ──
+        await pool.query(`
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='categories' AND column_name='code'
+                      AND character_maximum_length IS NOT NULL
+                      AND character_maximum_length < 5
+                ) THEN
+                    ALTER TABLE categories ALTER COLUMN code TYPE VARCHAR(5);
+                END IF;
+            END $$
+        `);
 
         // ── 4-Tier RBAC: area_id grouping — CRITICAL: must exist before GET /users & GET /managers run ──
         await pool.query('ALTER TABLE users      ADD COLUMN IF NOT EXISTS area_id INTEGER');
