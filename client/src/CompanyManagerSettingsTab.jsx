@@ -260,12 +260,12 @@ const InlineCategoryForm = ({ editCategory, createdBy, token, t, lang, onClose, 
 
     const handleSave = async () => {
         if (!form.name_en?.trim() && !form.name_he?.trim()) { alert('Name is required'); return; }
-        if (!form.code?.trim()) { alert('Code is required (3 chars max)'); return; }
+        if (!form.code?.trim()) { alert('Code is required (5 chars max)'); return; }
         setSaving(true);
         try {
             const payload = {
                 name_en: form.name_en, name_he: form.name_he, name_th: form.name_th,
-                code:    form.code.toUpperCase().slice(0, 3),
+                code:    form.code.toUpperCase().slice(0, 5),
                 created_by: createdBy,
             };
             const method = isEdit ? 'PUT' : 'POST';
@@ -295,9 +295,9 @@ const InlineCategoryForm = ({ editCategory, createdBy, token, t, lang, onClose, 
                 compact
             />
             <div>
-                <label className={labelCls}>Code (3 chars) *</label>
-                <input type="text" value={form.code} maxLength={3}
-                    onChange={e => set('code', e.target.value.toUpperCase().slice(0, 3))}
+                <label className={labelCls}>Code (5 chars) *</label>
+                <input type="text" value={form.code} maxLength={5}
+                    onChange={e => set('code', e.target.value.toUpperCase().slice(0, 5))}
                     className={`${inputCls} font-mono`} />
             </div>
             <div className="flex gap-2 pt-1">

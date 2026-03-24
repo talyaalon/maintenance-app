@@ -294,17 +294,6 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
                                 ) : (
                                     <div>
                                         <h3 className="font-bold text-gray-800 text-lg leading-tight">{getLocName(loc)}</h3>
-                                        {(() => {
-                                            // Show a single secondary-language subtitle so Thai never bleeds into the Hebrew UI
-                                            const secondary = lang !== 'en'
-                                                ? (loc.name_en && loc.name_en !== getLocName(loc) ? loc.name_en : null)
-                                                : (loc.name_he && loc.name_he !== getLocName(loc) ? loc.name_he : null);
-                                            return secondary ? (
-                                                <p className="text-xs text-gray-400 mt-0.5">
-                                                    <span dir={lang === 'en' ? 'rtl' : 'ltr'}>{secondary}</span>
-                                                </p>
-                                            ) : null;
-                                        })()}
                                         <p className="text-xs text-gray-400 mt-1">
                                             {t.created_by_label || 'Created by'}: {loc.creator_name || '—'}
                                         </p>
@@ -313,7 +302,8 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
                             </div>
 
                             {editingId !== loc.id && (
-                                <div className="flex gap-2 shrink-0 ml-2">
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    {loc.code && <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded">{loc.code}</span>}
                                     <button onClick={() => startEdit(loc)} className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-[#fdf4ff] bg-gray-50 rounded-full transition"><Pencil size={16} /></button>
                                     <button onClick={() => setDeleteConfirmId(loc.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 bg-gray-50 rounded-full transition"><Trash2 size={16} /></button>
                                 </div>

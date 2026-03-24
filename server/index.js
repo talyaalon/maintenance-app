@@ -1571,30 +1571,7 @@ app.post('/locations', authenticateToken, requireAdmin, (req, res) => {
             const check = await pool.query('SELECT id FROM locations WHERE name = $1 AND created_by = $2', [primaryName, ownerId]);
             if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: מיקום כבר קיים" });
 
-            const locs = await pool.query("SELECT code FROM locations WHERE created_by = $1 AND code LIKE 'LOC-%'", [ownerId]);
-            let max = 0;
-            locs.rows.forEach(r => { if(r.code) { let num = parseInt(r.code.split('-')[1]); if (num > max) max = num; } });
-            const generatedCode = `LOC-${String(max + 1).padStart(4, '0')}`;
-
-            let mainImageUrl = (existing_image && existing_image !== 'null') ? existing_image : null;
-            let parsedDynamicFields = [];
-            try { if (dynamic_fields && dynamic_fields !== 'null') parsedDynamicFields = JSON.parse(dynamic_fields); } catch(e){}
-
-            if (req.files && req.files.length > 0) {
-                req.files.forEach(file => {
-                    const fileUrl = file.secure_url || file.path; 
-                    if (file.fieldname === 'main_image') {
-                        mainImageUrl = fileUrl;
-                    } else if (file.fieldname.startsWith('dynamic_')) {
-                        // 🚀 התיקון הענק: פקודת הפענוח שמתרגמת את הג'יבריש חזרה לשם השדה!
-                        const fieldId = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
-                        const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId) || f.name === fieldId);
-                        if (fieldObj) fieldObj.value = fileUrl;
-                    }
-                });
-            }
-
-            // Determine area_id and company_id for the new location
+            // Determine area_id and company_id first — needed for company-scoped code generation
             let locAreaId = null;
             let locCompanyId = null;
             if (req.user.role === 'MANAGER') {
@@ -1609,6 +1586,34 @@ app.post('/locations', authenticateToken, requireAdmin, (req, res) => {
                 const owner = ownerRes.rows[0];
                 locAreaId = owner?.area_id || (owner?.role === 'MANAGER' ? ownerId : null);
                 locCompanyId = owner?.company_id ?? null;
+            }
+
+            // Generate LOC-XXXX code scoped to company_id (consistent with bulk-import)
+            const codeQ = locCompanyId
+                ? "SELECT code FROM locations WHERE code LIKE 'LOC-%' AND company_id = $1"
+                : "SELECT code FROM locations WHERE code LIKE 'LOC-%' AND created_by = $1";
+            const codeP = locCompanyId ? [locCompanyId] : [ownerId];
+            const locs = await pool.query(codeQ, codeP);
+            let max = 0;
+            locs.rows.forEach(r => { if(r.code) { let num = parseInt((r.code || '').split('-')[1]); if (!isNaN(num) && num > max) max = num; } });
+            const generatedCode = `LOC-${String(max + 1).padStart(4, '0')}`;
+
+            let mainImageUrl = (existing_image && existing_image !== 'null') ? existing_image : null;
+            let parsedDynamicFields = [];
+            try { if (dynamic_fields && dynamic_fields !== 'null') parsedDynamicFields = JSON.parse(dynamic_fields); } catch(e){}
+
+            if (req.files && req.files.length > 0) {
+                req.files.forEach(file => {
+                    const fileUrl = file.secure_url || file.path;
+                    if (file.fieldname === 'main_image') {
+                        mainImageUrl = fileUrl;
+                    } else if (file.fieldname.startsWith('dynamic_')) {
+                        // 🚀 התיקון הענק: פקודת הפענוח שמתרגמת את הג'יבריש חזרה לשם השדה!
+                        const fieldId = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
+                        const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId) || f.name === fieldId);
+                        if (fieldObj) fieldObj.value = fileUrl;
+                    }
+                });
             }
 
             const r = await pool.query(
@@ -4075,6 +4080,11 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
             if (email && !EMAIL_RE.test(email))      { errors.push(`Row ${ri}: Invalid email format. Must end with .com and contain valid characters.`); continue; }
             if (rawLineId && !LINE_ID_RE.test(rawLineId)) { errors.push(`Row ${ri}: Line ID must start with uppercase 'U' followed by numbers/letters.`); continue; }
             if (profilePicUrl && !URL_RE_MGR.test(profilePicUrl)) { errors.push(`Row ${ri}: profile_picture_url must be a valid URL starting with http:// or https://`); continue; }
+            // Duplicate email check (new rows only) — must be globally unique
+            if (!rowId && email) {
+                const dupR = await client.query("SELECT id FROM users WHERE LOWER(email) = LOWER($1)", [email]);
+                if (dupR.rows.length > 0) { errors.push(`Row ${ri}: Email '${email}' is already registered`); continue; }
+            }
             validRows.push({ rowId, name_en, name_he, name_th, email, phone, password, lang, line_user_id: rawLineId, profile_picture_url: profilePicUrl });
         }
 
@@ -4203,6 +4213,11 @@ app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, 
             if (email && !EMAIL_RE_EMP.test(email))      { errors.push(`Row ${ri}: Invalid email format. Must end with .com and contain valid characters.`); continue; }
             if (rawLineId && !LINE_ID_RE_EMP.test(rawLineId)) { errors.push(`Row ${ri}: Line ID must start with uppercase 'U' followed by numbers/letters.`); continue; }
             if (profilePicUrl && !URL_RE_EMP.test(profilePicUrl)) { errors.push(`Row ${ri}: profile_picture_url must be a valid URL starting with http:// or https://`); continue; }
+            // Duplicate email check (new rows only) — must be globally unique
+            if (!rowId && email) {
+                const dupR = await client.query("SELECT id FROM users WHERE LOWER(email) = LOWER($1)", [email]);
+                if (dupR.rows.length > 0) { errors.push(`Row ${ri}: Email '${email}' is already registered`); continue; }
+            }
 
             // For updates: verify employee belongs to caller's company
             if (rowId && insertCompanyId) {
