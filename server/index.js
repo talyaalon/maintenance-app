@@ -3589,7 +3589,9 @@ app.get('/locations/export', authenticateToken, requireAdmin, async (req, res) =
             : ALLOWED;
         if (!requested.length) return res.status(400).json({ error: 'No valid fields requested' });
 
-        const cols = requested.map(f => `locations.${f}`).join(', ');
+        const cols = requested.map(f =>
+            f === 'address' ? `coordinates::jsonb->>'link' AS address` : `locations.${f}`
+        ).join(', ');
         let query = `SELECT ${cols} FROM locations WHERE 1=1`;
         const params = [];
         let pi = 1;
@@ -3620,19 +3622,24 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
         const errors = [];
         const validRows = [];
 
+        const GMAPS_RE = /google\.com\/maps|maps\.app\.goo\.gl/i;
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const ri  = i + 1;
-            const name_en = (row.name_en || row['Name (EN)'] || '').toString().trim();
-            const name_he = (row.name_he || row['שם בעברית']  || '').toString().trim();
-            const name_th = (row.name_th || row['ชื่อ (TH)']  || '').toString().trim();
+            const name_en = (row.name_en || row['Name (EN)'] || row['name_en *'] || '').toString().trim();
+            const name_he = (row.name_he || row['שם בעברית']  || row['name_he (Optional)'] || '').toString().trim();
+            const name_th = (row.name_th || row['ชื่อ (TH)']  || row['name_th (Optional)'] || '').toString().trim();
             const primaryName = name_en || name_he || name_th;
-            const code    = (row.code    || row['Code']    || '').toString().trim() || null;
-            const address = (row.address || row['Address'] || '').toString().trim() || null;
+            // code is auto-generated — ignore any code column supplied by the file
+            const mapUrl  = (row.address || row['Address'] || row['address (Optional)'] || '').toString().trim() || null;
             const rowId   = row.id ? parseInt(row.id, 10) : null;
 
             if (!primaryName) { errors.push(`Row ${ri}: at least one name field is required`); continue; }
-            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, code, address });
+            if (mapUrl && !GMAPS_RE.test(mapUrl)) {
+                errors.push(`Row ${ri}: address must be a valid Google Maps URL (google.com/maps or maps.app.goo.gl)`);
+                continue;
+            }
+            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, mapUrl });
         }
 
         if (errors.length > 0 || isDryRun) {
@@ -3652,22 +3659,24 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
                     }
                 }
                 await client.query(
-                    'UPDATE locations SET name=$1, name_he=$2, name_en=$3, name_th=$4, code=COALESCE($5,code), address=$6 WHERE id=$7',
-                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.code, vr.address, vr.rowId]
+                    'UPDATE locations SET name=$1, name_he=$2, name_en=$3, name_th=$4, coordinates=COALESCE($5,coordinates) WHERE id=$6',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.mapUrl !== null ? JSON.stringify({ link: vr.mapUrl }) : null, vr.rowId]
                 );
                 updated++;
             } else {
-                // Auto-generate LOC-XXXX code when none provided
-                let finalCode = vr.code;
-                if (!finalCode) {
-                    const ex = await client.query("SELECT code FROM locations WHERE code LIKE 'LOC-%'");
-                    let max = 0;
-                    ex.rows.forEach(r => { const n = parseInt((r.code || '').split('-')[1]); if (!isNaN(n) && n > max) max = n; });
-                    finalCode = `LOC-${String(max + 1).padStart(4, '0')}`;
-                }
+                // Auto-generate LOC-XXXX code, scoped to the caller's company
+                const codeQ  = insertCompanyId
+                    ? "SELECT code FROM locations WHERE code LIKE 'LOC-%' AND company_id = $1"
+                    : "SELECT code FROM locations WHERE code LIKE 'LOC-%'";
+                const codeP  = insertCompanyId ? [insertCompanyId] : [];
+                const ex     = await client.query(codeQ, codeP);
+                let max = 0;
+                ex.rows.forEach(r => { const n = parseInt((r.code || '').split('-')[1]); if (!isNaN(n) && n > max) max = n; });
+                const finalCode = `LOC-${String(max + 1).padStart(4, '0')}`;
+                const coordValue = vr.mapUrl ? JSON.stringify({ link: vr.mapUrl }) : null;
                 await client.query(
-                    'INSERT INTO locations (name, name_he, name_en, name_th, code, address, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, finalCode, vr.address, callerId, insertAreaId, insertCompanyId]
+                    'INSERT INTO locations (name, name_he, name_en, name_th, code, coordinates, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, finalCode, coordValue, callerId, insertAreaId, insertCompanyId]
                 );
                 inserted++;
             }

@@ -62,8 +62,8 @@ const TEMPLATE_SAMPLE = {
         { name_he: 'משאבה',     name_en: 'Water Pump',  name_th: 'ปั๊มน้ำ',  code: 'PLMB-0001', category_id: 'PLMB',  location_id: 'LOC-0002' },
     ],
     locations: [
-        { name_he: 'קומה 1', name_en: 'Floor 1', name_th: 'ชั้น 1', code: 'LOC-0001', address: '123 Main St' },
-        { name_he: 'קומה 2', name_en: 'Floor 2', name_th: 'ชั้น 2', code: 'LOC-0002', address: '123 Main St' },
+        { 'name_en *': 'Floor 1', 'name_he (Optional)': 'קומה 1', 'name_th (Optional)': 'ชั้น 1', 'address (Optional)': 'https://maps.app.goo.gl/example1' },
+        { 'name_en *': 'Floor 2', 'name_he (Optional)': 'קומה 2', 'name_th (Optional)': 'ชั้น 2', 'address (Optional)': '' },
     ],
     managers: [
         { full_name: 'David Cohen', email: 'david@example.com', phone: '0501234567', password: 'Temp1234!' },
