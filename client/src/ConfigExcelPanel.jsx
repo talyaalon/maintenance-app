@@ -66,12 +66,12 @@ const TEMPLATE_SAMPLE = {
         { 'name_en *': 'Floor 2', 'name_he (Optional)': 'קומה 2', 'name_th (Optional)': 'ชั้น 2', 'address (Optional)': '',                                  'image_url (Optional)': '' },
     ],
     managers: [
-        { full_name: 'David Cohen', email: 'david@example.com', phone: '0501234567', password: 'Temp1234!' },
-        { full_name: 'Sarah Levi',  email: 'sarah@example.com', phone: '0509876543', password: 'Temp1234!' },
+        { 'name_en *': 'David Cohen', 'email *': 'david@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'דוד כהן', 'name_th (Optional)': '', 'phone (Optional)': '0501234567', 'line_user_id (Optional)': 'Uabc123def456', 'language (Optional)': 'English' },
+        { 'name_en *': 'Sarah Levi',  'email *': 'sarah@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'שרה לוי',  'name_th (Optional)': '', 'phone (Optional)': '0509876543', 'line_user_id (Optional)': '',              'language (Optional)': 'Hebrew'  },
     ],
     employees: [
-        { full_name: 'John Smith', email: 'john@example.com', phone: '0501111111', password: 'Temp1234!' },
-        { full_name: 'Jane Doe',   email: 'jane@example.com', phone: '0502222222', password: 'Temp1234!' },
+        { 'name_en *': 'John Smith', 'email *': 'john@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'ג׳ון סמית', 'name_th (Optional)': '', 'phone (Optional)': '0501111111', 'line_user_id (Optional)': 'Uxyz789', 'language (Optional)': 'English' },
+        { 'name_en *': 'Jane Doe',   'email *': 'jane@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': '',            'name_th (Optional)': '', 'phone (Optional)': '0502222222', 'line_user_id (Optional)': '',         'language (Optional)': 'Thai'    },
     ],
 };
 
