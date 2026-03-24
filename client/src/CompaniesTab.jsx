@@ -864,7 +864,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'managers' && (
-                        <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} companyId={cid} />
                     )}
                     addPanel={openPanel === 'add-user-manager' ? (
                         <InlineUserForm
@@ -975,7 +975,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'employees' && (
-                        <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} companyId={cid} />
                     )}
                     addPanel={openPanel === 'add-user-employee' ? (
                         <InlineUserForm
@@ -1071,7 +1071,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'locations' && (
-                        <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} companyId={cid} />
                     )}
                     addPanel={openPanel === 'add-loc' ? (
                         <InlineLocationForm
@@ -1130,7 +1130,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'categories' && (
-                        <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} companyId={cid} />
                     )}
                     addPanel={openPanel === 'add-cat' ? (
                         <InlineCategoryForm
@@ -1190,7 +1190,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'assets' && (
-                        <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} companyId={cid} />
                     )}
                     addPanel={openPanel === 'add-asset' ? (
                         <InlineAssetForm

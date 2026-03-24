@@ -66,16 +66,16 @@ const TEMPLATE_SAMPLE = {
         { 'name_en *': 'Floor 2', 'name_he (Optional)': 'קומה 2', 'name_th (Optional)': 'ชั้น 2', 'address (Optional)': '',                                  'image_url (Optional)': '' },
     ],
     managers: [
-        { 'name_en *': 'David Cohen', 'email *': 'david@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'דוד כהן', 'name_th (Optional)': '', 'phone (Optional)': '0501234567', 'line_user_id (Optional)': 'Uabc123def456', 'language (Optional)': 'English' },
-        { 'name_en *': 'Sarah Levi',  'email *': 'sarah@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'שרה לוי',  'name_th (Optional)': '', 'phone (Optional)': '0509876543', 'line_user_id (Optional)': '',              'language (Optional)': 'Hebrew'  },
+        { 'name_en *': 'David Cohen', 'email *': 'david@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'דוד כהן', 'name_th (Optional)': '', 'phone (Optional)': '0501234567', 'line_user_id (Optional)': 'Uabc123def456', 'language (Optional)': 'English', 'profile_picture_url (Optional)': 'https://example.com/david.jpg' },
+        { 'name_en *': 'Sarah Levi',  'email *': 'sarah@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'שרה לוי',  'name_th (Optional)': '', 'phone (Optional)': '0509876543', 'line_user_id (Optional)': '',              'language (Optional)': 'Hebrew',  'profile_picture_url (Optional)': '' },
     ],
     employees: [
-        { 'name_en *': 'John Smith', 'email *': 'john@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'ג׳ון סמית', 'name_th (Optional)': '', 'phone (Optional)': '0501111111', 'line_user_id (Optional)': 'Uxyz789', 'language (Optional)': 'English' },
-        { 'name_en *': 'Jane Doe',   'email *': 'jane@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': '',            'name_th (Optional)': '', 'phone (Optional)': '0502222222', 'line_user_id (Optional)': '',         'language (Optional)': 'Thai'    },
+        { 'name_en *': 'John Smith', 'email *': 'john@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'ג׳ון סמית', 'name_th (Optional)': '', 'phone (Optional)': '0501111111', 'line_user_id (Optional)': 'Uxyz789', 'language (Optional)': 'English', 'profile_picture_url (Optional)': 'https://example.com/john.jpg' },
+        { 'name_en *': 'Jane Doe',   'email *': 'jane@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': '',            'name_th (Optional)': '', 'phone (Optional)': '0502222222', 'line_user_id (Optional)': '',         'language (Optional)': 'Thai',    'profile_picture_url (Optional)': '' },
     ],
 };
 
-const ConfigExcelPanel = ({ section, t, onClose, token }) => {
+const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) => {
     const [activeTab, setActiveTab]               = useState('import');
     const [fileName, setFileName]                 = useState('');
     const [parsedRows, setParsedRows]             = useState([]);
@@ -142,7 +142,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
             const res  = await fetch(`${BASE}/${section}/bulk-import`, {
                 method: 'POST',
                 headers: authHeaders,
-                body: JSON.stringify({ rows: parsedRows, isDryRun: true }),
+                body: JSON.stringify({ rows: parsedRows, isDryRun: true, ...(companyId ? { target_company_id: companyId } : {}) }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -171,7 +171,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
             const res  = await fetch(`${BASE}/${section}/bulk-import`, {
                 method: 'POST',
                 headers: authHeaders,
-                body: JSON.stringify({ rows: parsedRows, isDryRun: false }),
+                body: JSON.stringify({ rows: parsedRows, isDryRun: false, ...(companyId ? { target_company_id: companyId } : {}) }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -182,6 +182,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                 setValidationStatus('idle');
                 setFileName('');
                 setParsedRows([]);
+                onSuccess?.();
             }
         } catch {
             setImportErrors(['Network error — please check your connection']);

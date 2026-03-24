@@ -3583,13 +3583,19 @@ app.put('/companies/:id', authenticateToken, async (req, res) => {
 
 // Helper: resolve the area_id + company_id that every inserted row must carry,
 // based on the authenticated caller.  Enforces company-scoping for non-BIG_BOSS roles.
-async function resolveCallerScope(reqUser) {
+// For BIG_BOSS acting on a tenant workspace, pass the validated targetCompanyId.
+async function resolveCallerScope(reqUser, targetCompanyId = null) {
     const { role, id, area_id } = reqUser;
-    // CRITICAL: always pull company_id from the JWT, never from the request body
+    // CRITICAL: always pull company_id from the JWT, never from the request body —
+    // EXCEPT for BIG_BOSS who may act on behalf of a specific tenant company.
     let insertCompanyId = reqUser.company_id ?? null;
     let insertAreaId    = area_id ?? null;
 
-    if (role === 'MANAGER') {
+    if (role === 'BIG_BOSS' && targetCompanyId) {
+        // BIG_BOSS is acting on behalf of a tenant — scope inserts to that company
+        insertCompanyId = targetCompanyId;
+        insertAreaId    = null;
+    } else if (role === 'MANAGER') {
         insertAreaId = id;                         // MANAGER's area = their own id
         if (!insertCompanyId) {
             const r = await pool.query('SELECT company_id FROM users WHERE id = $1', [id]);
@@ -3633,10 +3639,11 @@ app.get('/locations/export', authenticateToken, requireAdmin, async (req, res) =
 });
 
 app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
-    const { rows, isDryRun } = req.body;
+    const { rows, isDryRun, target_company_id } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
 
-    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
     const callerId = req.user.id;
     const client = await pool.connect();
     try {
@@ -3749,10 +3756,11 @@ app.get('/categories/export', authenticateToken, requireAdmin, async (req, res) 
 });
 
 app.post('/categories/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
-    const { rows, isDryRun } = req.body;
+    const { rows, isDryRun, target_company_id } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
 
-    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
     const callerId = req.user.id;
     const client = await pool.connect();
     try {
@@ -3845,10 +3853,11 @@ app.get('/assets/export', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 app.post('/assets/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
-    const { rows, isDryRun } = req.body;
+    const { rows, isDryRun, target_company_id } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
 
-    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
     const callerId = req.user.id;
     const client = await pool.connect();
     try {
@@ -3995,10 +4004,11 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
     // MANAGERs cannot create peer managers — only BIG_BOSS and COMPANY_MANAGER
     if (req.user.role === 'MANAGER') return res.status(403).json({ error: 'MANAGERs cannot bulk-import managers' });
 
-    const { rows, isDryRun } = req.body;
+    const { rows, isDryRun, target_company_id } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
 
-    const { insertCompanyId } = await resolveCallerScope(req.user);
+    const { insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -4117,10 +4127,11 @@ app.get('/employees/export', authenticateToken, requireAdmin, async (req, res) =
 });
 
 app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
-    const { rows, isDryRun } = req.body;
+    const { rows, isDryRun, target_company_id } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
 
-    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
     const callerId = req.user.id;
     const client = await pool.connect();
     try {
