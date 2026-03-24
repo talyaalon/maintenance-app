@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
 import TaskCard from './TaskCard';
@@ -83,6 +83,10 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const [filterAssignee, setFilterAssignee] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const isTeamView = Array.isArray(subordinates);
+  const isBulkRole = ['BIG_BOSS', 'COMPANY_MANAGER'].includes(user.role);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // ── API-fetched filter options (role-scoped) ─────────────────────────────
   const [apiLocations,  setApiLocations]  = useState([]);
@@ -181,6 +185,100 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       setFilterAssignee('');
   };
 
+  // Clear selection when the user switches tabs or view modes
+  useEffect(() => {
+      setSelectedIds(new Set());
+  }, [mainTab, viewMode]);
+
+  // ── Bulk helpers (BIG_BOSS / COMPANY_MANAGER only) ────────────────────────
+  const getVisibleTasks = () => {
+      if (mainTab === 'overdue') return applyFilters(applySearch(overdueTasks));
+      if (mainTab === 'todo') {
+          if (viewMode === 'daily') return applyFilters(applySearch(todayTasks));
+          if (viewMode === 'weekly') {
+              const next7Days = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(todayBkk), i));
+              return applyFilters(tasks.filter(tk => tk.status === 'PENDING' && next7Days.some(d => isSameDay(getBkkDateObj(tk.due_date), d))));
+          }
+          if (viewMode === 'calendar') return calendarTasks;
+      }
+      if (mainTab === 'waiting') return applyFilters(applySearch(waitingTasks));
+      if (mainTab === 'completed') return applyFilters(applySearch(completedTasks));
+      return [];
+  };
+
+  const toggleSelect = (id) => {
+      setSelectedIds(prev => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id); else next.add(id);
+          return next;
+      });
+  };
+
+  const handleSelectAll = () => {
+      const visible = getVisibleTasks();
+      const allSelected = visible.length > 0 && visible.every(tk => selectedIds.has(tk.id));
+      setSelectedIds(allSelected ? new Set() : new Set(visible.map(tk => tk.id)));
+  };
+
+  const handleBulkDelete = async () => {
+      setBulkLoading(true);
+      try {
+          const res = await fetch(`${BASE}/tasks/bulk-delete`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ task_ids: [...selectedIds] }),
+          });
+          if (res.ok) { setSelectedIds(new Set()); setShowBulkDeleteConfirm(false); onRefresh(); }
+      } catch (e) { console.error(e); }
+      finally { setBulkLoading(false); }
+  };
+
+  const handleBulkMarkDone = async () => {
+      setBulkLoading(true);
+      try {
+          const res = await fetch(`${BASE}/tasks/bulk-update-status`, {
+              method: 'PUT',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ task_ids: [...selectedIds], status: 'COMPLETED' }),
+          });
+          if (res.ok) { setSelectedIds(new Set()); onRefresh(); }
+      } catch (e) { console.error(e); }
+      finally { setBulkLoading(false); }
+  };
+
+  // Wraps a TaskCard with a selection checkbox for BIG_BOSS / COMPANY_MANAGER
+  const renderTaskCard = (task, prefixContent = null) => {
+      if (!isBulkRole) {
+          return (
+              <div key={task.id}>
+                  {prefixContent}
+                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+              </div>
+          );
+      }
+      const isSelected = selectedIds.has(task.id);
+      return (
+          <div key={task.id} className={`flex items-start gap-2 rounded-xl transition-colors ${isSelected ? 'bg-[#714B67]/5' : ''}`}>
+              <label
+                  className="flex items-center pt-3.5 pl-0.5 cursor-pointer shrink-0"
+                  onClick={e => e.stopPropagation()}
+              >
+                  <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelect(task.id)}
+                      className="w-4 h-4 cursor-pointer"
+                      style={{ accentColor: '#714B67' }}
+                  />
+              </label>
+              <div className="flex-1 min-w-0">
+                  {prefixContent}
+                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+              </div>
+          </div>
+      );
+  };
+
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
   // Only hide the Waiting Approval tab for MANAGERs who have auto-approve enabled.
   // EMPLOYEEs (and all other roles) always see the tab — data scoping handles what they see.
@@ -205,12 +303,9 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                   </div>
               ) : (
                   <div className="space-y-3">
-                      {filtered.map(task => (
-                          <div key={task.id}>
-                              <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1">
-                                  <AlertTriangle size={12}/> {t.overdue} — {formatBkkDate(task.due_date)}
-                              </div>
-                              <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+                      {filtered.map(task => renderTaskCard(task,
+                          <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1">
+                              <AlertTriangle size={12}/> {t.overdue} — {formatBkkDate(task.due_date)}
                           </div>
                       ))}
                   </div>
@@ -235,11 +330,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                       </div>
                   ) : (
                       <div className="space-y-3">
-                          {filtered.map(task => (
-                              <div key={task.id}>
-                                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
-                              </div>
-                          ))}
+                          {filtered.map(task => renderTaskCard(task))}
                       </div>
                   )}
               </div>
@@ -261,7 +352,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                               </div>
                               <div className="p-2 pt-0 space-y-2">
                                   {dayTasks.length > 0 ? (
-                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)
+                                      dayTasks.map(task => renderTaskCard(task))
                                   ) : (
                                       <div className="p-3 pt-0 text-xs text-gray-400 text-center">No tasks</div>
                                   )}
@@ -293,7 +384,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                       <h4 className="font-semibold mb-4 text-slate-700 text-base border-b border-gray-200 pb-2">{t.tasks_for_date} {format(selectedDate, 'dd/MM/yyyy')}:</h4>
                       {calendarTasks.length === 0 && <p className="text-gray-400 text-sm p-2">No tasks for this date.</p>}
                       <div className="space-y-2">
-                          {calendarTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
+                          {calendarTasks.map(task => renderTaskCard(task))}
                       </div>
                   </div>
               </div>
@@ -306,7 +397,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       return (
           <div className="space-y-4 animate-fade-in max-w-3xl mx-auto pb-28">
               {filtered.length === 0 && <div className="text-center py-10 text-gray-400"><p>{waitingTasks.length === 0 ? t.no_tasks_waiting : (t.no_search_results || 'No matching tasks.')}</p></div>}
-              {filtered.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
+              {filtered.map(task => renderTaskCard(task))}
           </div>
       );
   };
@@ -316,7 +407,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       return (
           <div className="space-y-3 animate-fade-in max-w-3xl mx-auto pb-28">
               {filtered.length === 0 && <p className="text-center text-gray-500 mt-10">{completedTasks.length === 0 ? t.no_tasks_completed : (t.no_search_results || 'No matching tasks.')}</p>}
-              {filtered.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
+              {filtered.map(task => renderTaskCard(task))}
           </div>
       );
   };
@@ -461,6 +552,28 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
           </div></div>
       )}
 
+      {/* ── Bulk Select All bar (BIG_BOSS / COMPANY_MANAGER only) ──────────── */}
+      {isBulkRole && (() => {
+          const visible = getVisibleTasks();
+          if (visible.length === 0) return null;
+          const allSelected = visible.every(tk => selectedIds.has(tk.id));
+          const someSelected = !allSelected && visible.some(tk => selectedIds.has(tk.id));
+          return (
+              <div className="flex items-center justify-between max-w-3xl mx-auto mb-3 px-1">
+                  <div className="flex items-center gap-2 cursor-pointer select-none" onClick={handleSelectAll}>
+                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${allSelected ? 'bg-[#714B67] border-[#714B67]' : someSelected ? 'border-[#714B67] bg-white' : 'bg-white border-gray-300 hover:border-[#714B67]'}`}>
+                          {allSelected && <Check size={10} className="text-white" />}
+                          {someSelected && <div className="w-2 h-0.5 bg-[#714B67]" />}
+                      </div>
+                      <span className="text-xs text-gray-500">{t.select_all || 'Select All'} ({visible.length})</span>
+                  </div>
+                  {selectedIds.size > 0 && (
+                      <span className="text-xs font-semibold text-[#714B67]">{selectedIds.size} {t.selected || 'selected'}</span>
+                  )}
+              </div>
+          );
+      })()}
+
       {mainTab === 'overdue' && renderOverdueView()}
       {mainTab === 'todo' && renderTodoView()}
       {mainTab === 'waiting' && !hideWaitingTab && renderApprovalView()}
@@ -484,6 +597,69 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
         >
             <Plus size={32} />
         </button>
+      )}
+
+      {/* ── Bulk Action Bar ──────────────────────────────────────────────────── */}
+      {isBulkRole && selectedIds.size > 0 && (
+          <div
+              className="fixed bottom-20 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-2xl border border-white/20 backdrop-blur-md bg-[#714B67] animate-fade-in"
+              style={{ left: '50%', transform: 'translateX(-50%)' }}
+          >
+              <span className="text-white text-sm font-bold opacity-90 mr-1">
+                  {selectedIds.size} {t.selected || 'selected'}
+              </span>
+              <div className="w-px h-5 bg-white/30 mx-1" />
+              <button
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-xl text-white text-sm font-semibold transition"
+              >
+                  <Trash2 size={14} /> {t.delete_selected || 'Delete'}
+              </button>
+              <button
+                  onClick={handleBulkMarkDone}
+                  disabled={bulkLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-xl text-white text-sm font-semibold transition disabled:opacity-60"
+              >
+                  <CheckCircle size={14} /> {t.mark_as_done || 'Mark Done'}
+              </button>
+              <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="ml-1 p-1.5 hover:bg-white/20 rounded-lg transition text-white"
+              >
+                  <X size={14} />
+              </button>
+          </div>
+      )}
+
+      {/* ── Bulk Delete Confirmation Modal ───────────────────────────────────── */}
+      {showBulkDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[110] backdrop-blur-sm p-4">
+              <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+                  <div className="p-5 pb-3">
+                      <h3 className="text-lg font-bold text-slate-800 mb-2">
+                          {t.confirm_bulk_delete_title || 'Delete Tasks'}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                          {`Are you sure you want to permanently delete ${selectedIds.size} task(s)? This cannot be undone.`}
+                      </p>
+                  </div>
+                  <div className="flex gap-2 p-4 pt-2">
+                      <button
+                          onClick={() => setShowBulkDeleteConfirm(false)}
+                          className="flex-1 py-2.5 border rounded-xl text-gray-600 hover:bg-gray-50 font-medium transition"
+                      >
+                          {t.cancel || 'Cancel'}
+                      </button>
+                      <button
+                          onClick={handleBulkDelete}
+                          disabled={bulkLoading}
+                          className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition disabled:opacity-60"
+                      >
+                          {bulkLoading ? '...' : (t.delete_selected || 'Delete')}
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
 
     </div>

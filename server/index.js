@@ -2348,6 +2348,82 @@ app.delete('/tasks/delete-all', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).send("Error deleting tasks"); }
 });
 
+// ── Bulk Delete ───────────────────────────────────────────────────────────────
+app.delete('/tasks/bulk-delete', authenticateToken, async (req, res) => {
+    const { role, company_id } = req.user;
+    if (role !== 'BIG_BOSS' && role !== 'COMPANY_MANAGER') {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    const { task_ids } = req.body;
+    if (!Array.isArray(task_ids) || task_ids.length === 0) {
+        return res.status(400).json({ error: 'task_ids array required' });
+    }
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        let result;
+        if (role === 'COMPANY_MANAGER') {
+            result = await client.query(
+                `DELETE FROM tasks WHERE id = ANY($1::int[]) AND company_id = $2`,
+                [task_ids, company_id]
+            );
+        } else {
+            result = await client.query(
+                `DELETE FROM tasks WHERE id = ANY($1::int[])`,
+                [task_ids]
+            );
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, deleted: result.rowCount });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('bulk-delete error:', err);
+        res.status(500).json({ error: 'Error deleting tasks' });
+    } finally {
+        client.release();
+    }
+});
+
+// ── Bulk Update Status ────────────────────────────────────────────────────────
+app.put('/tasks/bulk-update-status', authenticateToken, async (req, res) => {
+    const { role, company_id } = req.user;
+    if (role !== 'BIG_BOSS' && role !== 'COMPANY_MANAGER') {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    const { task_ids, status } = req.body;
+    const ALLOWED_STATUSES = ['PENDING', 'WAITING_APPROVAL', 'COMPLETED'];
+    if (!Array.isArray(task_ids) || task_ids.length === 0) {
+        return res.status(400).json({ error: 'task_ids array required' });
+    }
+    if (!ALLOWED_STATUSES.includes(status)) {
+        return res.status(400).json({ error: `status must be one of: ${ALLOWED_STATUSES.join(', ')}` });
+    }
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        let result;
+        if (role === 'COMPANY_MANAGER') {
+            result = await client.query(
+                `UPDATE tasks SET status = $1 WHERE id = ANY($2::int[]) AND company_id = $3`,
+                [status, task_ids, company_id]
+            );
+        } else {
+            result = await client.query(
+                `UPDATE tasks SET status = $1 WHERE id = ANY($2::int[])`,
+                [status, task_ids]
+            );
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, updated: result.rowCount });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('bulk-update-status error:', err);
+        res.status(500).json({ error: 'Error updating tasks' });
+    } finally {
+        client.release();
+    }
+});
+
 app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     try {
         const { worker_id, start_date, end_date, status } = req.query;
