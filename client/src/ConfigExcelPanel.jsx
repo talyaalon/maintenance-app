@@ -54,16 +54,16 @@ const SECTION_LABELS = {
 // Sample rows used to generate the downloadable template per section
 const TEMPLATE_SAMPLE = {
     categories: [
-        { name_he: 'חשמל',       name_en: 'Electrical', name_th: 'ไฟฟ้า',  code: 'ELEC' },
-        { name_he: 'אינסטלציה', name_en: 'Plumbing',   name_th: 'ประปา', code: 'PLMB' },
+        { 'name_en *': 'Electrical', 'code *': 'ELEC', 'name_he (Optional)': 'חשמל',       'name_th (Optional)': 'ไฟฟ้า'  },
+        { 'name_en *': 'Plumbing',   'code *': 'PLMB', 'name_he (Optional)': 'אינסטלציה', 'name_th (Optional)': 'ประปา' },
     ],
     assets: [
-        { name_he: 'מזגן ראשי', name_en: 'Main AC',     name_th: 'แอร์หลัก', code: 'ELEC-0001', category_id: 'ELEC',  location_id: 'LOC-0001' },
-        { name_he: 'משאבה',     name_en: 'Water Pump',  name_th: 'ปั๊มน้ำ',  code: 'PLMB-0001', category_id: 'PLMB',  location_id: 'LOC-0002' },
+        { 'name_en *': 'Main AC',    'category *': 'ELEC', 'name_he (Optional)': 'מזגן ראשי', 'name_th (Optional)': 'แอร์หลัก', 'location (Optional)': 'LOC-0001' },
+        { 'name_en *': 'Water Pump', 'category *': 'PLMB', 'name_he (Optional)': 'משאבה',     'name_th (Optional)': 'ปั๊มน้ำ',  'location (Optional)': 'LOC-0002' },
     ],
     locations: [
-        { 'name_en *': 'Floor 1', 'name_he (Optional)': 'קומה 1', 'name_th (Optional)': 'ชั้น 1', 'address (Optional)': 'https://maps.app.goo.gl/example1' },
-        { 'name_en *': 'Floor 2', 'name_he (Optional)': 'קומה 2', 'name_th (Optional)': 'ชั้น 2', 'address (Optional)': '' },
+        { 'name_en *': 'Floor 1', 'name_he (Optional)': 'קומה 1', 'name_th (Optional)': 'ชั้น 1', 'address (Optional)': 'https://maps.app.goo.gl/example1', 'image_url (Optional)': 'https://example.com/floor1.jpg' },
+        { 'name_en *': 'Floor 2', 'name_he (Optional)': 'קומה 2', 'name_th (Optional)': 'ชั้น 2', 'address (Optional)': '',                                  'image_url (Optional)': '' },
     ],
     managers: [
         { full_name: 'David Cohen', email: 'david@example.com', phone: '0501234567', password: 'Temp1234!' },

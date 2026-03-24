@@ -348,6 +348,18 @@ app.get('/fix-db', async (req, res) => {
             await client.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)');
 
             await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS code VARCHAR(10)');
+            // Widen category code limit from 3→5 letters (idempotent via DO $$ block)
+            await client.query(`
+                DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name='categories' AND column_name='code'
+                          AND character_maximum_length < 5
+                    ) THEN
+                        ALTER TABLE categories ALTER COLUMN code TYPE VARCHAR(5);
+                    END IF;
+                END $$
+            `);
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS code VARCHAR(50)');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS image_url TEXT');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS coordinates TEXT');
@@ -1693,11 +1705,17 @@ app.get('/categories', authenticateToken, async (req, res) => {
     } catch (err) { console.error('GET /categories error:', err.message); res.json([]); }
 });
 
+const CATEGORY_CODE_RE = /^[a-zA-Z]{1,5}$/;
+
 app.post('/categories', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name, name_he, name_en, name_th, code, created_by } = req.body;
         const ownerId = created_by || req.user.id;
         const primaryName = name_en || name_he || name || '';
+
+        if (code && !CATEGORY_CODE_RE.test(code)) {
+            return res.status(400).json({ error: 'Code must be 1-5 English letters' });
+        }
 
         const check = await pool.query('SELECT id FROM categories WHERE name = $1 AND created_by = $2', [primaryName, ownerId]);
         if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: קטגוריה בשם זה כבר קיימת אצלך במערכת!" });
@@ -1734,6 +1752,10 @@ app.put('/categories/:id', authenticateToken, requireAdmin, async (req, res) => 
         const { id } = req.params;
         const { name, name_he, name_en, name_th, code } = req.body;
         const primaryName = name_en || name_he || name || '';
+
+        if (code && !CATEGORY_CODE_RE.test(code)) {
+            return res.status(400).json({ error: 'Code must be 1-5 English letters' });
+        }
         const result = await pool.query(
             'UPDATE categories SET name = $1, name_he = $2, name_en = $3, name_th = $4, code = $5 WHERE id = $6 RETURNING *',
             [primaryName, name_he || null, name_en || null, name_th || null, code, id]
@@ -3623,6 +3645,7 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
         const validRows = [];
 
         const GMAPS_RE = /google\.com\/maps|maps\.app\.goo\.gl/i;
+        const URL_RE   = /^https?:\/\/.+/i;
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const ri  = i + 1;
@@ -3631,15 +3654,20 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
             const name_th = (row.name_th || row['ชื่อ (TH)']  || row['name_th (Optional)'] || '').toString().trim();
             const primaryName = name_en || name_he || name_th;
             // code is auto-generated — ignore any code column supplied by the file
-            const mapUrl  = (row.address || row['Address'] || row['address (Optional)'] || '').toString().trim() || null;
-            const rowId   = row.id ? parseInt(row.id, 10) : null;
+            const mapUrl   = (row.address || row['Address'] || row['address (Optional)'] || '').toString().trim() || null;
+            const imageUrl = (row.image_url || row['image_url (Optional)'] || '').toString().trim() || null;
+            const rowId    = row.id ? parseInt(row.id, 10) : null;
 
             if (!primaryName) { errors.push(`Row ${ri}: at least one name field is required`); continue; }
             if (mapUrl && !GMAPS_RE.test(mapUrl)) {
                 errors.push(`Row ${ri}: address must be a valid Google Maps URL (google.com/maps or maps.app.goo.gl)`);
                 continue;
             }
-            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, mapUrl });
+            if (imageUrl && !URL_RE.test(imageUrl)) {
+                errors.push(`Row ${ri}: image_url must be a valid URL starting with http:// or https://`);
+                continue;
+            }
+            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, mapUrl, imageUrl });
         }
 
         if (errors.length > 0 || isDryRun) {
@@ -3659,8 +3687,8 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
                     }
                 }
                 await client.query(
-                    'UPDATE locations SET name=$1, name_he=$2, name_en=$3, name_th=$4, coordinates=COALESCE($5,coordinates) WHERE id=$6',
-                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.mapUrl !== null ? JSON.stringify({ link: vr.mapUrl }) : null, vr.rowId]
+                    'UPDATE locations SET name=$1, name_he=$2, name_en=$3, name_th=$4, coordinates=COALESCE($5,coordinates), image_url=COALESCE($6,image_url) WHERE id=$7',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.mapUrl !== null ? JSON.stringify({ link: vr.mapUrl }) : null, vr.imageUrl, vr.rowId]
                 );
                 updated++;
             } else {
@@ -3672,11 +3700,11 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
                 const ex     = await client.query(codeQ, codeP);
                 let max = 0;
                 ex.rows.forEach(r => { const n = parseInt((r.code || '').split('-')[1]); if (!isNaN(n) && n > max) max = n; });
-                const finalCode = `LOC-${String(max + 1).padStart(4, '0')}`;
+                const finalCode  = `LOC-${String(max + 1).padStart(4, '0')}`;
                 const coordValue = vr.mapUrl ? JSON.stringify({ link: vr.mapUrl }) : null;
                 await client.query(
-                    'INSERT INTO locations (name, name_he, name_en, name_th, code, coordinates, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, finalCode, coordValue, callerId, insertAreaId, insertCompanyId]
+                    'INSERT INTO locations (name, name_he, name_en, name_th, code, coordinates, image_url, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, finalCode, coordValue, vr.imageUrl, callerId, insertAreaId, insertCompanyId]
                 );
                 inserted++;
             }
@@ -3735,14 +3763,17 @@ app.post('/categories/bulk-import', authenticateToken, requireAdmin, async (req,
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const ri  = i + 1;
-            const name_en = (row.name_en || row['Name (EN)'] || '').toString().trim();
-            const name_he = (row.name_he || row['שם בעברית']  || '').toString().trim();
-            const name_th = (row.name_th || row['ชื่อ (TH)']  || '').toString().trim();
+            const name_en = (row.name_en || row['Name (EN)'] || row['name_en *'] || '').toString().trim();
+            const name_he = (row.name_he || row['שם בעברית']  || row['name_he (Optional)'] || '').toString().trim();
+            const name_th = (row.name_th || row['ชื่อ (TH)']  || row['name_th (Optional)'] || '').toString().trim();
             const primaryName = name_en || name_he || name_th;
-            const code  = (row.code || row['Code'] || '').toString().trim() || null;
+            const code  = (row.code || row['Code'] || row['code *'] || '').toString().trim() || null;
             const rowId = row.id ? parseInt(row.id, 10) : null;
 
             if (!primaryName) { errors.push(`Row ${ri}: at least one name field is required`); continue; }
+            if (code && !CATEGORY_CODE_RE.test(code)) {
+                errors.push(`Row ${ri}: code must be 1-5 English letters`); continue;
+            }
             validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, code });
         }
 
@@ -3840,39 +3871,44 @@ app.post('/assets/bulk-import', authenticateToken, requireAdmin, async (req, res
             const row = rows[i];
             const ri  = i + 1;
             const rowErrors = [];
-            const name_en = (row.name_en || row['Name (EN)'] || '').toString().trim();
-            const name_he = (row.name_he || row['שם בעברית']  || '').toString().trim();
-            const name_th = (row.name_th || row['ชื่อ (TH)']  || '').toString().trim();
+            const name_en = (row.name_en || row['Name (EN)'] || row['name_en *'] || '').toString().trim();
+            const name_he = (row.name_he || row['שם בעברית']  || row['name_he (Optional)'] || '').toString().trim();
+            const name_th = (row.name_th || row['ชื่อ (TH)']  || row['name_th (Optional)'] || '').toString().trim();
             const primaryName = name_en || name_he || name_th;
-            const code  = (row.code  || row['Code']  || '').toString().trim() || null;
+            // code is always auto-generated — ignore any code column supplied by the file
             const rowId = row.id ? parseInt(row.id, 10) : null;
 
             if (!primaryName) rowErrors.push(`Row ${ri}: at least one name field is required`);
 
             // FK: category — resolve by code or name, must belong to caller's company
             let category_id = null;
-            const catRaw = (row.category_id || row['Category'] || '').toString().trim();
-            if (catRaw) {
+            const catRaw = (row.category_id || row['Category'] || row['category *'] || '').toString().trim();
+            if (!rowId && !catRaw) {
+                rowErrors.push(`Row ${ri}: category is required`);
+            } else if (catRaw) {
                 category_id = catByCode.get(catRaw.toLowerCase()) || catByName.get(catRaw.toLowerCase()) || null;
                 if (!category_id) rowErrors.push(`Row ${ri}: Category '${catRaw}' not found in your company`);
             }
 
             // FK: location — resolve by code or name, must belong to caller's company
             let location_id = null;
-            const locRaw = (row.location_id || row['Location'] || '').toString().trim();
+            const locRaw = (row.location_id || row['Location'] || row['location (Optional)'] || '').toString().trim();
             if (locRaw) {
                 location_id = locByCode.get(locRaw.toLowerCase()) || locByName.get(locRaw.toLowerCase()) || null;
                 if (!location_id) rowErrors.push(`Row ${ri}: Location '${locRaw}' not found in your company`);
             }
 
             if (rowErrors.length > 0) { errors.push(...rowErrors); continue; }
-            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, code, category_id, location_id });
+            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, category_id, location_id });
         }
 
         if (errors.length > 0 || isDryRun) {
             await client.query('ROLLBACK');
             return res.json({ errors, validCount: validRows.length });
         }
+
+        // In-memory counters per category code to avoid duplicate codes within this batch
+        const batchCounters = {};
 
         let inserted = 0, updated = 0;
         for (const vr of validRows) {
@@ -3885,23 +3921,30 @@ app.post('/assets/bulk-import', authenticateToken, requireAdmin, async (req, res
                     }
                 }
                 await client.query(
-                    'UPDATE assets SET name=$1, name_he=$2, name_en=$3, name_th=$4, code=COALESCE($5,code), category_id=COALESCE($6,category_id), location_id=COALESCE($7,location_id) WHERE id=$8',
-                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.code, vr.category_id, vr.location_id, vr.rowId]
+                    'UPDATE assets SET name=$1, name_he=$2, name_en=$3, name_th=$4, category_id=COALESCE($5,category_id), location_id=COALESCE($6,location_id) WHERE id=$7',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.category_id, vr.location_id, vr.rowId]
                 );
                 updated++;
             } else {
-                // Auto-generate code from category prefix
-                let finalCode = vr.code;
-                if (!finalCode) {
-                    const catCode = vr.category_id
-                        ? ((await client.query('SELECT code FROM categories WHERE id = $1', [vr.category_id])).rows[0]?.code || 'GEN').toUpperCase()
-                        : 'GEN';
-                    const pattern = `^${catCode}-[0-9]+$`;
-                    const ex = await client.query('SELECT code FROM assets WHERE code ~ $1', [pattern]);
+                // Auto-generate code from category prefix with in-memory counter for batch safety
+                const catCode = vr.category_id
+                    ? ((await client.query('SELECT code FROM categories WHERE id = $1', [vr.category_id])).rows[0]?.code || 'GEN').toUpperCase()
+                    : 'GEN';
+
+                if (!(catCode in batchCounters)) {
+                    // Seed from DB: highest existing sequential number for this category prefix + company
+                    const patternQ = insertCompanyId
+                        ? 'SELECT code FROM assets WHERE code ~ $1 AND company_id = $2'
+                        : 'SELECT code FROM assets WHERE code ~ $1';
+                    const patternP = insertCompanyId ? [`^${catCode}-[0-9]+$`, insertCompanyId] : [`^${catCode}-[0-9]+$`];
+                    const ex = await client.query(patternQ, patternP);
                     let maxNum = 0;
                     ex.rows.forEach(r => { const n = parseInt((r.code || '').split('-')[1]); if (!isNaN(n) && n > maxNum) maxNum = n; });
-                    finalCode = `${catCode}-${String(maxNum + 1).padStart(4, '0')}`;
+                    batchCounters[catCode] = maxNum;
                 }
+                batchCounters[catCode]++;
+                const finalCode = `${catCode}-${String(batchCounters[catCode]).padStart(4, '0')}`;
+
                 await client.query(
                     'INSERT INTO assets (name, name_he, name_en, name_th, code, category_id, location_id, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
                     [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, finalCode, vr.category_id, vr.location_id, callerId, insertAreaId, insertCompanyId]
