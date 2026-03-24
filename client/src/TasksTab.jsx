@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2, ListChecks } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
 import TaskCard from './TaskCard';
@@ -84,6 +84,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const isTeamView = Array.isArray(subordinates);
   const isBulkRole = ['BIG_BOSS', 'COMPANY_MANAGER'].includes(user.role);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -188,7 +189,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   // Clear selection when the user switches tabs or view modes
   useEffect(() => {
       setSelectedIds(new Set());
-  }, [mainTab, viewMode]);
+  }, [mainTab, viewMode, isSelectionMode]);
 
   // ── Bulk helpers (BIG_BOSS / COMPANY_MANAGER only) ────────────────────────
   const getVisibleTasks = () => {
@@ -248,7 +249,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
 
   // Wraps a TaskCard with a selection checkbox for BIG_BOSS / COMPANY_MANAGER
   const renderTaskCard = (task, prefixContent = null) => {
-      if (!isBulkRole) {
+      if (!isBulkRole || !isSelectionMode) {
           return (
               <div key={task.id}>
                   {prefixContent}
@@ -426,6 +427,20 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                 >
                     <Search size={20} />
                 </button>
+                {isBulkRole && (
+                    <button
+                        onClick={() => {
+                            setIsSelectionMode(m => {
+                                if (m) setSelectedIds(new Set());
+                                return !m;
+                            });
+                        }}
+                        className={`p-2 rounded-full transition shadow-sm ${isSelectionMode ? 'bg-[#714B67] text-white shadow-[0_0_0_3px_rgba(113,75,103,0.25)]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        title="Bulk Select"
+                    >
+                        <ListChecks size={20} />
+                    </button>
+                )}
                 {['BIG_BOSS', 'COMPANY_MANAGER'].includes(user.role) && (
                     <button onClick={() => setShowExcel(!showExcel)} className="p-2 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition shadow-sm">
                         <FileSpreadsheet size={20} />
@@ -553,7 +568,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       )}
 
       {/* ── Bulk Select All bar (BIG_BOSS / COMPANY_MANAGER only) ──────────── */}
-      {isBulkRole && (() => {
+      {isBulkRole && isSelectionMode && (() => {
           const visible = getVisibleTasks();
           if (visible.length === 0) return null;
           const allSelected = visible.every(tk => selectedIds.has(tk.id));
@@ -600,7 +615,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       )}
 
       {/* ── Bulk Action Bar ──────────────────────────────────────────────────── */}
-      {isBulkRole && selectedIds.size > 0 && (
+      {isBulkRole && isSelectionMode && selectedIds.size > 0 && (
           <div
               className="fixed bottom-20 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-2xl border border-white/20 backdrop-blur-md bg-[#714B67] animate-fade-in"
               style={{ left: '50%', transform: 'translateX(-50%)' }}
