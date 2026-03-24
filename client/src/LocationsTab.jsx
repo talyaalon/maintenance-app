@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Trash2, Pencil, MapPin, Plus, X, Save, Navigation } from 'lucide-react';
 
-const API = 'https://maintenance-app-h84v.onrender.com';
+const API = 'https://maintenance-app-staging.onrender.com';
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const emptyForm = () => ({ name_he: '', name_en: '', name_th: '', address: '' });
@@ -266,11 +266,17 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
                     <div key={loc.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                         <div className="flex justify-between items-start">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
-                                {loc.image_url ? (
-                                    <img src={loc.image_url} alt={getLocName(loc)} className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0" />
-                                ) : (
-                                    <div className="bg-[#fdf4ff] p-2 rounded-full text-[#714B67] shrink-0"><MapPin size={20} /></div>
-                                )}
+                                <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-200 bg-slate-50 flex items-center justify-center">
+                                    {loc.image_url ? (
+                                        <img
+                                            src={loc.image_url.startsWith('/') ? `${API}${loc.image_url}` : loc.image_url}
+                                            alt={getLocName(loc)}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <MapPin size={18} className="text-[#714B67]" />
+                                    )}
+                                </div>
 
                                 {editingId === loc.id ? (
                                     <div className="flex-1 space-y-2">

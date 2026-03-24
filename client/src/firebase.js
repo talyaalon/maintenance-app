@@ -35,7 +35,7 @@ export const requestForToken = async (userId, token) => {
         console.log('Got Device Token:', currentToken);
         
         // 3. שליחת הטוקן לשרת שלך כדי לשמור אותו במסד הנתונים
-        await fetch('https://maintenance-app-h84v.onrender.com/users/device-token', {
+        await fetch('https://maintenance-app-staging.onrender.com/users/device-token', {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json', 

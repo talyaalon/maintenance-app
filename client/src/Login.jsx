@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { Globe, Eye, EyeOff, Loader2, X, KeyRound, ArrowLeft } from 'lucide-react';
+import airManageLogo from './app-logo.png';
 
-const API = 'https://maintenance-app-h84v.onrender.com';
+const API = 'https://maintenance-app-staging.onrender.com';
 
 // ── Forgot/Reset Password Modal ──────────────────────────────────────────────
 const ForgotPasswordModal = ({ t, lang, onClose }) => {
@@ -348,10 +349,11 @@ const Login = ({ onLoginSuccess, t, lang, setLang }) => {
             </select>
           </div>
 
-          {/* Title */}
+          {/* Logo + Brand Title */}
           <div className="text-center mb-8 mt-8">
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight mb-1">
-              {t.app_name || 'Maintenance App'}
+            <img src={airManageLogo} alt="Air Manage" className="h-40 w-auto object-contain mx-auto mb-4" />
+            <h2 className="text-xs font-extrabold tracking-[0.3em] text-[#714B67] uppercase mb-1">
+              AIR MANAGE
             </h2>
             <p className="text-slate-400 text-sm font-medium">{t.login_title}</p>
           </div>

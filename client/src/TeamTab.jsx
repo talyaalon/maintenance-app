@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trash2, Edit2, ChevronDown, ChevronUp, User, X, Plus, Save, Eye, EyeOff } from 'lucide-react';
 import TasksTab from './TasksTab';
+import ScopedTasksModal from './ScopedTasksModal';
 
 // ─── Branded delete-confirm modal ────────────────────────────────────────────
 const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
@@ -42,7 +43,7 @@ const RoleBadge = ({ role, t }) => {
         return <span className="text-[10px] bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded-full font-semibold">Admin</span>;
     if (role === 'MANAGER')
         return <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full font-semibold">{t?.role_area_manager || 'Area Manager'}</span>;
-    if (role === 'SUPERVISOR')
+    if (role === 'COMPANY_MANAGER')
         return <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-semibold">{t?.role_dept_manager || 'Dept Manager'}</span>;
     if (role === 'EMPLOYEE')
         return <span className="text-[10px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-semibold">{t?.role_employee || 'Employee'}</span>;
@@ -73,32 +74,37 @@ const TeamTab = ({ token, t, user, lang }) => {
     const [addAssignedEmployeeIds, setAddAssignedEmployeeIds] = useState(new Set());
 
     const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+    const [scopedModalUser, setScopedModalUser] = useState(null);
     const [selectedMember, setSelectedMember] = useState(null);
     const [memberTasks, setMemberTasks] = useState([]);
     const [isLoadingTasks, setIsLoadingTasks] = useState(false);
 
     // All managers/supervisors visible to the viewer (for parent dropdown)
-    const activeManagers = (Array.isArray(team) ? team : []).filter(u => u?.role === 'MANAGER' || u?.role === 'BIG_BOSS' || u?.role === 'SUPERVISOR');
+    const activeManagers = (Array.isArray(team) ? team : []).filter(u => u?.role === 'MANAGER' || u?.role === 'BIG_BOSS' || u?.role === 'COMPANY_MANAGER');
 
-    useEffect(() => { fetchTeam(); }, []);
+    // Re-fetch whenever the authenticated user's identity changes so that a MANAGER
+    // always receives the correctly scoped ?manager_id=… URL from the first real render.
+    useEffect(() => { if (user?.id) fetchTeam(); }, [user?.id]);
 
     const fetchTeam = async () => {
         setIsLoadingTeam(true);
         try {
-            const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
+            const url = user?.role === 'MANAGER'
+                ? `https://maintenance-app-staging.onrender.com/users?manager_id=${user.id}`
+                : 'https://maintenance-app-staging.onrender.com/users';
+            const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) {
-                const raw = await res.json();
-                const data = Array.isArray(raw) ? raw : [];
-                setTeam(data);
-                // Auto-expand all area managers and dept managers
-                const toExpand = data
-                    .filter(u => u?.role === 'MANAGER' || u?.role === 'SUPERVISOR')
-                    .map(u => u.id);
-                setExpandedNodes(new Set(toExpand));
-            }
-        } catch (e) { console.error(e); }
+            const raw = res.ok ? await res.json().catch(() => []) : [];
+            const data = Array.isArray(raw) ? raw : [];
+            setTeam(data);
+            // Auto-expand all managers and dept managers
+            const toExpand = (data ?? [])
+                .filter(u => u?.role === 'MANAGER' || u?.role === 'COMPANY_MANAGER')
+                .map(u => u?.id)
+                .filter(Boolean);
+            setExpandedNodes(new Set(toExpand));
+        } catch (e) { console.error(e); setTeam([]); }
         finally { setIsLoadingTeam(false); }
     };
 
@@ -115,7 +121,7 @@ const TeamTab = ({ token, t, user, lang }) => {
         setSelectedMember(member);
         setIsLoadingTasks(true);
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/user/${member.id}`, {
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/tasks/user/${member.id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) setMemberTasks(await res.json());
@@ -127,7 +133,7 @@ const TeamTab = ({ token, t, user, lang }) => {
         const userId = deleteConfirmId;
         setDeleteConfirmId(null);
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${userId}`, {
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/users/${userId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -153,7 +159,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             line_user_id: member.line_user_id || ''
         });
         // Pre-load employees already assigned to this DeptManager
-        if (member.role === 'SUPERVISOR') {
+        if (member.role === 'COMPANY_MANAGER') {
             const assigned = (Array.isArray(team) ? team : [])
                 .filter(u => u.role === 'EMPLOYEE' && u.parent_manager_id === member.id)
                 .map(u => u.id);
@@ -167,7 +173,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const handleEditSubmit = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/users/${editMember.id}`, {
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/users/${editMember.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(editForm)
@@ -175,8 +181,8 @@ const TeamTab = ({ token, t, user, lang }) => {
             const data = await res.json();
             if (res.ok) {
                 // For DeptManagers, persist the employee assignment in the same save
-                if (editMember.role === 'SUPERVISOR') {
-                    await fetch(`https://maintenance-app-h84v.onrender.com/users/${editMember.id}/assign-employees`, {
+                if (editMember.role === 'COMPANY_MANAGER') {
+                    await fetch(`https://maintenance-app-staging.onrender.com/users/${editMember.id}/assign-employees`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ employeeIds: Array.from(assignedEmployeeIds) })
@@ -193,14 +199,14 @@ const TeamTab = ({ token, t, user, lang }) => {
     const handleAddUser = async (e) => {
         e.preventDefault();
         let payload = { ...addForm };
-        if (user.role === 'MANAGER' || user.role === 'SUPERVISOR') {
+        if (user.role === 'MANAGER' || user.role === 'COMPANY_MANAGER') {
             payload.parent_manager_id = user.id;
             payload.role = 'EMPLOYEE';
         }
-        if (payload.role === 'MANAGER' || payload.role === 'SUPERVISOR') payload.parent_manager_id = null;
+        if (payload.role === 'MANAGER' || payload.role === 'COMPANY_MANAGER') payload.parent_manager_id = null;
 
         try {
-            const res = await fetch('https://maintenance-app-h84v.onrender.com/users', {
+            const res = await fetch('https://maintenance-app-staging.onrender.com/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(payload)
@@ -208,8 +214,8 @@ const TeamTab = ({ token, t, user, lang }) => {
             const data = await res.json();
             if (res.ok) {
                 // If creating a DeptManager with employees selected, assign them now
-                if (payload.role === 'SUPERVISOR' && addAssignedEmployeeIds.size > 0) {
-                    await fetch(`https://maintenance-app-h84v.onrender.com/users/${data.id}/assign-employees`, {
+                if (payload.role === 'COMPANY_MANAGER' && addAssignedEmployeeIds.size > 0) {
+                    await fetch(`https://maintenance-app-staging.onrender.com/users/${data.id}/assign-employees`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ employeeIds: Array.from(addAssignedEmployeeIds) })
@@ -231,7 +237,7 @@ const TeamTab = ({ token, t, user, lang }) => {
     const renderMemberRow = (member, depth = 0) => {
         const displayName = member['full_name_' + lang] || member.full_name_en || member.full_name || '?';
         const initial = displayName.charAt(0).toUpperCase();
-        const isExpandable = member.role === 'MANAGER' || member.role === 'SUPERVISOR';
+        const isExpandable = member.role === 'MANAGER' || member.role === 'COMPANY_MANAGER';
         const indentClass = depth === 1 ? 'ml-4 sm:ml-6' : depth === 2 ? 'ml-8 sm:ml-12' : depth === 3 ? 'ml-12 sm:ml-16' : '';
         const borderClass = depth === 1 ? 'border-l-4 border-l-indigo-200' : depth === 2 ? 'border-l-4 border-l-blue-200' : depth === 3 ? 'border-l-4 border-l-green-200' : '';
 
@@ -273,15 +279,15 @@ const TeamTab = ({ token, t, user, lang }) => {
 
     // ─── 4-tier hierarchy builders ─────────────────────────────────────────────
     const safeTeam     = Array.isArray(team) ? team : [];
-    const bigBosses    = safeTeam.filter(u => u?.role === 'BIG_BOSS');
-    const areaManagers = safeTeam.filter(u => u?.role === 'MANAGER');
-    const deptManagers = safeTeam.filter(u => u?.role === 'SUPERVISOR');
-    const employees    = safeTeam.filter(u => u?.role === 'EMPLOYEE');
+    const bigBosses    = (safeTeam ?? []).filter(u => u?.role === 'BIG_BOSS');
+    const areaManagers = (safeTeam ?? []).filter(u => u?.role === 'MANAGER');
+    const deptManagers = (safeTeam ?? []).filter(u => u?.role === 'COMPANY_MANAGER');
+    const employees    = (safeTeam ?? []).filter(u => u?.role === 'EMPLOYEE');
 
     // Render Employees under a given parent id
     const renderEmployees = (parentId) => {
         if (parentId == null) return null;
-        const emps = employees.filter(e => e.parent_manager_id === parentId);
+        const emps = (employees ?? []).filter(e => e?.parent_manager_id === parentId);
         if (emps.length === 0) return null;
         return (
             <div className="space-y-1 mt-1">
@@ -377,27 +383,32 @@ const TeamTab = ({ token, t, user, lang }) => {
             );
         }
 
-        // MANAGER (AreaManager) viewer: sees DeptManagers + direct Employees (DeptManager is optional)
-        const myDepts = deptManagers.filter(d => d?.parent_manager_id === user?.id);
-        const myDirectEmps = employees.filter(e => e?.parent_manager_id === user?.id);
+        // MANAGER (AreaManager) viewer: shows ONLY employees assigned to this manager
+        // via parent_manager_id (M:M proxy seeded from the junction table migration)
+        const myDepts      = (deptManagers ?? []).filter(d => d?.parent_manager_id === user?.id);
+        const myDirectEmps = (employees    ?? []).filter(e => e?.parent_manager_id === user?.id);
 
         return (
             <>
-                {myDepts.map(dept => (
-                    <div key={dept.id}>
+                {/* M:M scope label */}
+                <p className="text-xs text-[#714B67] font-semibold mb-3 px-1">
+                    👥 {t?.team_assigned_to_you || 'Showing only employees assigned to you'}
+                </p>
+                {(myDepts ?? []).map(dept => (
+                    <div key={dept?.id}>
                         {renderMemberRow(dept, 0)}
-                        {expandedNodes.has(dept.id) && (
+                        {expandedNodes.has(dept?.id) && (
                             <div className="animate-fade-in">
-                                {renderEmployees(dept.id) || (
+                                {renderEmployees(dept?.id) || (
                                     <p className="text-sm text-gray-400 text-center py-2 ml-8">{t?.no_employees_assigned || 'No employees assigned'}</p>
                                 )}
                             </div>
                         )}
                     </div>
                 ))}
-                {myDirectEmps.map(emp => renderMemberRow(emp, 0))}
-                {myDepts.length === 0 && myDirectEmps.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-4">{t?.no_employees_assigned || 'No employees assigned'}</p>
+                {(myDirectEmps ?? []).map(emp => renderMemberRow(emp, 0))}
+                {(myDepts ?? []).length === 0 && (myDirectEmps ?? []).length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-4">{t?.no_employees_assigned || 'No employees assigned yet'}</p>
                 )}
             </>
         );
@@ -417,6 +428,56 @@ const TeamTab = ({ token, t, user, lang }) => {
         );
     };
 
+    // ─── Manager (AreaManager) Team view — M:M assigned employees ──────────────
+    // Employee list is already M:M-scoped via fetchTeam (?manager_id=…).
+    // Clicking an employee name opens ScopedTasksModal (full-screen).
+    const renderManagerTeamView = () => {
+        const myEmployees = employees; // already M:M-scoped via fetch
+
+        if (myEmployees.length === 0) {
+            return (
+                <div className="text-center py-12 text-gray-400">
+                    <User size={48} className="mx-auto mb-3 text-gray-200" />
+                    <p className="text-sm">{t?.no_employees_assigned || 'No employees assigned yet'}</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="space-y-2">
+                <p className="text-xs text-[#714B67] font-semibold mb-3 px-1">
+                    👥 {t?.team_assigned_to_you || 'Employees assigned to you'} — {myEmployees.length}
+                </p>
+                {myEmployees.map(emp => {
+                    const displayName = emp['full_name_' + lang] || emp.full_name_en || emp.full_name || '?';
+                    const initial = displayName.charAt(0).toUpperCase();
+                    return (
+                        <div key={emp.id} className="bg-white p-4 rounded-xl border border-gray-200 flex items-center gap-3 shadow-sm">
+                            <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2 border-gray-100 bg-slate-50 flex items-center justify-center">
+                                {emp.profile_picture_url ? (
+                                    <img src={emp.profile_picture_url} alt={displayName} className="w-full h-full object-cover" />
+                                ) : (
+                                    <span className="text-sm font-bold text-[#714B67]">{initial}</span>
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <button
+                                    onClick={() => setScopedModalUser(emp)}
+                                    className="font-semibold text-sm leading-tight text-left hover:underline decoration-violet-400 hover:text-violet-700 transition-colors"
+                                    title="View Tasks"
+                                >
+                                    {displayName}
+                                </button>
+                                <p className="text-xs text-gray-400 truncate mt-0.5">{emp.email}{emp.phone && ` · ${emp.phone}`}</p>
+                            </div>
+                            <RoleBadge role={emp.role} t={t} />
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
+
     return (
         <div className="px-3 sm:px-4 pt-3 pb-24 min-h-screen bg-slate-50">
             {deleteConfirmId !== null && (
@@ -430,19 +491,21 @@ const TeamTab = ({ token, t, user, lang }) => {
 
             <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4">{t.my_team_title || t.nav_team || 'Team'}</h1>
 
-            <div className="flex justify-end items-center mb-5">
-                <button
-                    className="bg-[#714B67] text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#5a3b52] transition flex items-center gap-1.5"
-                    onClick={() => setShowAddModal(true)}
-                >
-                    <Plus size={18}/> {t.add_team_member || "Add User"}
-                </button>
-            </div>
+            {user?.role !== 'MANAGER' && (
+                <div className="flex justify-end items-center mb-5">
+                    <button
+                        className="bg-[#714B67] text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-[#5a3b52] transition flex items-center gap-1.5"
+                        onClick={() => setShowAddModal(true)}
+                    >
+                        <Plus size={18}/> {t.add_team_member || "Add User"}
+                    </button>
+                </div>
+            )}
 
-            {/* Hierarchy Legend (Admin/AreaManager viewers only) */}
-            {(user?.role === 'BIG_BOSS' || user?.role === 'MANAGER') && (
+            {/* Hierarchy Legend (BIG_BOSS only) */}
+            {user?.role === 'BIG_BOSS' && (
                 <div className="flex gap-3 mb-4 flex-wrap text-xs text-gray-500">
-                    {user?.role === 'BIG_BOSS' && <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-400 inline-block"/> Admin</span>}
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-400 inline-block"/> Admin</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-indigo-400 inline-block"/> {t.role_area_manager || 'Area Manager'}</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-400 inline-block"/> {t.role_dept_manager || 'Dept Manager'}</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-400 inline-block"/> {t.role_employee || 'Employee'}</span>
@@ -458,9 +521,11 @@ const TeamTab = ({ token, t, user, lang }) => {
                         <SkeletonRow indent />
                     </>
                 ) : (
-                    user?.role === 'SUPERVISOR'
+                    user?.role === 'COMPANY_MANAGER'
                         ? renderDeptManagerView()
-                        : renderFullHierarchy()
+                        : user?.role === 'MANAGER'
+                            ? renderManagerTeamView()
+                            : renderFullHierarchy()
                 )}
             </div>
 
@@ -489,8 +554,8 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         tasks={memberTasks}
                                         t={t}
                                         token={token}
-                                        user={selectedMember}
-                                        subordinates={team.filter(u => u.parent_manager_id === selectedMember.id)}
+                                        user={user}
+                                        subordinates={[selectedMember]}
                                         onRefresh={() => handleMemberClick(selectedMember)}
                                         lang={lang}
                                     />
@@ -501,10 +566,22 @@ const TeamTab = ({ token, t, user, lang }) => {
                 </div>
             )}
 
+            {/* Manager scoped employee tasks — full-screen modal */}
+            {scopedModalUser && (
+                <ScopedTasksModal
+                    scopedUser={scopedModalUser}
+                    scopedUserRole="EMPLOYEE"
+                    token={token}
+                    lang={lang}
+                    t={t}
+                    onClose={() => setScopedModalUser(null)}
+                />
+            )}
+
             {/* Edit User Modal */}
             {showEditModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-                    <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl border border-gray-200">
+                <div className="fixed inset-0 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl border border-gray-200">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold">{t.edit || "Edit"}</h3>
                             <button onClick={() => setShowEditModal(false)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400"><X size={18}/></button>
@@ -525,7 +602,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         onChange={e => setEditForm({...editForm, role: e.target.value})}
                                     >
                                         <option value="EMPLOYEE">{t.role_employee || 'Employee'}</option>
-                                        <option value="SUPERVISOR">{t.role_dept_manager || 'Dept Manager'}</option>
+                                        <option value="COMPANY_MANAGER">{t.role_dept_manager || 'Dept Manager'}</option>
                                         <option value="MANAGER">{t.role_area_manager || 'Area Manager'}</option>
                                     </select>
                                 </div>
@@ -557,7 +634,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                             </div>
 
                             {/* ── Assign Employees (DeptManager only) ─────────────── */}
-                            {editMember?.role === 'SUPERVISOR' && (() => {
+                            {editMember?.role === 'COMPANY_MANAGER' && (() => {
                                 const areaEmps = safeTeam.filter(u => u.role === 'EMPLOYEE' && u.area_id === editMember.area_id);
                                 return (
                                     <div>
@@ -603,8 +680,8 @@ const TeamTab = ({ token, t, user, lang }) => {
 
             {/* Add User Modal */}
             {showAddModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl p-5 w-full max-w-md shadow-xl border border-gray-200 animate-scale-in">
+                <div className="fixed inset-0 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-5 w-full max-w-lg shadow-xl border border-gray-200 animate-scale-in">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-slate-800">{t.add_team_member || "Add User"}</h3>
                             <button onClick={() => setShowAddModal(false)}><X size={20} className="text-gray-400"/></button>
@@ -642,14 +719,14 @@ const TeamTab = ({ token, t, user, lang }) => {
                                         }}
                                     >
                                         <option value="EMPLOYEE">{t.role_employee || "Employee"}</option>
-                                        <option value="SUPERVISOR">{t.role_dept_manager || "Dept Manager"}</option>
+                                        <option value="COMPANY_MANAGER">{t.role_dept_manager || "Dept Manager"}</option>
                                         <option value="MANAGER">{t.role_area_manager || "Area Manager"}</option>
                                     </select>
 
-                                    {(addForm.role === 'EMPLOYEE' || addForm.role === 'SUPERVISOR') && (
+                                    {(addForm.role === 'EMPLOYEE' || addForm.role === 'COMPANY_MANAGER') && (
                                         <div className="relative">
                                             <p className="text-xs text-gray-500 mb-1">
-                                                {addForm.role === 'SUPERVISOR'
+                                                {addForm.role === 'COMPANY_MANAGER'
                                                     ? (t.role_area_manager || 'Area Manager') + ' (parent)'
                                                     : (t.select_manager || 'Select Manager') + ' (' + (t.optional || 'Optional — leave blank for direct Area Manager') + ')'}
                                             </p>
@@ -676,7 +753,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                             {managerDropdownOpen && (
                                                 <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                                                     {activeManagers
-                                                        .filter(m => addForm.role === 'SUPERVISOR' ? m.role === 'MANAGER' : true)
+                                                        .filter(m => addForm.role === 'COMPANY_MANAGER' ? m.role === 'MANAGER' : true)
                                                         .map(m => (
                                                         <div
                                                             key={m.id}
@@ -691,7 +768,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                                             <span className="text-sm text-gray-700">
                                                                 {m.full_name}
                                                                 <span className="text-xs text-gray-400 ml-1">
-                                                                    ({m.role === 'MANAGER' ? (t.role_area_manager || 'Area Mgr') : m.role === 'SUPERVISOR' ? (t.role_dept_manager || 'Dept Mgr') : m.role})
+                                                                    ({m.role === 'MANAGER' ? (t.role_area_manager || 'Area Mgr') : m.role === 'COMPANY_MANAGER' ? (t.role_dept_manager || 'Dept Mgr') : m.role})
                                                                 </span>
                                                             </span>
                                                         </div>
@@ -702,7 +779,7 @@ const TeamTab = ({ token, t, user, lang }) => {
                                     )}
 
                                     {/* ── Assign Employees to new DeptManager ──────── */}
-                                    {addForm.role === 'SUPERVISOR' && addForm.parent_manager_id && (() => {
+                                    {addForm.role === 'COMPANY_MANAGER' && addForm.parent_manager_id && (() => {
                                         const parentId = parseInt(addForm.parent_manager_id);
                                         const addAreaEmps = safeTeam.filter(u => u.role === 'EMPLOYEE' && u.area_id === parentId);
                                         return (

@@ -1,7 +1,7 @@
 import { requestForToken, onMessageListener } from './firebase';
 import { Toaster, toast } from 'react-hot-toast'; // אם אין לך react-hot-toast, תוכלי להשתמש ב-alert רגיל
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, UserCircle, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, UserCircle, Settings, Building2 } from 'lucide-react';
 import Login from './Login';
 import AddUserForm from './AddUserForm';
 import { translations } from './translations'; 
@@ -10,8 +10,17 @@ import logoImg from './app-logo.png';
 // ייבוא הטאבים
 import TasksTab from './TasksTab';
 import TeamTab from './TeamTab';
-import ProfileTab from './ProfileTab'; 
-import ConfigurationTab from './ConfigurationTab'; 
+import ProfileTab from './ProfileTab';
+import ConfigurationTab from './ConfigurationTab';
+import CompaniesTab from './CompaniesTab';
+import CompanyManagerSettingsTab from './CompanyManagerSettingsTab';
+
+// Legacy role mapping: DB may still contain "Admin" from before the Phase 1 rename.
+// Normalise it to "BIG_BOSS" so all tab routing and permission checks work correctly.
+const normalizeRole = (role) => {
+  if (role === 'Admin' || role === 'admin') return 'BIG_BOSS';
+  return role;
+};
 
 function App() {
   const [user, setUser] = useState(null);
@@ -43,7 +52,7 @@ function App() {
             setUser({
                 ...storedUser,             // extended profile fields from localStorage
                 id:   decodedUser.id,      // JWT auth fields always take priority
-                role: decodedUser.role,
+                role: normalizeRole(decodedUser.role),
                 name: decodedUser.name,
             });
         } else {
@@ -102,16 +111,21 @@ function App() {
   
   const t = translations[lang]; // המילון הנוכחי
 
-  // שואב את הטאב האחרון מהזיכרון (אם אין, יפתח את טאב 1)
+  // שואב את הטאב האחרון מהזיכרון (אם אין, יפתח את tasks)
   const [activeTab, setActiveTab] = useState(() => {
-      const savedTab = localStorage.getItem('appActiveTab');
-      return savedTab ? parseInt(savedTab, 10) : 1;
+      return localStorage.getItem('appActiveTab') || 'tasks';
   });
 
   // שומר את הטאב לזיכרון בכל פעם שאת עוברת עמוד
   useEffect(() => {
       localStorage.setItem('appActiveTab', activeTab);
   }, [activeTab]);
+
+  // Reset to Tasks tab on login so a stale tab (e.g. Settings saved by a
+  // previous session) never lands the new user on a blank screen.
+  useEffect(() => {
+      if (user) setActiveTab('tasks');
+  }, [user?.id]);
 
   // מודאלים
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
@@ -122,7 +136,7 @@ function App() {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await fetch('https://maintenance-app-h84v.onrender.com/tasks', {
+      const res = await fetch('https://maintenance-app-staging.onrender.com/tasks', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.status === 401) { setUser(null); return; }
@@ -185,49 +199,72 @@ function App() {
   const isRTL = lang === 'he';
   const dir = isRTL ? 'rtl' : 'ltr';
 
+  const isBigBoss        = user?.role === 'BIG_BOSS';
+  const isCompanyManager = user?.role === 'COMPANY_MANAGER';
+
+  // Role-based tab configuration — must be before any early return
+  const tabsConfig = React.useMemo(() => {
+      switch (user?.role) {
+          case 'BIG_BOSS':
+              return [
+                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
+                  { key: 'companies', label: t.nav_companies,            Icon: Building2 },
+                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+              ];
+          case 'COMPANY_MANAGER':
+              return [
+                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
+                  { key: 'settings',  label: t.nav_config,               Icon: Settings },
+                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+              ];
+          case 'MANAGER':
+              return [
+                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
+                  { key: 'team',      label: t.nav_team,                 Icon: Users },
+                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+              ];
+          default: // EMPLOYEE (or null user — won't be rendered)
+              return [
+                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
+                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+              ];
+      }
+  }, [user?.role, t]);
+
   if (!user) {
     return (
-        <Login 
-            onLoginSuccess={setUser} 
-            t={t} 
-            lang={lang}          
-            setLang={setLang}    
-        /> 
+        <Login
+            onLoginSuccess={(userData) => setUser({ ...userData, role: normalizeRole(userData?.role) })}
+            t={t}
+            lang={lang}
+            setLang={setLang}
+        />
     );
   }
-
-  const isEmployee = user.role === 'EMPLOYEE';
-  // Settings tab is only for Admin (BIG_BOSS) and legacy MANAGER accounts; SUPERVISOR cannot access it
-  const canAccessSettings = user.role === 'BIG_BOSS' || user.role === 'MANAGER';
 
   const renderContent = () => {
       const token = localStorage.getItem('token');
       switch (activeTab) {
-          case 1: 
-            return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
-          case 2: 
-            if (isEmployee) return null;
-            return <TeamTab
-                        user={user}
-                        token={token}
-                        t={t}
-                        lang={lang}
-                        onAddUser={() => setIsUserFormOpen(true)}
-                        refreshTrigger={refreshTrigger}
-                    />;
-          case 3:
-            if (!canAccessSettings) return null;
-            return <ConfigurationTab token={token} t={t} user={user} lang={lang} />;
-          case 4: 
-            return <ProfileTab 
-                        t={t} 
-                        user={user} 
-                        token={token}
-                        onLogout={() => { setUser(null); localStorage.removeItem('token'); }} 
-                        onUpdateUser={handleUserUpdate} 
-                    />;
-          default: 
-            return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
+          case 'tasks':
+              return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
+          case 'companies':
+              return <CompaniesTab token={token} t={t} user={user} lang={lang} />;
+          case 'team':
+              return <TeamTab user={user} token={token} t={t} lang={lang} onAddUser={() => setIsUserFormOpen(true)} refreshTrigger={refreshTrigger} />;
+          case 'settings':
+              if (isBigBoss)        return <ConfigurationTab token={token} t={t} user={user} lang={lang} />;
+              if (isCompanyManager) return <CompanyManagerSettingsTab token={token} t={t} user={user} lang={lang} />;
+              return null;
+          case 'profile':
+              return <ProfileTab
+                          t={t}
+                          user={user}
+                          token={token}
+                          onLogout={() => { setUser(null); localStorage.removeItem('token'); }}
+                          onUpdateUser={handleUserUpdate}
+                      />;
+          default:
+              return <TasksTab tasks={tasks} t={t} token={token} user={user} onRefresh={fetchTasks} onComplete={handleCompleteTask} lang={lang} />;
       }
   };
 
@@ -267,7 +304,7 @@ function App() {
                       if (user) {
                           try {
                               const tok = localStorage.getItem('token');
-                              await fetch(`https://maintenance-app-h84v.onrender.com/users/${user.id}`, {
+                              await fetch(`https://maintenance-app-staging.onrender.com/users/${user.id}`, {
                                   method: 'PUT',
                                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
                                   body: JSON.stringify({
@@ -295,34 +332,24 @@ function App() {
         {renderContent()}
       </main>
 
-{/* תפריט ניווט תחתון */}
+{/* ─── Footer ────────────────────────────────────────────────────────────── */}
+      <footer className="pb-16 pt-4 flex justify-center">
+        <img src={logoImg} alt="Air Manage" className="h-6 w-auto object-contain opacity-30" />
+      </footer>
+
+{/* ─── Bottom navigation ─────────────────────────────────────────────────── */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
         <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
-            
-            <button onClick={() => setActiveTab(1)} className={`flex flex-col items-center w-full ${activeTab === 1 ? 'text-[#714B67]' : 'text-gray-400'}`}>
-                <LayoutDashboard size={24} strokeWidth={activeTab === 1 ? 2.5 : 2} />
-                <span className="text-[10px] mt-1 font-medium">{t.nav_tasks}</span>
-            </button>
-
-            {!isEmployee && (
-                <button onClick={() => setActiveTab(2)} className={`flex flex-col items-center w-full ${activeTab === 2 ? 'text-[#714B67]' : 'text-gray-400'}`}>
-                    <Users size={24} strokeWidth={activeTab === 2 ? 2.5 : 2} />
-                    <span className="text-[10px] mt-1 font-medium">{t.nav_team}</span>
+            {tabsConfig.map(({ key, label, Icon }) => (
+                <button
+                    key={key}
+                    onClick={() => setActiveTab(key)}
+                    className={`flex flex-col items-center w-full ${activeTab === key ? 'text-[#714B67]' : 'text-gray-400'}`}
+                >
+                    <Icon size={24} strokeWidth={activeTab === key ? 2.5 : 2} />
+                    <span className="text-[10px] mt-1 font-medium">{label}</span>
                 </button>
-            )}
-
-            {canAccessSettings && (
-                <button onClick={() => setActiveTab(3)} className={`flex flex-col items-center w-full ${activeTab === 3 ? 'text-[#714B67]' : 'text-gray-400'}`}>
-                    <Settings size={24} strokeWidth={activeTab === 3 ? 2.5 : 2} />
-                    <span className="text-[10px] mt-1 font-medium">{t.nav_config}</span>
-                </button>
-            )}
-
-            <button onClick={() => setActiveTab(4)} className={`flex flex-col items-center w-full ${activeTab === 4 ? 'text-[#714B67]' : 'text-gray-400'}`}>
-                <UserCircle size={24} strokeWidth={activeTab === 4 ? 2.5 : 2} />
-                <span className="text-[10px] mt-1 font-medium">{t.nav_profile}</span>
-            </button>
-
+            ))}
         </div>
       </nav>
 

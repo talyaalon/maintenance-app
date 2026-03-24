@@ -56,7 +56,7 @@ const TaskCard = ({ task, onClick, t, lang = 'en' }) => {
                         <span>{getTaskName('location_name') || "No Loc"}</span>
                     </div>
                     {task.worker_name && (
-                        <div className="flex items-center gap-1 text-purple-700 font-medium bg-purple-50 px-1.5 py-0.5 rounded-md text-xs border border-purple-100">
+                        <div className="flex items-center gap-1 text-slate-600 font-medium bg-slate-50 px-1.5 py-0.5 rounded-md text-xs border border-slate-100">
                             <User size={10}/> {task.worker_name.split(' ')[0]}
                         </div>
                     )}

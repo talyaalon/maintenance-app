@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2, ListChecks } from 'lucide-react';
 import AdvancedExcel from './AdvancedExcel';
 import CreateTaskForm from './CreateTaskForm';
 import TaskCard from './TaskCard';
@@ -68,7 +68,7 @@ const calendarStyles = `
   .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.25); color: white; }
 `;
 
-const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
+const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scopedCompanyId }) => {
   const [mainTab, setMainTab] = useState('todo');
   const [viewMode, setViewMode] = useState('daily');
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -77,7 +77,72 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterAssignee, setFilterAssignee] = useState('');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const isTeamView = Array.isArray(subordinates);
+  const isBulkRole = ['BIG_BOSS', 'COMPANY_MANAGER'].includes(user.role);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  // ── API-fetched filter options (role-scoped) ─────────────────────────────
+  const [apiLocations,  setApiLocations]  = useState([]);
+  const [apiCategories, setApiCategories] = useState([]);
+  const [apiEmployees,  setApiEmployees]  = useState([]);
+
+  const BASE = 'https://maintenance-app-staging.onrender.com';
+
+  useEffect(() => {
+    if (!token || !user?.id) return;
+    const h = { Authorization: `Bearer ${token}` };
+
+    fetch(`${BASE}/locations`,  { headers: h })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setApiLocations(Array.isArray(d) ? d : []))
+      .catch(() => {});
+
+    fetch(`${BASE}/categories`, { headers: h })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setApiCategories(Array.isArray(d) ? d : []))
+      .catch(() => {});
+
+    // EMPLOYEE sees no assignee filter — skip the extra request
+    if (user.role !== 'EMPLOYEE') {
+      // MANAGER: only their M:M-assigned employees
+      const empUrl = user.role === 'MANAGER'
+        ? `${BASE}/users?manager_id=${user.id}`
+        : `${BASE}/users`;
+      fetch(empUrl, { headers: h })
+        .then(r => r.ok ? r.json() : [])
+        .then(d => {
+          const arr = Array.isArray(d) ? d : [];
+          setApiEmployees(arr.filter(u => u.role === 'EMPLOYEE'));
+        })
+        .catch(() => {});
+    }
+  }, [token, user?.id, user?.role]);
+
+  // Localized name helpers
+  const localName = (item) => {
+    if (!item) return '';
+    if (lang === 'he') return item.name_he || item.name_en || item.name || '';
+    if (lang === 'th') return item.name_th || item.name_en || item.name || '';
+    return item.name_en || item.name || '';
+  };
+  const localEmpName = (emp) => {
+    if (!emp) return '';
+    if (lang === 'he') return emp.full_name_he || emp.full_name_en || emp.full_name || '';
+    if (lang === 'th') return emp.full_name_th || emp.full_name_en || emp.full_name || '';
+    return emp.full_name_en || emp.full_name || '';
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const showAssigneeFilter = ['BIG_BOSS', 'COMPANY_MANAGER', 'MANAGER'].includes(user.role);
+  const hasActiveFilters = !!(filterPriority || filterLocation || filterCategory || filterAssignee);
 
   const todayBkk = getBkkDateObj(new Date());
 
@@ -105,15 +170,131 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       );
   };
 
+  // Attribute filter helper — location/category compared by ID for accuracy
+  const applyFilters = (list) => list.filter(tk => {
+      if (filterPriority && tk.urgency !== filterPriority) return false;
+      if (filterLocation && String(tk.location_id) !== String(filterLocation)) return false;
+      if (filterCategory && String(tk.category_id) !== String(filterCategory)) return false;
+      if (filterAssignee && String(tk.worker_id) !== String(filterAssignee)) return false;
+      return true;
+  });
+
+  const clearFilters = () => {
+      setFilterPriority('');
+      setFilterLocation('');
+      setFilterCategory('');
+      setFilterAssignee('');
+  };
+
+  // Clear selection when the user switches tabs or view modes
+  useEffect(() => {
+      setSelectedIds(new Set());
+  }, [mainTab, viewMode, isSelectionMode]);
+
+  // ── Bulk helpers (BIG_BOSS / COMPANY_MANAGER only) ────────────────────────
+  const getVisibleTasks = () => {
+      if (mainTab === 'overdue') return applyFilters(applySearch(overdueTasks));
+      if (mainTab === 'todo') {
+          if (viewMode === 'daily') return applyFilters(applySearch(todayTasks));
+          if (viewMode === 'weekly') {
+              const next7Days = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(todayBkk), i));
+              return applyFilters(tasks.filter(tk => tk.status === 'PENDING' && next7Days.some(d => isSameDay(getBkkDateObj(tk.due_date), d))));
+          }
+          if (viewMode === 'calendar') return calendarTasks;
+      }
+      if (mainTab === 'waiting') return applyFilters(applySearch(waitingTasks));
+      if (mainTab === 'completed') return applyFilters(applySearch(completedTasks));
+      return [];
+  };
+
+  const toggleSelect = (id) => {
+      setSelectedIds(prev => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id); else next.add(id);
+          return next;
+      });
+  };
+
+  const handleSelectAll = () => {
+      const visible = getVisibleTasks();
+      const allSelected = visible.length > 0 && visible.every(tk => selectedIds.has(tk.id));
+      setSelectedIds(allSelected ? new Set() : new Set(visible.map(tk => tk.id)));
+  };
+
+  const handleBulkDelete = async () => {
+      setBulkLoading(true);
+      try {
+          const res = await fetch(`${BASE}/tasks/bulk-delete`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ task_ids: [...selectedIds] }),
+          });
+          if (res.ok) { setSelectedIds(new Set()); setShowBulkDeleteConfirm(false); onRefresh(); }
+      } catch (e) { console.error(e); }
+      finally { setBulkLoading(false); }
+  };
+
+  const handleBulkMarkDone = async () => {
+      setBulkLoading(true);
+      try {
+          const res = await fetch(`${BASE}/tasks/bulk-update-status`, {
+              method: 'PUT',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ task_ids: [...selectedIds], status: 'COMPLETED' }),
+          });
+          if (res.ok) { setSelectedIds(new Set()); onRefresh(); }
+      } catch (e) { console.error(e); }
+      finally { setBulkLoading(false); }
+  };
+
+  // Wraps a TaskCard with a selection checkbox for BIG_BOSS / COMPANY_MANAGER
+  const renderTaskCard = (task, prefixContent = null) => {
+      if (!isBulkRole || !isSelectionMode) {
+          return (
+              <div key={task.id}>
+                  {prefixContent}
+                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+              </div>
+          );
+      }
+      const isSelected = selectedIds.has(task.id);
+      return (
+          <div key={task.id} className={`flex items-start gap-2 rounded-xl transition-colors ${isSelected ? 'bg-[#714B67]/5' : ''}`}>
+              <label
+                  className="flex items-center pt-3.5 pl-0.5 cursor-pointer shrink-0"
+                  onClick={e => e.stopPropagation()}
+              >
+                  <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelect(task.id)}
+                      className="w-4 h-4 cursor-pointer"
+                      style={{ accentColor: '#714B67' }}
+                  />
+              </label>
+              <div className="flex-1 min-w-0">
+                  {prefixContent}
+                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+              </div>
+          </div>
+      );
+  };
+
   const waitingTasks = tasks.filter(t => t.status === 'WAITING_APPROVAL');
-  const hideWaitingTab = user.role === 'MANAGER'
-      ? !!user.auto_approve_tasks
-      : !!user.manager_auto_approve_tasks;
+  // Only hide the Waiting Approval tab for MANAGERs who have auto-approve enabled.
+  // EMPLOYEEs (and all other roles) always see the tab — data scoping handles what they see.
+  const hideWaitingTab = user.role === 'MANAGER' && !!user.auto_approve_tasks;
   const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
-  const calendarTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), selectedDate));
+
+  // Filtered counts — tab badges reflect the currently active search/filter state
+  const filteredOverdueCount   = applyFilters(applySearch(overdueTasks)).length;
+  const filteredTodayCount     = applyFilters(applySearch(todayTasks)).length;
+  const filteredWaitingCount   = applyFilters(applySearch(waitingTasks)).length;
+  const filteredCompletedCount = applyFilters(applySearch(completedTasks)).length;
+  const calendarTasks = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), selectedDate)));
 
   const renderOverdueView = () => {
-      const filtered = applySearch(overdueTasks);
+      const filtered = applyFilters(applySearch(overdueTasks));
       return (
           <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
               {filtered.length === 0 ? (
@@ -123,12 +304,9 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                   </div>
               ) : (
                   <div className="space-y-3">
-                      {filtered.map(task => (
-                          <div key={task.id}>
-                              <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1">
-                                  <AlertTriangle size={12}/> {t.overdue} — {formatBkkDate(task.due_date)}
-                              </div>
-                              <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+                      {filtered.map(task => renderTaskCard(task,
+                          <div className="text-xs text-red-500 font-bold mb-1 mr-1 flex items-center gap-1">
+                              <AlertTriangle size={12}/> {t.overdue} — {formatBkkDate(task.due_date)}
                           </div>
                       ))}
                   </div>
@@ -139,7 +317,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
 
   const renderTodoView = () => {
       if (viewMode === 'daily') {
-          const filtered = applySearch(todayTasks);
+          const filtered = applyFilters(applySearch(todayTasks));
           return (
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
                   <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200 text-center mb-5">
@@ -153,11 +331,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                       </div>
                   ) : (
                       <div className="space-y-3">
-                          {filtered.map(task => (
-                              <div key={task.id}>
-                                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
-                              </div>
-                          ))}
+                          {filtered.map(task => renderTaskCard(task))}
                       </div>
                   )}
               </div>
@@ -169,7 +343,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           return (
               <div className="space-y-4 animate-fade-in max-h-[65vh] overflow-y-auto max-w-2xl mx-auto pr-1 pb-28">
                   {next7Days.map(day => {
-                      const dayTasks = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), day));
+                      const dayTasks = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), day)));
                       const isToday = isSameDay(day, todayBkk);
                       return (
                           <div key={day.toString()} className={`rounded-xl border transition-all ${isToday ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200 bg-white'}`}>
@@ -179,7 +353,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                               </div>
                               <div className="p-2 pt-0 space-y-2">
                                   {dayTasks.length > 0 ? (
-                                      dayTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)
+                                      dayTasks.map(task => renderTaskCard(task))
                                   ) : (
                                       <div className="p-3 pt-0 text-xs text-gray-400 text-center">No tasks</div>
                                   )}
@@ -194,14 +368,14 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
       if (viewMode === 'calendar') {
           return (
               <div className="animate-fade-in flex flex-col items-center">
-                  <div className="w-full overflow-x-auto">
+                  <div className="w-full max-w-3xl mx-auto">
                       <Calendar
                         onChange={setSelectedDate}
                         value={selectedDate}
                         locale={getLocale(lang)}
                         tileContent={({ date, view }) => {
                             if (view === 'month') {
-                                const count = tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), date)).length;
+                                const count = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), date))).length;
                                 if (count > 0) return <div className="flex flex-col items-center"><span className="task-count-badge">{count} {count === 1 ? (t.task_singular || "Task") : (t.tasks_plural || "Tasks")}</span></div>;
                             }
                         }}
@@ -211,7 +385,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                       <h4 className="font-semibold mb-4 text-slate-700 text-base border-b border-gray-200 pb-2">{t.tasks_for_date} {format(selectedDate, 'dd/MM/yyyy')}:</h4>
                       {calendarTasks.length === 0 && <p className="text-gray-400 text-sm p-2">No tasks for this date.</p>}
                       <div className="space-y-2">
-                          {calendarTasks.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
+                          {calendarTasks.map(task => renderTaskCard(task))}
                       </div>
                   </div>
               </div>
@@ -220,21 +394,21 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
   };
 
   const renderApprovalView = () => {
-      const filtered = applySearch(waitingTasks);
+      const filtered = applyFilters(applySearch(waitingTasks));
       return (
           <div className="space-y-4 animate-fade-in max-w-3xl mx-auto pb-28">
               {filtered.length === 0 && <div className="text-center py-10 text-gray-400"><p>{waitingTasks.length === 0 ? t.no_tasks_waiting : (t.no_search_results || 'No matching tasks.')}</p></div>}
-              {filtered.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
+              {filtered.map(task => renderTaskCard(task))}
           </div>
       );
   };
 
   const renderCompletedView = () => {
-      const filtered = applySearch(completedTasks);
+      const filtered = applyFilters(applySearch(completedTasks));
       return (
           <div className="space-y-3 animate-fade-in max-w-3xl mx-auto pb-28">
               {filtered.length === 0 && <p className="text-center text-gray-500 mt-10">{completedTasks.length === 0 ? t.no_tasks_completed : (t.no_search_results || 'No matching tasks.')}</p>}
-              {filtered.map(task => <TaskCard key={task.id} task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />)}
+              {filtered.map(task => renderTaskCard(task))}
           </div>
       );
   };
@@ -253,7 +427,21 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
                 >
                     <Search size={20} />
                 </button>
-                {(user.role === 'MANAGER' || user.role === 'BIG_BOSS') && (
+                {isBulkRole && (
+                    <button
+                        onClick={() => {
+                            setIsSelectionMode(m => {
+                                if (m) setSelectedIds(new Set());
+                                return !m;
+                            });
+                        }}
+                        className={`p-2 rounded-full transition shadow-sm ${isSelectionMode ? 'bg-[#714B67] text-white shadow-[0_0_0_3px_rgba(113,75,103,0.25)]' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        title="Bulk Select"
+                    >
+                        <ListChecks size={20} />
+                    </button>
+                )}
+                {['BIG_BOSS', 'COMPANY_MANAGER'].includes(user.role) && (
                     <button onClick={() => setShowExcel(!showExcel)} className="p-2 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition shadow-sm">
                         <FileSpreadsheet size={20} />
                     </button>
@@ -279,14 +467,96 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
           </div>
       )}
 
+      {/* ── Filter Bar ──────────────────────────────────────────────────────── */}
+      <div className="mb-4 max-w-3xl mx-auto">
+          {/* Toggle row */}
+          <div className="flex items-center gap-2">
+              <button
+                  onClick={() => setIsFilterOpen(p => !p)}
+                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition shadow-sm ${isFilterOpen || hasActiveFilters ? 'bg-[#714B67] text-white border-[#714B67]' : 'bg-white text-gray-500 border-gray-200 hover:border-[#714B67]/40 hover:text-[#714B67]'}`}
+              >
+                  <SlidersHorizontal size={13} />
+                  <span>{t.filter || 'Filter'}</span>
+                  {hasActiveFilters && !isFilterOpen && (
+                      <span className="ml-1 bg-white text-[#714B67] rounded-full px-1.5 py-0 text-[10px] font-bold leading-4">
+                          {[filterPriority, filterLocation, filterCategory, filterAssignee].filter(Boolean).length}
+                      </span>
+                  )}
+              </button>
+              {hasActiveFilters && (
+                  <button
+                      onClick={clearFilters}
+                      className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-[#714B67]/10 text-[#714B67] font-semibold hover:bg-[#714B67]/20 transition"
+                  >
+                      <X size={11} /> {t.clear_filters || 'Clear'}
+                  </button>
+              )}
+          </div>
+
+          {/* Collapsible dropdowns */}
+          <div
+              className="overflow-hidden transition-all duration-300 ease-in-out"
+              style={{ maxHeight: isFilterOpen ? '120px' : '0px', opacity: isFilterOpen ? 1 : 0 }}
+          >
+              <div className="flex flex-wrap gap-2 items-center pt-2">
+                  {/* Priority */}
+                  <select
+                      value={filterPriority}
+                      onChange={e => setFilterPriority(e.target.value)}
+                      className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterPriority ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                  >
+                      <option value="">{t.urgency_label || 'Priority'}</option>
+                      <option value="High">{t.urgency_high || 'High'}</option>
+                      <option value="Normal">{t.urgency_normal || 'Normal'}</option>
+                  </select>
+
+                  {/* Location — API-fetched, company_id scoped per role */}
+                  {apiLocations.length > 0 && (
+                      <select
+                          value={filterLocation}
+                          onChange={e => setFilterLocation(e.target.value)}
+                          className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterLocation ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                      >
+                          <option value="">{t.location || 'Location'}</option>
+                          {apiLocations.map(loc => <option key={loc.id} value={loc.id}>{localName(loc)}</option>)}
+                      </select>
+                  )}
+
+                  {/* Category — API-fetched, company_id scoped per role */}
+                  {apiCategories.length > 0 && (
+                      <select
+                          value={filterCategory}
+                          onChange={e => setFilterCategory(e.target.value)}
+                          className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterCategory ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                      >
+                          <option value="">{t.category_label || 'Category'}</option>
+                          {apiCategories.map(cat => <option key={cat.id} value={cat.id}>{localName(cat)}</option>)}
+                      </select>
+                  )}
+
+                  {/* Assignee — hidden for EMPLOYEE; MANAGER sees only their M:M employees */}
+                  {showAssigneeFilter && apiEmployees.length > 0 && (
+                      <select
+                          value={filterAssignee}
+                          onChange={e => setFilterAssignee(e.target.value)}
+                          className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterAssignee ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
+                      >
+                          <option value="">{t.assigned_to || 'Assignee'}</option>
+                          {apiEmployees.map(emp => <option key={emp.id} value={emp.id}>{localEmpName(emp)}</option>)}
+                      </select>
+                  )}
+              </div>
+          </div>
+      </div>
+
       {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
-      {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} />}
+      {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} scopedCompanyId={scopedCompanyId} />}
 
       <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 mb-5 mx-auto max-w-3xl">
-          <TabButton active={mainTab === 'overdue'} onClick={() => setMainTab('overdue')} label={t.tab_overdue || 'Overdue'} icon={<AlertTriangle size={18}/>} count={overdueTasks.length} color="red" />
-          <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={todayTasks.length} color="purple" />
-          {!hideWaitingTab && <TabButton active={mainTab === 'waiting'} onClick={() => setMainTab('waiting')} label={t.tab_waiting} icon={<AlertCircle size={18}/>} count={waitingTasks.length} color="orange" />}
-          <TabButton active={mainTab === 'completed'} onClick={() => setMainTab('completed')} label={t.tab_completed} icon={<CheckCircle size={18}/>} count={completedTasks.length} color="green" />
+          <TabButton active={mainTab === 'overdue'} onClick={() => setMainTab('overdue')} label={t.tab_overdue || 'Overdue'} icon={<AlertTriangle size={18}/>} count={filteredOverdueCount} color="red" />
+          <TabButton active={mainTab === 'todo'} onClick={() => { setMainTab('todo'); setViewMode('daily'); }} label={t.tab_todo} icon={<Clock size={18}/>} count={filteredTodayCount} color="purple" />
+          {!hideWaitingTab && <TabButton active={mainTab === 'waiting'} onClick={() => setMainTab('waiting')} label={t.tab_waiting} icon={<AlertCircle size={18}/>} count={filteredWaitingCount} color="orange" />}
+          <TabButton active={mainTab === 'completed'} onClick={() => setMainTab('completed')} label={t.tab_completed} icon={<CheckCircle size={18}/>} count={filteredCompletedCount} color="green" />
       </div>
 
       {mainTab === 'todo' && (
@@ -296,6 +566,28 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
               <ViewBtn active={viewMode === 'calendar'} onClick={() => setViewMode('calendar')} label={t.view_calendar} />
           </div></div>
       )}
+
+      {/* ── Bulk Select All bar (BIG_BOSS / COMPANY_MANAGER only) ──────────── */}
+      {isBulkRole && isSelectionMode && (() => {
+          const visible = getVisibleTasks();
+          if (visible.length === 0) return null;
+          const allSelected = visible.every(tk => selectedIds.has(tk.id));
+          const someSelected = !allSelected && visible.some(tk => selectedIds.has(tk.id));
+          return (
+              <div className="flex items-center justify-between max-w-3xl mx-auto mb-3 px-1">
+                  <div className="flex items-center gap-2 cursor-pointer select-none" onClick={handleSelectAll}>
+                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${allSelected ? 'bg-[#714B67] border-[#714B67]' : someSelected ? 'border-[#714B67] bg-white' : 'bg-white border-gray-300 hover:border-[#714B67]'}`}>
+                          {allSelected && <Check size={10} className="text-white" />}
+                          {someSelected && <div className="w-2 h-0.5 bg-[#714B67]" />}
+                      </div>
+                      <span className="text-xs text-gray-500">{t.select_all || 'Select All'} ({visible.length})</span>
+                  </div>
+                  {selectedIds.size > 0 && (
+                      <span className="text-xs font-semibold text-[#714B67]">{selectedIds.size} {t.selected || 'selected'}</span>
+                  )}
+              </div>
+          );
+      })()}
 
       {mainTab === 'overdue' && renderOverdueView()}
       {mainTab === 'todo' && renderTodoView()}
@@ -310,7 +602,6 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
               user={user}
               onRefresh={onRefresh}
               t={t}
-              allUsers={subordinates}
           />
       )}
 
@@ -321,6 +612,69 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates }) => {
         >
             <Plus size={32} />
         </button>
+      )}
+
+      {/* ── Bulk Action Bar ──────────────────────────────────────────────────── */}
+      {isBulkRole && isSelectionMode && selectedIds.size > 0 && (
+          <div
+              className="fixed bottom-20 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-2xl border border-white/20 backdrop-blur-md bg-[#714B67] animate-fade-in"
+              style={{ left: '50%', transform: 'translateX(-50%)' }}
+          >
+              <span className="text-white text-sm font-bold opacity-90 mr-1">
+                  {selectedIds.size} {t.selected || 'selected'}
+              </span>
+              <div className="w-px h-5 bg-white/30 mx-1" />
+              <button
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-xl text-white text-sm font-semibold transition"
+              >
+                  <Trash2 size={14} /> {t.delete_selected || 'Delete'}
+              </button>
+              <button
+                  onClick={handleBulkMarkDone}
+                  disabled={bulkLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-xl text-white text-sm font-semibold transition disabled:opacity-60"
+              >
+                  <CheckCircle size={14} /> {t.mark_as_done || 'Mark Done'}
+              </button>
+              <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="ml-1 p-1.5 hover:bg-white/20 rounded-lg transition text-white"
+              >
+                  <X size={14} />
+              </button>
+          </div>
+      )}
+
+      {/* ── Bulk Delete Confirmation Modal ───────────────────────────────────── */}
+      {showBulkDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[110] backdrop-blur-sm p-4">
+              <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+                  <div className="p-5 pb-3">
+                      <h3 className="text-lg font-bold text-slate-800 mb-2">
+                          {t.confirm_bulk_delete_title || 'Delete Tasks'}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                          {`Are you sure you want to permanently delete ${selectedIds.size} task(s)? This cannot be undone.`}
+                      </p>
+                  </div>
+                  <div className="flex gap-2 p-4 pt-2">
+                      <button
+                          onClick={() => setShowBulkDeleteConfirm(false)}
+                          className="flex-1 py-2.5 border rounded-xl text-gray-600 hover:bg-gray-50 font-medium transition"
+                      >
+                          {t.cancel || 'Cancel'}
+                      </button>
+                      <button
+                          onClick={handleBulkDelete}
+                          disabled={bulkLoading}
+                          className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition disabled:opacity-60"
+                      >
+                          {bulkLoading ? '...' : (t.delete_selected || 'Delete')}
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
 
     </div>
@@ -366,7 +720,7 @@ const InlineAlert = ({ message, onClose }) => (
     </div>
 );
 
-const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers }) => {
+const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
     const [followUpDate, setFollowUpDate] = useState(getCurrentBkkTimeForInput);
@@ -375,7 +729,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
     const [modalError, setModalError] = useState('');
     const [showStuck, setShowStuck] = useState(false);
 
-    const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS') && task.status === 'WAITING_APPROVAL';
+    const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS' || user.role === 'COMPANY_MANAGER') && task.status === 'WAITING_APPROVAL';
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
     const canShowStuck = task.status === 'PENDING' && !task.is_stuck && canComplete;
 
@@ -389,7 +743,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
         formData.append('completion_note', note);
         if (file) formData.append('completion_image', file);
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/complete`, {
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/tasks/${task.id}/complete`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
@@ -399,7 +753,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
     };
 
     const handleApprove = async () => {
-        await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/approve`, {
+        await fetch(`https://maintenance-app-staging.onrender.com/tasks/${task.id}/approve`, {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -413,7 +767,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
             return;
         }
         setModalError('');
-        await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/follow-up`, {
+        await fetch(`https://maintenance-app-staging.onrender.com/tasks/${task.id}/follow-up`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ due_date: followUpDate, description: note || 'Follow up' })
@@ -434,24 +788,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
         </div>
     );
 
-    let displayManagerName = task.manager_name;
-    if (!displayManagerName && allUsers) {
-        const workerInfo = allUsers.find(u => String(u.id) === String(task.worker_id));
-        if (workerInfo) {
-            const managerInfo = allUsers.find(u => String(u.id) === String(workerInfo.parent_manager_id));
-            if (managerInfo) {
-                displayManagerName = managerInfo.full_name;
-            } else if (String(workerInfo.parent_manager_id) === String(user.id)) {
-                displayManagerName = user.full_name || user.name;
-            }
-        }
-    }
-    if (!displayManagerName && (user.role === 'MANAGER' || user.role === 'BIG_BOSS')) {
-        displayManagerName = user.full_name || user.name;
-    }
-    if (!displayManagerName) {
-        displayManagerName = task.manager_name || t.management || t.manager_label || 'Manager';
-    }
+    const displayCreatorName = task.creator_name || '—';
 
     return (
         <>
@@ -494,7 +831,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, allUsers })
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.category_label || "Category"}</span><span className="font-medium">{task.category_name || '-'}</span></div>
                         <div className="col-span-2 border-t pt-2 mt-2"></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.assigned_to}</span><span className="font-medium">{task.worker_name}</span></div>
-                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.manager_label || "Manager"}</span><span className="font-medium">{displayManagerName}</span></div>
+                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.created_by_label || "Created By"}</span><span className="font-medium">{displayCreatorName}</span></div>
                     </div>
 
                     {task.description && (
@@ -608,13 +945,17 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
     const [error, setError] = useState('');
 
     const handleSubmit = async () => {
+        if (!note.trim()) {
+            setError(t.alert_required || 'A reason is required.');
+            return;
+        }
         setLoading(true);
         setError('');
         const formData = new FormData();
         formData.append('stuck_description', note);
         if (file) formData.append('stuck_file', file);
         try {
-            const res = await fetch(`https://maintenance-app-h84v.onrender.com/tasks/${task.id}/stuck`, {
+            const res = await fetch(`https://maintenance-app-staging.onrender.com/tasks/${task.id}/stuck`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
