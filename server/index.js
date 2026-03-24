@@ -4032,13 +4032,16 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
             const lang     = LANG_MAP[rawLang] || 'en';
             const rawLineId = (row['line_user_id (Optional)'] || row.line_user_id || '').toString().trim() || null;
             const rowId    = row.id ? parseInt(row.id, 10) : null;
+            const profilePicUrl = (row['profile_picture_url (Optional)'] || row.profile_picture_url || '').toString().trim() || null;
 
+            const URL_RE_MGR = /^https?:\/\/.+/i;
             if (!name_en)              { errors.push(`Row ${ri}: name_en is required`);                        continue; }
             if (!rowId && !email)      { errors.push(`Row ${ri}: email is required for new managers`);         continue; }
             if (!rowId && !password)   { errors.push(`Row ${ri}: password is required for new managers`);      continue; }
             if (email && !EMAIL_RE.test(email))      { errors.push(`Row ${ri}: Invalid email format. Must end with .com and contain valid characters.`); continue; }
             if (rawLineId && !LINE_ID_RE.test(rawLineId)) { errors.push(`Row ${ri}: Line ID must start with uppercase 'U' followed by numbers/letters.`); continue; }
-            validRows.push({ rowId, name_en, name_he, name_th, email, phone, password, lang, line_user_id: rawLineId });
+            if (profilePicUrl && !URL_RE_MGR.test(profilePicUrl)) { errors.push(`Row ${ri}: profile_picture_url must be a valid URL starting with http:// or https://`); continue; }
+            validRows.push({ rowId, name_en, name_he, name_th, email, phone, password, lang, line_user_id: rawLineId, profile_picture_url: profilePicUrl });
         }
 
         if (errors.length > 0 || isDryRun) {
@@ -4065,6 +4068,7 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
                 if (vr.email)               { setClauses.push(`email=$${pi++}`);             vals.push(vr.email); }
                 if (vr.phone !== null)      { setClauses.push(`phone=$${pi++}`);             vals.push(vr.phone); }
                 if (vr.line_user_id !== null) { setClauses.push(`line_user_id=$${pi++}`);   vals.push(vr.line_user_id); }
+                if (vr.profile_picture_url !== null) { setClauses.push(`profile_picture_url=$${pi++}`); vals.push(vr.profile_picture_url); }
                 setClauses.push(`preferred_language=$${pi++}`); vals.push(vr.lang);
                 if (vr.password) { const hp = await bcrypt.hash(vr.password, 10); setClauses.push(`password=$${pi++}`); vals.push(hp); }
                 vals.push(vr.rowId);
@@ -4073,9 +4077,9 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
             } else {
                 const hashedPw = await bcrypt.hash(vr.password, 10);
                 const newMgr = await client.query(
-                    `INSERT INTO users (full_name, full_name_en, full_name_he, full_name_th, email, password, role, phone, company_id, line_user_id, preferred_language)
-                     VALUES ($1,$1,$2,$3,$4,$5,'MANAGER',$6,$7,$8,$9) RETURNING id`,
-                    [vr.name_en, vr.name_he, vr.name_th, vr.email, hashedPw, vr.phone, insertCompanyId, vr.line_user_id, vr.lang]
+                    `INSERT INTO users (full_name, full_name_en, full_name_he, full_name_th, email, password, role, phone, company_id, line_user_id, preferred_language, profile_picture_url)
+                     VALUES ($1,$1,$2,$3,$4,$5,'MANAGER',$6,$7,$8,$9,$10) RETURNING id`,
+                    [vr.name_en, vr.name_he, vr.name_th, vr.email, hashedPw, vr.phone, insertCompanyId, vr.line_user_id, vr.lang, vr.profile_picture_url]
                 );
                 // MANAGER's area_id = their own id (defines their area)
                 await client.query('UPDATE users SET area_id = id WHERE id = $1', [newMgr.rows[0].id]);
@@ -4156,12 +4160,15 @@ app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, 
             const lang     = LANG_MAP_EMP[rawLang] || 'en';
             const rawLineId = (row['line_user_id (Optional)'] || row.line_user_id || '').toString().trim() || null;
             const rowId    = row.id ? parseInt(row.id, 10) : null;
+            const profilePicUrl = (row['profile_picture_url (Optional)'] || row.profile_picture_url || '').toString().trim() || null;
 
+            const URL_RE_EMP = /^https?:\/\/.+/i;
             if (!name_en)            { errors.push(`Row ${ri}: name_en is required`);                        continue; }
             if (!rowId && !email)    { errors.push(`Row ${ri}: email is required for new employees`);        continue; }
             if (!rowId && !password) { errors.push(`Row ${ri}: password is required for new employees`);     continue; }
             if (email && !EMAIL_RE_EMP.test(email))      { errors.push(`Row ${ri}: Invalid email format. Must end with .com and contain valid characters.`); continue; }
             if (rawLineId && !LINE_ID_RE_EMP.test(rawLineId)) { errors.push(`Row ${ri}: Line ID must start with uppercase 'U' followed by numbers/letters.`); continue; }
+            if (profilePicUrl && !URL_RE_EMP.test(profilePicUrl)) { errors.push(`Row ${ri}: profile_picture_url must be a valid URL starting with http:// or https://`); continue; }
 
             // For updates: verify employee belongs to caller's company
             if (rowId && insertCompanyId) {
@@ -4176,7 +4183,7 @@ app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, 
                 const chk = await client.query('SELECT 1 FROM employee_managers WHERE manager_id = $1 AND employee_id = $2', [callerId, rowId]);
                 if (chk.rowCount === 0) { errors.push(`Row ${ri}: Employee id=${rowId} is not in your team`); continue; }
             }
-            validRows.push({ rowId, name_en, name_he, name_th, email, phone, password, lang, line_user_id: rawLineId });
+            validRows.push({ rowId, name_en, name_he, name_th, email, phone, password, lang, line_user_id: rawLineId, profile_picture_url: profilePicUrl });
         }
 
         if (errors.length > 0 || isDryRun) {
@@ -4195,6 +4202,7 @@ app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, 
                 if (vr.email)                 { setClauses.push(`email=$${pi++}`);           vals.push(vr.email); }
                 if (vr.phone !== null)        { setClauses.push(`phone=$${pi++}`);           vals.push(vr.phone); }
                 if (vr.line_user_id !== null) { setClauses.push(`line_user_id=$${pi++}`);   vals.push(vr.line_user_id); }
+                if (vr.profile_picture_url !== null) { setClauses.push(`profile_picture_url=$${pi++}`); vals.push(vr.profile_picture_url); }
                 setClauses.push(`preferred_language=$${pi++}`); vals.push(vr.lang);
                 if (vr.password) { const hp = await bcrypt.hash(vr.password, 10); setClauses.push(`password=$${pi++}`); vals.push(hp); }
                 vals.push(vr.rowId);
@@ -4203,9 +4211,9 @@ app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, 
             } else {
                 const hashedPw = await bcrypt.hash(vr.password, 10);
                 const newEmp = await client.query(
-                    `INSERT INTO users (full_name, full_name_en, full_name_he, full_name_th, email, password, role, phone, company_id, area_id, parent_manager_id, line_user_id, preferred_language)
-                     VALUES ($1,$1,$2,$3,$4,$5,'EMPLOYEE',$6,$7,$8,$9,$10,$11) RETURNING id`,
-                    [vr.name_en, vr.name_he, vr.name_th, vr.email, hashedPw, vr.phone, insertCompanyId, insertAreaId, callerId, vr.line_user_id, vr.lang]
+                    `INSERT INTO users (full_name, full_name_en, full_name_he, full_name_th, email, password, role, phone, company_id, area_id, parent_manager_id, line_user_id, preferred_language, profile_picture_url)
+                     VALUES ($1,$1,$2,$3,$4,$5,'EMPLOYEE',$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+                    [vr.name_en, vr.name_he, vr.name_th, vr.email, hashedPw, vr.phone, insertCompanyId, insertAreaId, callerId, vr.line_user_id, vr.lang, vr.profile_picture_url]
                 );
                 // M:M link: employee ↔ importing manager (MANAGER or COMPANY_MANAGER)
                 await client.query(
