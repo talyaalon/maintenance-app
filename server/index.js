@@ -1782,13 +1782,20 @@ app.delete('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     try {
       const { id } = req.params;
-      const subordinates = await pool.query('SELECT count(*) FROM users WHERE parent_manager_id = $1', [id]);
-      const count = parseInt(subordinates.rows[0].count);
 
-      if (count > 0) {
-          return res.status(400).json({ 
-              error: `לא ניתן למחוק מנהל זה! יש לו ${count} עובדים משויכים. אנא מחק אותם תחילה או העבר אותם למנהל אחר.` 
-          });
+      // Fetch the target user's role — subordinate constraint only applies to MANAGER, not COMPANY_MANAGER
+      const targetRes = await pool.query('SELECT role FROM users WHERE id = $1', [id]);
+      if (!targetRes.rows.length) return res.status(404).json({ error: 'User not found' });
+      const targetRole = targetRes.rows[0].role;
+
+      if (targetRole === 'MANAGER') {
+          const subordinates = await pool.query('SELECT count(*) FROM users WHERE parent_manager_id = $1', [id]);
+          const count = parseInt(subordinates.rows[0].count);
+          if (count > 0) {
+              return res.status(400).json({
+                  error: `לא ניתן למחוק מנהל זה! יש לו ${count} עובדים משויכים. אנא מחק אותם תחילה או העבר אותם למנהל אחר.`
+              });
+          }
       }
 
       await pool.query('UPDATE locations SET created_by = NULL WHERE created_by = $1', [id]);
@@ -2284,22 +2291,23 @@ app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) =
     const id = req.params.id;
     const companyId = req.user.company_id;
     try {
-        await pool.query('DELETE FROM locations WHERE id = $1', [id]);
-        res.json({ success: true });
-    } catch (e) {
-        if (e.code === '23503') {
-            const [assetRes, taskRes] = await Promise.all([
-                pool.query('SELECT COUNT(*) FROM assets WHERE location_id = $1 AND company_id = $2', [id, companyId]),
-                pool.query('SELECT COUNT(*) FROM tasks  WHERE location_id = $1 AND company_id = $2', [id, companyId]),
-            ]);
-            const assets = parseInt(assetRes.rows[0].count, 10);
-            const tasks  = parseInt(taskRes.rows[0].count, 10);
-            const parts  = [];
+        // Pre-deletion check — scoped strictly to this tenant to prevent cross-company FK bleed
+        const [assetRes, taskRes] = await Promise.all([
+            pool.query('SELECT COUNT(*) FROM assets WHERE location_id = $1 AND company_id = $2', [id, companyId]),
+            pool.query('SELECT COUNT(*) FROM tasks  WHERE location_id = $1 AND company_id = $2', [id, companyId]),
+        ]);
+        const assets = parseInt(assetRes.rows[0].count, 10);
+        const tasks  = parseInt(taskRes.rows[0].count, 10);
+        if (assets > 0 || tasks > 0) {
+            const parts = [];
             if (assets > 0) parts.push(`${assets} asset${assets !== 1 ? 's' : ''}`);
             if (tasks  > 0) parts.push(`${tasks} task${tasks !== 1 ? 's' : ''}`);
-            const detail = parts.length ? parts.join(' and ') : 'other records';
-            return res.status(400).json({ message: `Cannot delete: This location is currently assigned to ${detail}.` });
+            return res.status(400).json({ message: `Cannot delete: This location is currently assigned to ${parts.join(' and ')}.` });
         }
+        // Scoped delete — only removes this company's record, immune to other tenants' FK references
+        await pool.query('DELETE FROM locations WHERE id = $1 AND company_id = $2', [id, companyId]);
+        res.json({ success: true });
+    } catch (e) {
         res.status(400).json({ message: 'Cannot delete: Item is in use.' });
     }
 });
