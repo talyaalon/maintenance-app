@@ -8,7 +8,7 @@ const BASE = 'https://maintenance-app-staging.onrender.com';
 
 // ─── Confirm delete modal (kept as modal — it's just a confirmation, not an edit form) ──
 const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+    <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
         <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
             <p className="text-gray-800 font-medium text-center mb-6">{message}</p>
             <div className="flex gap-3">
@@ -34,7 +34,7 @@ const DeletionBlockerModal = ({ company, counts, onClose, t }) => {
     ].filter(i => counts[i.key] > 0);
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+        <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
                 <div className="flex items-center gap-2 mb-4">
                     <AlertTriangle size={20} className="text-amber-500 shrink-0" />
@@ -61,7 +61,7 @@ const DeletionBlockerModal = ({ company, counts, onClose, t }) => {
 
 // ─── Company Deletion: Confirmation Modal (company is empty, request email) ──
 const DeletionConfirmModal = ({ company, onConfirm, onCancel, requesting, emailSent, t }) => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+    <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
         <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
             {emailSent ? (
                 <div className="text-center">

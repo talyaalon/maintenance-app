@@ -648,7 +648,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
 
       {/* ── Bulk Delete Confirmation Modal ───────────────────────────────────── */}
       {showBulkDeleteConfirm && (
-          <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[110] backdrop-blur-sm p-4">
+          <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex justify-center items-center z-[110] p-4">
               <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
                   <div className="p-5 pb-3">
                       <h3 className="text-lg font-bold text-slate-800 mb-2">

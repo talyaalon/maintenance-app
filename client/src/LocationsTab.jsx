@@ -8,7 +8,7 @@ const emptyForm = () => ({ name_he: '', name_en: '', name_th: '', address: '' })
 
 // ─── Branded delete-confirm modal ────────────────────────────────────────────
 const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+    <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
         <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in">
             <p className="text-gray-800 font-medium text-center mb-6">{message}</p>
             <div className="flex gap-3">
