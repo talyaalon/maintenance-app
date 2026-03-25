@@ -2289,16 +2289,28 @@ const deleteItem = async (table, id, res) => {
 
 app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) => {
     const id = req.params.id;
-    const companyId = req.user.company_id;
-    console.log('Backend received delete request for location:', id, '| company_id:', companyId);
+    const isBigBoss = req.user.role === 'BIG_BOSS';
+    console.log('Backend received delete request for location:', id, '| role:', req.user.role, '| company_id:', req.user.company_id);
     try {
-        // Nullify FK references scoped to this tenant to avoid Postgres 23503 violations
+        // Fetch the location first to verify existence and get its company_id
+        const locResult = await pool.query('SELECT company_id FROM locations WHERE id = $1', [id]);
+        if (locResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Location not found.' });
+        }
+        const locationCompanyId = locResult.rows[0].company_id;
+
+        // Non-BIG_BOSS users can only delete locations belonging to their own company
+        if (!isBigBoss && req.user.company_id !== locationCompanyId) {
+            return res.status(403).json({ message: 'Forbidden: You do not have permission to delete this location.' });
+        }
+
+        // Nullify FK references using the location's own company_id to avoid Postgres 23503 violations
         await Promise.all([
-            pool.query('UPDATE tasks  SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, companyId]),
-            pool.query('UPDATE assets SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, companyId]),
+            pool.query('UPDATE tasks  SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, locationCompanyId]),
+            pool.query('UPDATE assets SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, locationCompanyId]),
         ]);
-        await pool.query('DELETE FROM locations WHERE id = $1 AND company_id = $2', [id, companyId]);
-        res.json({ success: true });
+        await pool.query('DELETE FROM locations WHERE id = $1', [id]);
+        res.json({ success: true, message: 'Location deleted successfully.' });
     } catch (e) {
         console.error('Delete location error:', e);
         res.status(500).json({ message: `Server error while deleting location: ${e.message || e}` });
