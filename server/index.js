@@ -1705,7 +1705,7 @@ app.post('/companies/:id/request-deletion', authenticateToken, async (req, res) 
             { expiresIn: '15m' }
         );
 
-        const APP_URL = process.env.APP_URL || 'https://maintenance-app-staging.onrender.com';
+        const APP_URL = process.env.APP_URL || 'https://air-manage-app.netlify.app';
         const confirmLink = `${APP_URL}/api/companies/confirm-delete?token=${deletionToken}`;
         const companyLabel = company.name_en || company.name_he || company.name || `#${id}`;
 
@@ -1741,7 +1741,7 @@ app.post('/companies/:id/request-deletion', authenticateToken, async (req, res) 
 app.get('/companies/confirm-delete', async (req, res) => {
     const { token } = req.query;
     if (!token) return res.status(400).send('<h2 style="font-family:sans-serif;color:#dc2626;">Invalid or missing token.</h2>');
-    const APP_URL = process.env.APP_URL || 'https://maintenance-app-staging.onrender.com';
+    const APP_URL = process.env.APP_URL || 'https://air-manage-app.netlify.app';
     try {
         let payload;
         try {
