@@ -111,28 +111,29 @@ function App() {
   
   const t = translations[lang]; // המילון הנוכחי
 
-  // שואב את הטאב האחרון מהזיכרון (אם אין, יפתח את tasks)
+  // Initialize activeTab from sessionStorage so F5 reloads preserve the current tab.
+  // sessionStorage survives hard refreshes within the same tab but clears on new sessions.
   const [activeTab, setActiveTab] = useState(() => {
-      return localStorage.getItem('appActiveTab') || 'tasks';
+      return sessionStorage.getItem('activeTab') || 'tasks';
   });
 
-  // שומר את הטאב לזיכרון בכל פעם שאת עוברת עמוד
+  // Persist active tab to sessionStorage on every change
   useEffect(() => {
-      localStorage.setItem('appActiveTab', activeTab);
+      sessionStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
 
-  // Reset to Tasks tab on genuine new login, but NOT on F5 page reload.
-  // We track the current session's user ID in sessionStorage: if it already
-  // matches the user being loaded, this is a reload — keep the saved tab.
-  // If it differs (or is absent), it's a new/different login — reset to tasks.
+  // Reset to Tasks tab only when a genuinely different user logs in.
+  // Do NOT clear sessionUserId when user is null (initial mount state) —
+  // that was the root cause of the F5 regression: wiping the tracker on
+  // every mount made every reload look like a new login.
   useEffect(() => {
-      if (!user) {
-          sessionStorage.removeItem('sessionUserId');
-          return;
-      }
+      if (!user) return; // initial null state — do nothing
       const prev = sessionStorage.getItem('sessionUserId');
-      if (prev === String(user.id)) return; // same session (F5 reload) — keep tab
-      setActiveTab('tasks');
+      if (prev !== null && prev !== String(user.id)) {
+          // A different user just logged in — reset to tasks
+          sessionStorage.removeItem('activeTab');
+          setActiveTab('tasks');
+      }
       sessionStorage.setItem('sessionUserId', String(user.id));
   }, [user?.id]);
 
@@ -269,7 +270,12 @@ function App() {
                           t={t}
                           user={user}
                           token={token}
-                          onLogout={() => { setUser(null); localStorage.removeItem('token'); }}
+                          onLogout={() => {
+                              sessionStorage.removeItem('sessionUserId');
+                              sessionStorage.removeItem('activeTab');
+                              setUser(null);
+                              localStorage.removeItem('token');
+                          }}
                           onUpdateUser={handleUserUpdate}
                       />;
           default:
