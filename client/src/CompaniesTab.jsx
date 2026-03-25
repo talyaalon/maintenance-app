@@ -750,9 +750,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-slate-800 truncate">
                                         {userName(cm)}
-                                        {cm?.full_name_th && lang !== 'th' && (
-                                            <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{cm.full_name_th}</span>
-                                        )}
                                     </p>
                                     <span className="inline-block text-[10px] font-bold text-[#714B67] bg-[#714B67]/10 px-1.5 py-0.5 rounded mt-0.5">
                                         Company Manager
@@ -895,9 +892,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                                     title="View Tasks"
                                 >
                                     {userName(u)}
-                                    {u?.full_name_th && lang !== 'th' && (
-                                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{u.full_name_th}</span>
-                                    )}
                                 </button>
                                 <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">{u?.role}</span>
                                 <RowActions
@@ -1005,9 +999,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                                     title="View Tasks"
                                 >
                                     {userName(u)}
-                                    {u?.full_name_th && lang !== 'th' && (
-                                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{u.full_name_th}</span>
-                                    )}
                                 </button>
                                 <RowActions
                                     onEdit={() => togglePanel(`edit-user:${u.id}`)}

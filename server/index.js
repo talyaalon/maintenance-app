@@ -1902,11 +1902,49 @@ app.put('/assets/:id', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 const deleteItem = async (table, id, res) => {
-    try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); } 
+    try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); }
     catch (e) { res.status(400).json({ error: "Cannot delete: Item is in use." }); }
 };
-app.delete('/locations/:id', authenticateToken, requireAdmin, (req, res) => deleteItem('locations', req.params.id, res));
-app.delete('/categories/:id', authenticateToken, requireAdmin, (req, res) => deleteItem('categories', req.params.id, res));
+
+app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const id = req.params.id;
+    try {
+        await pool.query('DELETE FROM locations WHERE id = $1', [id]);
+        res.json({ success: true });
+    } catch (e) {
+        if (e.code === '23503') {
+            const [assetRes, taskRes] = await Promise.all([
+                pool.query('SELECT COUNT(*) FROM assets WHERE location_id = $1', [id]),
+                pool.query('SELECT COUNT(*) FROM tasks WHERE location_id = $1', [id]),
+            ]);
+            const assets = parseInt(assetRes.rows[0].count, 10);
+            const tasks  = parseInt(taskRes.rows[0].count, 10);
+            const parts  = [];
+            if (assets > 0) parts.push(`${assets} asset${assets !== 1 ? 's' : ''}`);
+            if (tasks  > 0) parts.push(`${tasks} task${tasks !== 1 ? 's' : ''}`);
+            const detail = parts.length ? parts.join(' and ') : 'other records';
+            return res.status(400).json({ message: `Cannot delete: This location is currently assigned to ${detail}.` });
+        }
+        res.status(400).json({ message: 'Cannot delete: Item is in use.' });
+    }
+});
+
+app.delete('/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const id = req.params.id;
+    try {
+        await pool.query('DELETE FROM categories WHERE id = $1', [id]);
+        res.json({ success: true });
+    } catch (e) {
+        if (e.code === '23503') {
+            const assetRes = await pool.query('SELECT COUNT(*) FROM assets WHERE category_id = $1', [id]);
+            const assets   = parseInt(assetRes.rows[0].count, 10);
+            const detail   = assets > 0 ? `${assets} asset${assets !== 1 ? 's' : ''}` : 'other records';
+            return res.status(400).json({ message: `Cannot delete: This category is currently assigned to ${detail}.` });
+        }
+        res.status(400).json({ message: 'Cannot delete: Item is in use.' });
+    }
+});
+
 app.delete('/assets/:id', authenticateToken, requireAdmin, (req, res) => deleteItem('assets', req.params.id, res));
 
 app.get('/tasks', authenticateToken, async (req, res) => {

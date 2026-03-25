@@ -158,8 +158,13 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
         const id = deleteConfirmId;
         setDeleteConfirmId(null);
         try {
-            await fetch(`${API}/locations/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-            fetchLocations();
+            const res = await fetch(`${API}/locations/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) {
+                fetchLocations();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || t.error_deleting_location || 'Error deleting location. It may be in use.');
+            }
         } catch { alert(t.error_deleting_location || 'Error deleting'); }
     };
 

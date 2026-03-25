@@ -223,8 +223,12 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       if (!window.confirm(t.confirm_delete || "האם למחוק פריט זה?")) return;
       try {
           const res = await fetch(`https://maintenance-app-staging.onrender.com/${type}/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-          if (res.ok) fetchData();
-          else alert("לא ניתן למחוק. ייתכן והפריט בשימוש במערכת.");
+          if (res.ok) {
+              fetchData();
+          } else {
+              const data = await res.json().catch(() => ({}));
+              alert(data.message || "לא ניתן למחוק. ייתכן והפריט בשימוש במערכת.");
+          }
       } catch (e) { alert("Server Error"); }
   };
 

@@ -692,8 +692,12 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (res.ok) fetchData();
-            else alert('Error deleting item. It may be in use.');
+            if (res.ok) {
+                fetchData();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || 'Error deleting item. It may be in use.');
+            }
         } catch { alert('Server error'); }
         setDeleteConfirm(null);
     };
