@@ -20,6 +20,7 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => createPortal
                     {t?.cancel || 'Cancel'}
                 </button>
                 <button
+                    type="button"
                     onClick={onConfirm}
                     className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition"
                 >
@@ -126,10 +127,18 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
 
     const fetchLocations = async () => {
         try {
-            const res = await fetch(`${API}/locations`, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await fetch(`${API}/locations`, {
+                headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+                cache: 'no-store',
+            });
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
             const data = await res.json();
+            if (!Array.isArray(data)) throw new Error('Unexpected response format');
             setLocations(data);
-        } catch (err) { console.error('Error fetching locations', err); }
+        } catch (err) {
+            console.error('Error fetching locations', err);
+            alert(t?.server_error || 'Failed to refresh locations list. Please reload the page.');
+        }
     };
 
     useEffect(() => { fetchLocations(); }, []);
@@ -158,16 +167,26 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
 
     const confirmDelete = async () => {
         const id = deleteConfirmId;
+        console.log('Starting deletion for ID:', id, 'type:', typeof id);
         setDeleteConfirmId(null);
         try {
-            const res = await fetch(`${API}/locations/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+            if (!id) { alert('Frontend Error: id is null/undefined — cannot delete'); return; }
+            const url = `${API}/locations/${id}`;
+            console.log('DELETE request to:', url);
+            const res = await fetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+            console.log('DELETE response status:', res.status);
             if (res.ok) {
-                fetchLocations();
+                alert('Location deleted successfully');
+                await fetchLocations();
             } else {
                 const data = await res.json().catch(() => ({}));
-                alert(data.message || t.error_deleting_location || 'Error deleting location. It may be in use.');
+                console.error('Delete failed, server response:', data);
+                alert(data.message || t?.error_deleting_location || 'Error deleting location. It may be in use.');
             }
-        } catch { alert(t.error_deleting_location || 'Error deleting'); }
+        } catch (err) {
+            console.error('Delete location error:', err);
+            alert('Frontend Error: ' + err.message);
+        }
     };
 
     const startEdit = (loc) => {
