@@ -3,7 +3,7 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
 import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2, ListChecks } from 'lucide-react';
-import AdvancedExcel from './AdvancedExcel';
+import ConfigExcelPanel from './ConfigExcelPanel';
 import CreateTaskForm from './CreateTaskForm';
 import TaskCard from './TaskCard';
 
@@ -441,7 +441,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                         <ListChecks size={20} />
                     </button>
                 )}
-                {['BIG_BOSS', 'COMPANY_MANAGER'].includes(user.role) && (
+                {['BIG_BOSS', 'COMPANY_MANAGER', 'MANAGER'].includes(user.role) && (
                     <button onClick={() => setShowExcel(!showExcel)} className="p-2 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition shadow-sm">
                         <FileSpreadsheet size={20} />
                     </button>
@@ -549,7 +549,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
           </div>
       </div>
 
-      {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
+      {showExcel && <ConfigExcelPanel section="tasks" token={token} t={t} onClose={() => setShowExcel(false)} onSuccess={onRefresh} />}
       {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} scopedCompanyId={scopedCompanyId} />}
 
       <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 mb-5 mx-auto max-w-3xl">
@@ -648,7 +648,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
 
       {/* ── Bulk Delete Confirmation Modal ───────────────────────────────────── */}
       {showBulkDeleteConfirm && (
-          <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[110] backdrop-blur-sm p-4">
+          <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex justify-center items-center z-[110] p-4">
               <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
                   <div className="p-5 pb-3">
                       <h3 className="text-lg font-bold text-slate-800 mb-2">

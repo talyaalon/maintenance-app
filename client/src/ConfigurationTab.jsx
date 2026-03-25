@@ -223,8 +223,12 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       if (!window.confirm(t.confirm_delete || "האם למחוק פריט זה?")) return;
       try {
           const res = await fetch(`https://maintenance-app-staging.onrender.com/${type}/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-          if (res.ok) fetchData();
-          else alert("לא ניתן למחוק. ייתכן והפריט בשימוש במערכת.");
+          if (res.ok) {
+              fetchData();
+          } else {
+              const data = await res.json().catch(() => ({}));
+              alert(data.message || "לא ניתן למחוק. ייתכן והפריט בשימוש במערכת.");
+          }
       } catch (e) { alert("Server Error"); }
   };
 
@@ -269,7 +273,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
       if (treeNodeType === 'category') {
           method = categoryForm.id ? 'PUT' : 'POST';
           url = categoryForm.id ? `https://maintenance-app-staging.onrender.com/categories/${categoryForm.id}` : 'https://maintenance-app-staging.onrender.com/categories';
-          payload = { name_he: categoryForm.name_he, name_en: categoryForm.name_en, name_th: categoryForm.name_th, code: categoryForm.code.toUpperCase().slice(0, 3), created_by: categoryForm.created_by };
+          payload = { name_he: categoryForm.name_he, name_en: categoryForm.name_en, name_th: categoryForm.name_th, code: categoryForm.code.toUpperCase().slice(0, 5), created_by: categoryForm.created_by };
       } else {
           method = assetForm.id ? 'PUT' : 'POST';
           url = assetForm.id ? `https://maintenance-app-staging.onrender.com/assets/${assetForm.id}` : 'https://maintenance-app-staging.onrender.com/assets';
@@ -435,10 +439,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           </div>
                       </div>
                       {openExcelSection === 'categories' && (
-                          <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                          <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                       )}
                       {openExcelSection === 'assets' && (
-                          <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                          <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                       )}
                       <div className="space-y-3">
                           {wCategories.length === 0 && <p className="text-gray-400 text-center text-sm py-4">{t.no_categories_for_manager || 'אין קטגוריות למנהל זה.'}</p>}
@@ -517,7 +521,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               )}
                           </div>
                           {openExcelSection === 'managers' && (
-                              <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                              <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                           )}
                       </div>
 
@@ -536,7 +540,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               )}
                           </div>
                           {openExcelSection === 'employees' && (
-                              <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                              <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                           )}
                       </div>
                   </div>
@@ -563,7 +567,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           </div>
                       </div>
                       {openExcelSection === 'locations' && (
-                          <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                          <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                       )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -585,7 +589,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                               )}
                                               <div>
                                                   <h4 className="font-bold text-gray-800 text-sm">{loc['name_' + lang] || loc.name_en || loc.name}</h4>
-                                                  <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase font-mono">{loc.code}</span>
+                                                  {loc.code && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase font-mono">{loc.code}</span>}
                                               </div>
                                           </div>
                                           <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition">
@@ -807,7 +811,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                       required
                                   />
                               </div>
-                              <div><label className="block text-sm font-bold text-gray-700 mb-1">{t.category_code_label || 'קוד זיהוי (3 אותיות)'}</label><input type="text" required maxLength="3" className="w-full p-3 border rounded-lg bg-gray-50 uppercase font-mono" value={categoryForm.code} onChange={e => setCategoryForm({...categoryForm, code: e.target.value.toUpperCase()})} /></div>
+                              <div><label className="block text-sm font-bold text-gray-700 mb-1">{t.category_code_label || 'קוד זיהוי (1-5 אותיות)'}</label><input type="text" required maxLength="5" pattern="[a-zA-Z]{1,5}" title="Code must be 1-5 English letters" className="w-full p-3 border rounded-lg bg-gray-50 uppercase font-mono" value={categoryForm.code} onChange={e => setCategoryForm({...categoryForm, code: e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase()})} /></div>
                           </>
                       ) : (
                           <>
@@ -823,7 +827,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               </div>
                               <div><label className="block text-sm font-bold text-gray-700 mb-1">קטגוריה</label><select required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.category_id} onChange={e => setAssetForm({...assetForm, category_id: e.target.value})}><option value="">בחר...</option>{categories.filter(c => c.created_by === assetForm.created_by).map(c => <option key={c.id} value={c.id}>{c['name_' + lang] || c.name_en || c.name}</option>)}</select></div>
                               <div><label className="block text-sm font-bold text-gray-700 mb-1">מיקום</label><select required className="w-full p-3 border rounded-lg bg-gray-50" value={assetForm.location_id} onChange={e => setAssetForm({...assetForm, location_id: e.target.value})}><option value="">בחר...</option>{locations.filter(l => l.created_by === assetForm.created_by).map(l => <option key={l.id} value={l.id}>{l['name_' + lang] || l.name_en || l.name}</option>)}</select></div>
-                              {assetForm.id && <div><label className="block text-sm font-bold text-gray-700 mb-1">קוד (נוצר אוטומטית)</label><input type="text" disabled className="w-full p-3 border rounded-lg bg-gray-100 font-mono text-gray-500" value={assetForm.code} /></div>}
+                              <div><label className="block text-sm font-bold text-gray-700 mb-1">קוד</label><input type="text" disabled className="w-full p-3 border rounded-lg bg-gray-100 font-mono text-gray-400 italic" value={assetForm.id ? assetForm.code : ''} placeholder="Auto-generated" /></div>
                           </>
                       )}
                       <button type="submit" className="w-full py-2.5 bg-[#714B67] text-white rounded-xl font-bold mt-2 shadow-sm hover:bg-[#5a3b52] transition">{t.save || 'שמור'}</button>

@@ -41,6 +41,15 @@ const SECTION_FIELDS = {
         { id: 'email',     label: 'Email' },
         { id: 'phone',     label: 'Phone' },
     ],
+    tasks: [
+        { id: 'id',        label: 'ID' },
+        { id: 'title',     label: 'Task Name' },
+        { id: 'location',  label: 'Location' },
+        { id: 'worker',    label: 'Assigned To' },
+        { id: 'urgency',   label: 'Urgency' },
+        { id: 'due_date',  label: 'Due Date' },
+        { id: 'status',    label: 'Status' },
+    ],
 };
 
 const SECTION_LABELS = {
@@ -49,33 +58,100 @@ const SECTION_LABELS = {
     locations:  { he: 'מיקומים',  en: 'Locations' },
     managers:   { he: 'מנהלים',   en: 'Managers' },
     employees:  { he: 'עובדים',   en: 'Employees' },
+    tasks:      { he: 'משימות',   en: 'Tasks' },
 };
 
 // Sample rows used to generate the downloadable template per section
 const TEMPLATE_SAMPLE = {
     categories: [
-        { name_he: 'חשמל',       name_en: 'Electrical', name_th: 'ไฟฟ้า',  code: 'ELEC' },
-        { name_he: 'אינסטלציה', name_en: 'Plumbing',   name_th: 'ประปา', code: 'PLMB' },
+        { 'name_en *': 'Electrical', 'code *': 'ELEC', 'name_he (Optional)': 'חשמל',       'name_th (Optional)': 'ไฟฟ้า'  },
+        { 'name_en *': 'Plumbing',   'code *': 'PLMB', 'name_he (Optional)': 'אינסטלציה', 'name_th (Optional)': 'ประปา' },
     ],
     assets: [
-        { name_he: 'מזגן ראשי', name_en: 'Main AC',     name_th: 'แอร์หลัก', code: 'ELEC-0001', category_id: 'ELEC',  location_id: 'LOC-0001' },
-        { name_he: 'משאבה',     name_en: 'Water Pump',  name_th: 'ปั๊มน้ำ',  code: 'PLMB-0001', category_id: 'PLMB',  location_id: 'LOC-0002' },
+        { 'name_en *': 'Main AC',    'category *': 'ELEC', 'name_he (Optional)': 'מזגן ראשי', 'name_th (Optional)': 'แอร์หลัก', 'location (Optional)': 'LOC-0001' },
+        { 'name_en *': 'Water Pump', 'category *': 'PLMB', 'name_he (Optional)': 'משאבה',     'name_th (Optional)': 'ปั๊มน้ำ',  'location (Optional)': 'LOC-0002' },
     ],
     locations: [
-        { name_he: 'קומה 1', name_en: 'Floor 1', name_th: 'ชั้น 1', code: 'LOC-0001', address: '123 Main St' },
-        { name_he: 'קומה 2', name_en: 'Floor 2', name_th: 'ชั้น 2', code: 'LOC-0002', address: '123 Main St' },
+        { 'name_en *': 'Floor 1', 'name_he (Optional)': 'קומה 1', 'name_th (Optional)': 'ชั้น 1', 'address (Optional)': 'https://maps.app.goo.gl/example1', 'image_url (Optional)': 'https://example.com/floor1.jpg' },
+        { 'name_en *': 'Floor 2', 'name_he (Optional)': 'קומה 2', 'name_th (Optional)': 'ชั้น 2', 'address (Optional)': '',                                  'image_url (Optional)': '' },
     ],
     managers: [
-        { full_name: 'David Cohen', email: 'david@example.com', phone: '0501234567', password: 'Temp1234!' },
-        { full_name: 'Sarah Levi',  email: 'sarah@example.com', phone: '0509876543', password: 'Temp1234!' },
+        { 'name_en *': 'David Cohen', 'email *': 'david@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'דוד כהן', 'name_th (Optional)': '', 'phone (Optional)': '0501234567', 'line_user_id (Optional)': 'Uabc123def456', 'language (Optional)': 'English', 'profile_picture_url (Optional)': 'https://example.com/david.jpg' },
+        { 'name_en *': 'Sarah Levi',  'email *': 'sarah@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'שרה לוי',  'name_th (Optional)': '', 'phone (Optional)': '0509876543', 'line_user_id (Optional)': '',              'language (Optional)': 'Hebrew',  'profile_picture_url (Optional)': '' },
     ],
     employees: [
-        { full_name: 'John Smith', email: 'john@example.com', phone: '0501111111', password: 'Temp1234!' },
-        { full_name: 'Jane Doe',   email: 'jane@example.com', phone: '0502222222', password: 'Temp1234!' },
+        { 'name_en *': 'John Smith', 'email *': 'john@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': 'ג׳ון סמית', 'name_th (Optional)': '', 'phone (Optional)': '0501111111', 'line_user_id (Optional)': 'Uxyz789', 'language (Optional)': 'English', 'profile_picture_url (Optional)': 'https://example.com/john.jpg' },
+        { 'name_en *': 'Jane Doe',   'email *': 'jane@example.com', 'password *': 'Temp1234!', 'name_he (Optional)': '',            'name_th (Optional)': '', 'phone (Optional)': '0502222222', 'line_user_id (Optional)': '',         'language (Optional)': 'Thai',    'profile_picture_url (Optional)': '' },
+    ],
+    tasks: [
+        {
+            'employee_name_en *': 'John Smith',
+            'employee_name_he (Optional)': 'ג׳ון סמית',
+            'employee_name_th (Optional)': '',
+            'task_name_en *': 'Check AC Filter',
+            'task_name_he (Optional)': 'בדיקת מסנן מזגן',
+            'task_name_th (Optional)': '',
+            'location *': 'Floor 1',
+            'frequency *': 'Monthly',
+            'date_or_days *': '15',
+            'urgency (Optional)': 'Normal',
+            'category (Optional)': 'Electrical',
+            'asset (Optional)': 'Main AC',
+            'image_url (Optional)': '',
+            'notes (Optional)': 'Check and replace filter if needed',
+        },
+        {
+            'employee_name_en *': 'Jane Doe',
+            'employee_name_he (Optional)': '',
+            'employee_name_th (Optional)': '',
+            'task_name_en *': 'Safety Inspection',
+            'task_name_he (Optional)': 'בדיקת בטיחות',
+            'task_name_th (Optional)': '',
+            'location *': 'Floor 2',
+            'frequency *': 'One-time',
+            'date_or_days *': '25/06/2025',
+            'urgency (Optional)': 'Urgent',
+            'category (Optional)': '',
+            'asset (Optional)': '',
+            'image_url (Optional)': 'https://example.com/safety.jpg',
+            'notes (Optional)': '',
+        },
+        {
+            'employee_name_en *': 'John Smith',
+            'employee_name_he (Optional)': '',
+            'employee_name_th (Optional)': '',
+            'task_name_en *': 'Weekly Fire Exit Check',
+            'task_name_he (Optional)': 'בדיקת יציאת חירום שבועית',
+            'task_name_th (Optional)': '',
+            'location *': 'Floor 1',
+            'frequency *': 'Weekly',
+            'date_or_days *': '1',
+            'urgency (Optional)': 'Normal',
+            'category (Optional)': '',
+            'asset (Optional)': '',
+            'image_url (Optional)': '',
+            'notes (Optional)': '1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat',
+        },
+        {
+            'employee_name_en *': 'Jane Doe',
+            'employee_name_he (Optional)': '',
+            'employee_name_th (Optional)': '',
+            'task_name_en *': 'Quarterly Boiler Service',
+            'task_name_he (Optional)': 'תחזוקת דוד רבעונית',
+            'task_name_th (Optional)': '',
+            'location *': 'Floor 2',
+            'frequency *': 'Quarterly',
+            'date_or_days *': '01/01,01/04,01/07,01/10',
+            'urgency (Optional)': 'Urgent',
+            'category (Optional)': '',
+            'asset (Optional)': '',
+            'image_url (Optional)': '',
+            'notes (Optional)': 'One DD/MM date per quarter (Q1:Jan-Mar, Q2:Apr-Jun, Q3:Jul-Sep, Q4:Oct-Dec)',
+        },
     ],
 };
 
-const ConfigExcelPanel = ({ section, t, onClose, token }) => {
+const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) => {
     const [activeTab, setActiveTab]               = useState('import');
     const [fileName, setFileName]                 = useState('');
     const [parsedRows, setParsedRows]             = useState([]);
@@ -91,7 +167,14 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
         .filter(f => !selectedFields.find(s => s.id === f.id))
         .filter(f => f.label.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const sectionLabel = SECTION_LABELS[section]?.he || section;
+    const SECTION_NAME_KEYS = {
+        categories: 'section_name_categories',
+        assets:     'section_name_assets',
+        locations:  'section_name_locations',
+        managers:   'section_name_managers',
+        employees:  'section_name_employees',
+    };
+    const sectionLabel = t?.[SECTION_NAME_KEYS[section]] || SECTION_LABELS[section]?.en || section;
 
     const authHeaders = {
         'Authorization': `Bearer ${token}`,
@@ -142,7 +225,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
             const res  = await fetch(`${BASE}/${section}/bulk-import`, {
                 method: 'POST',
                 headers: authHeaders,
-                body: JSON.stringify({ rows: parsedRows, isDryRun: true }),
+                body: JSON.stringify({ rows: parsedRows, isDryRun: true, ...(companyId ? { target_company_id: companyId } : {}) }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -171,7 +254,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
             const res  = await fetch(`${BASE}/${section}/bulk-import`, {
                 method: 'POST',
                 headers: authHeaders,
-                body: JSON.stringify({ rows: parsedRows, isDryRun: false }),
+                body: JSON.stringify({ rows: parsedRows, isDryRun: false, ...(companyId ? { target_company_id: companyId } : {}) }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -182,6 +265,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                 setValidationStatus('idle');
                 setFileName('');
                 setParsedRows([]);
+                onSuccess?.();
             }
         } catch {
             setImportErrors(['Network error — please check your connection']);
@@ -239,20 +323,20 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                         onClick={() => setActiveTab('import')}
                         className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'import' ? 'bg-[#714B67] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        {t?.import_update_tab || 'ייבוא / עדכון'}
+                        {t?.import_update_tab || 'Import / Update'}
                     </button>
                     <button
                         onClick={() => setActiveTab('export')}
                         className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'export' ? 'bg-[#714B67] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        {t?.export_data_tab || 'ייצוא נתונים'}
+                        {t?.export_data_tab || 'Export Data'}
                     </button>
                 </div>
 
                 <button
                     onClick={onClose}
                     className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition shrink-0"
-                    title={t?.close || 'סגור'}
+                    title={t?.close || 'Close'}
                 >
                     <X size={15} />
                 </button>
@@ -282,13 +366,13 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                     {/* Template download */}
                     <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
                         <span className="text-xs text-[#714B67] font-medium">
-                            ✨ {t?.template_download_hint || 'הורד תבנית Excel מותאמת אישית'}
+                            ✨ {t?.template_download_hint || 'Special 3-language template available for download, including image column and examples!'}
                         </span>
                         <button
                             onClick={handleDownloadTemplate}
                             className="bg-[#714B67] text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-[#5a3b52] shadow-sm flex items-center gap-1 transition"
                         >
-                            <Download size={12} /> {t?.download_template_btn || 'הורד תבנית'}
+                            <Download size={12} /> {t?.download_template_btn || 'Download Advanced Template'}
                         </button>
                     </div>
 
@@ -296,7 +380,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                     {validationStatus === 'valid' && importResult && (
                         <div className="bg-green-50 border border-green-200 p-2.5 rounded text-green-700 text-xs font-medium flex items-center gap-1.5">
                             <CheckCircle size={14} />
-                            {t?.file_valid_title || 'הקובץ תקין'} — {importResult.validCount} {t?.rows_ready || 'שורות מוכנות'}
+                            {t?.file_valid_title || 'File validated successfully!'} — {importResult.validCount} {t?.rows_ready || 'rows ready'}
                         </div>
                     )}
 
@@ -304,7 +388,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                     {importResult?.inserted !== undefined && (
                         <div className="bg-blue-50 border border-blue-200 p-2.5 rounded text-blue-800 text-xs font-medium flex items-center gap-1.5">
                             <CheckCircle size={14} />
-                            {t?.import_success || 'הייבוא הושלם'}: {importResult.inserted} {t?.inserted || 'נוספו'}, {importResult.updated} {t?.updated || 'עודכנו'}
+                            {t?.import_success || 'Import completed'}: {importResult.inserted} {t?.inserted || 'added'}, {importResult.updated} {t?.updated || 'updated'}
                         </div>
                     )}
 
@@ -329,7 +413,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                                 className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700 transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isLoading && validationStatus === 'idle' ? <Loader2 size={12} className="animate-spin" /> : null}
-                                {t?.validate_import || '1. בדוק תקינות'}
+                                {t?.validate_import || '1. Validate File'}
                             </button>
                             <button
                                 onClick={handleImport}
@@ -337,7 +421,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                                 className="bg-[#714B67] text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-[#5a3b52] transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                             >
                                 {isLoading && validationStatus === 'valid' ? <Loader2 size={12} className="animate-spin" /> : null}
-                                {t?.upload_approved_btn || '2. העלה נתונים'}
+                                {t?.upload_approved_btn || '2. Upload Validated Data'}
                             </button>
                         </div>
                     )}
@@ -418,7 +502,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token }) => {
                             className="bg-[#714B67] text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-[#5a3b52] transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                         >
                             {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-                            {t?.export_data || 'ייצוא נתונים'}
+                            {t?.export_data || 'Export Data'}
                         </button>
                     </div>
                 </div>

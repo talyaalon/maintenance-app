@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Trash2, Pencil, MapPin, Plus, X, Save, Navigation } from 'lucide-react';
 
 const API = 'https://maintenance-app-staging.onrender.com';
@@ -7,8 +8,8 @@ const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const emptyForm = () => ({ name_he: '', name_en: '', name_th: '', address: '' });
 
 // ─── Branded delete-confirm modal ────────────────────────────────────────────
-const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => createPortal(
+    <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
         <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in">
             <p className="text-gray-800 font-medium text-center mb-6">{message}</p>
             <div className="flex gap-3">
@@ -26,7 +27,8 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
                 </button>
             </div>
         </div>
-    </div>
+    </div>,
+    document.body
 );
 
 const LocationsTab = ({ token, t, lang = 'en' }) => {
@@ -158,8 +160,13 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
         const id = deleteConfirmId;
         setDeleteConfirmId(null);
         try {
-            await fetch(`${API}/locations/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-            fetchLocations();
+            const res = await fetch(`${API}/locations/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) {
+                fetchLocations();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || t.error_deleting_location || 'Error deleting location. It may be in use.');
+            }
         } catch { alert(t.error_deleting_location || 'Error deleting'); }
     };
 
@@ -294,13 +301,6 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
                                 ) : (
                                     <div>
                                         <h3 className="font-bold text-gray-800 text-lg leading-tight">{getLocName(loc)}</h3>
-                                        {(loc.name_he || loc.name_en || loc.name_th) && (
-                                            <p className="text-xs text-gray-400 mt-0.5 flex gap-2 flex-wrap">
-                                                {loc.name_he && loc.name_he !== getLocName(loc) && <span dir="rtl">{loc.name_he}</span>}
-                                                {loc.name_en && loc.name_en !== getLocName(loc) && <span dir="ltr">{loc.name_en}</span>}
-                                                {loc.name_th && loc.name_th !== getLocName(loc) && <span dir="ltr">{loc.name_th}</span>}
-                                            </p>
-                                        )}
                                         <p className="text-xs text-gray-400 mt-1">
                                             {t.created_by_label || 'Created by'}: {loc.creator_name || '—'}
                                         </p>
@@ -309,7 +309,8 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
                             </div>
 
                             {editingId !== loc.id && (
-                                <div className="flex gap-2 shrink-0 ml-2">
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                    {loc.code && <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded">{loc.code}</span>}
                                     <button onClick={() => startEdit(loc)} className="p-2 text-gray-400 hover:text-[#714B67] hover:bg-[#fdf4ff] bg-gray-50 rounded-full transition"><Pencil size={16} /></button>
                                     <button onClick={() => setDeleteConfirmId(loc.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 bg-gray-50 rounded-full transition"><Trash2 size={16} /></button>
                                 </div>

@@ -8,7 +8,7 @@ const BASE = 'https://maintenance-app-staging.onrender.com';
 
 // ─── Confirm delete modal (kept as modal — just a confirmation, not an edit form) ──
 const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+    <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
         <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
             <p className="text-gray-800 font-medium text-center mb-6">{message}</p>
             <div className="flex gap-3">
@@ -46,6 +46,12 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, 
             <div className="px-3 py-2 border-b border-gray-100 bg-white">{excelPanel}</div>
         )}
         <div className="divide-y divide-gray-100">
+            {/* Add panel — rendered above all rows when the Add button is active */}
+            {addPanel && (
+                <div className="px-4 py-2.5 text-sm text-slate-700 bg-slate-50">
+                    {addPanel}
+                </div>
+            )}
             {(items ?? []).length === 0 && !addPanel ? (
                 <p className="px-4 py-3 text-xs text-gray-400 italic">{emptyLabel}</p>
             ) : (
@@ -56,11 +62,6 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, 
                 ))
             )}
         </div>
-        {addPanel && (
-            <div className="px-4 py-2.5 text-sm text-slate-700 border-t border-slate-200 bg-slate-50">
-                {addPanel}
-            </div>
-        )}
     </div>
 );
 
@@ -141,7 +142,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
             ].map(({ label, key, type }) => (
                 <div key={key}>
                     <label className={labelCls}>{label}</label>
-                    <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} />
+                    <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} autoComplete={key === 'password' ? 'new-password' : undefined} />
                 </div>
             ))}
             <div>
@@ -260,12 +261,12 @@ const InlineCategoryForm = ({ editCategory, createdBy, token, t, lang, onClose, 
 
     const handleSave = async () => {
         if (!form.name_en?.trim() && !form.name_he?.trim()) { alert('Name is required'); return; }
-        if (!form.code?.trim()) { alert('Code is required (3 chars max)'); return; }
+        if (!form.code?.trim()) { alert('Code is required (5 chars max)'); return; }
         setSaving(true);
         try {
             const payload = {
                 name_en: form.name_en, name_he: form.name_he, name_th: form.name_th,
-                code:    form.code.toUpperCase().slice(0, 3),
+                code:    form.code.toUpperCase().slice(0, 5),
                 created_by: createdBy,
             };
             const method = isEdit ? 'PUT' : 'POST';
@@ -295,9 +296,9 @@ const InlineCategoryForm = ({ editCategory, createdBy, token, t, lang, onClose, 
                 compact
             />
             <div>
-                <label className={labelCls}>Code (3 chars) *</label>
-                <input type="text" value={form.code} maxLength={3}
-                    onChange={e => set('code', e.target.value.toUpperCase().slice(0, 3))}
+                <label className={labelCls}>Code (5 chars) *</label>
+                <input type="text" value={form.code} maxLength={5}
+                    onChange={e => set('code', e.target.value.toUpperCase().slice(0, 5))}
                     className={`${inputCls} font-mono`} />
             </div>
             <div className="flex gap-2 pt-1">
@@ -367,7 +368,7 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
                     className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]">
                     <option value="">Select category…</option>
                     {(categories ?? []).map(c => (
-                        <option key={c.id} value={String(c.id)}>{c.name_en || c.name}</option>
+                        <option key={c.id} value={String(c.id)}>{c['name_' + lang] || c.name_en || c.name}</option>
                     ))}
                 </select>
             </div>
@@ -377,7 +378,7 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
                     className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]">
                     <option value="">None</option>
                     {(locations ?? []).map(l => (
-                        <option key={l.id} value={String(l.id)}>{l.name_en || l.name}</option>
+                        <option key={l.id} value={String(l.id)}>{l['name_' + lang] || l.name_en || l.name}</option>
                     ))}
                 </select>
             </div>
@@ -692,8 +693,12 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (res.ok) fetchData();
-            else alert('Error deleting item. It may be in use.');
+            if (res.ok) {
+                fetchData();
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || 'Error deleting item. It may be in use.');
+            }
         } catch { alert('Server error'); }
         setDeleteConfirm(null);
     };
@@ -835,7 +840,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'managers' && (
-                        <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                     )}
                     addPanel={openPanel === 'add-user-manager' ? (
                         <InlineUserForm
@@ -943,7 +948,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'employees' && (
-                        <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                     )}
                     addPanel={openPanel === 'add-user-employee' ? (
                         <InlineUserForm
@@ -1036,7 +1041,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'locations' && (
-                        <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                     )}
                     addPanel={openPanel === 'add-loc' ? (
                         <InlineLocationForm
@@ -1098,7 +1103,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'categories' && (
-                        <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                     )}
                     addPanel={openPanel === 'add-cat' ? (
                         <InlineCategoryForm
@@ -1153,7 +1158,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'assets' && (
-                        <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                     )}
                     addPanel={openPanel === 'add-asset' ? (
                         <InlineAssetForm

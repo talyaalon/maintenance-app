@@ -95,7 +95,7 @@ transporter.verify((error, success) => {
 const sendLineMessage = async (lineUserId, text) => {
     if (!lineUserId || !process.env.LINE_CHANNEL_ACCESS_TOKEN) return;
     const https = require('https');
-    const textWithLink = `${text}\n\nView in App: ${APP_LINK}`;
+    const textWithLink = `${text}\n\nView in App: ${APP_LINK}?openExternalBrowser=1`;
     const body = JSON.stringify({
         to: lineUserId,
         messages: [{ type: 'text', text: textWithLink }]
@@ -129,6 +129,189 @@ const sendLineMessage = async (lineUserId, text) => {
         });
     } catch (err) {
         console.error('⚠️ LINE sendMessage failed:', err.message);
+    }
+};
+
+// ==========================================
+// 🔔 NotificationService — Core dispatcher
+//    sendNotification(userId, channels[], type, data)
+//    channels: ['email','line','push']
+//    types: 'user_created' | 'user_updated' | 'tasks_assigned' | 'morning_briefing'
+// ==========================================
+
+const sendFcmPush = async (token, title, body, link = '/') => {
+    if (!token) return;
+    try {
+        await admin.messaging().send({
+            token,
+            notification: { title, body },
+            webpush: { fcmOptions: { link } }
+        });
+        console.log(`🔔 FCM push sent`);
+    } catch (err) {
+        console.error('⚠️ FCM send failed:', err.message);
+    }
+};
+
+const buildTaskListLine = (tasks, lang) => {
+    const urgL = { low: { he: 'נמוכה', en: 'Low', th: 'ต่ำ' }, medium: { he: 'בינונית', en: 'Medium', th: 'ปานกลาง' }, high: { he: 'גבוהה', en: 'High', th: 'สูง' } };
+    return tasks.map((t, i) => {
+        const urg = urgL[t.urgency]?.[lang] || t.urgency || '';
+        const date = t.due_date ? new Date(t.due_date).toLocaleDateString('en-GB') : '';
+        return `${i + 1}. ${t.title}\n   📅 ${date}  ⚡ ${urg}`;
+    }).join('\n');
+};
+
+const buildTaskTableHtml = (tasks, lang) => {
+    const hdr = { he: ['#', 'משימה', 'תאריך', 'עדיפות'], en: ['#', 'Task', 'Date', 'Priority'], th: ['#', 'งาน', 'วันที่', 'ลำดับความสำคัญ'] };
+    const urgL = { low: { he: 'נמוכה', en: 'Low', th: 'ต่ำ' }, medium: { he: 'בינונית', en: 'Medium', th: 'ปานกลาง' }, high: { he: 'גבוהה', en: 'High', th: 'สูง' } };
+    const [h0, h1, h2, h3] = hdr[lang] || hdr.en;
+    const rows = tasks.map((t, i) => {
+        const date = t.due_date ? new Date(t.due_date).toLocaleDateString('en-GB') : '';
+        const urg = urgL[t.urgency]?.[lang] || t.urgency || '';
+        const urgColor = t.urgency === 'high' ? '#991b1b' : (t.urgency === 'medium' ? '#92400e' : '#166534');
+        const urgBg   = t.urgency === 'high' ? '#fee2e2' : (t.urgency === 'medium' ? '#fef3c7' : '#dcfce7');
+        return `<tr>
+            <td style="padding:7px 8px;border-bottom:1px solid #e5e7eb;color:#6b7280;">${i + 1}</td>
+            <td style="padding:7px 8px;border-bottom:1px solid #e5e7eb;color:#111827;font-weight:500;">${t.title}</td>
+            <td style="padding:7px 8px;border-bottom:1px solid #e5e7eb;color:#6b7280;">${date}</td>
+            <td style="padding:7px 8px;border-bottom:1px solid #e5e7eb;">
+                <span style="background:${urgBg};color:${urgColor};padding:2px 8px;border-radius:10px;font-size:11px;">${urg}</span>
+            </td></tr>`;
+    }).join('');
+    return `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;">
+        <tr style="background:#f3f4f6;">
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;font-size:12px;">${h0}</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;font-size:12px;">${h1}</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;font-size:12px;">${h2}</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;font-size:12px;">${h3}</th>
+        </tr>${rows}</table>`;
+};
+
+const NOTIF_T = {
+    user_created: {
+        he: {
+            subj: '👋 פרטי חשבון - OpsManager',
+            mgr_subj: '💼 חשבון מנהל נוצר - OpsManager',
+            push_t: 'ברוך הבא! 👋',
+            push_b: n => `שלום ${n}! חשבונך נוצר בהצלחה.`,
+            line: (n, e, p) => `👋 שלום ${n}!\nחשבונך נוצר במערכת OpsManager.\n\n📧 אימייל: ${e}\n🔑 סיסמה: ${p}`,
+        },
+        en: {
+            subj: '👋 Account Created - OpsManager',
+            mgr_subj: '💼 Manager Account Created - OpsManager',
+            push_t: 'Welcome! 👋',
+            push_b: n => `Hello ${n}! Your account has been created.`,
+            line: (n, e, p) => `👋 Hello ${n}!\nYour OpsManager account is ready.\n\n📧 Email: ${e}\n🔑 Password: ${p}`,
+        },
+        th: {
+            subj: '👋 สร้างบัญชีแล้ว - OpsManager',
+            mgr_subj: '💼 สร้างบัญชีผู้จัดการแล้ว - OpsManager',
+            push_t: 'ยินดีต้อนรับ! 👋',
+            push_b: n => `สวัสดี ${n}! บัญชีของคุณถูกสร้างเรียบร้อยแล้ว`,
+            line: (n, e, p) => `👋 สวัสดี ${n}!\nบัญชี OpsManager ของคุณพร้อมแล้ว\n\n📧 อีเมล: ${e}\n🔑 รหัสผ่าน: ${p}`,
+        },
+    },
+    user_updated: {
+        he: { subj: '📝 פרטי חשבונך עודכנו - OpsManager', push_t: 'חשבון עודכן 📝', push_b: () => 'פרטי חשבונך עודכנו על ידי מנהל.', line: (n, c) => `📝 שלום ${n}!\nהפרטים הבאים עודכנו:\n${c}` },
+        en: { subj: '📝 Your account has been updated - OpsManager', push_t: 'Account Updated 📝', push_b: () => 'Your account details were updated by an admin.', line: (n, c) => `📝 Hello ${n}!\nThe following was updated:\n${c}` },
+        th: { subj: '📝 บัญชีของคุณได้รับการอัปเดต - OpsManager', push_t: 'อัปเดตบัญชี 📝', push_b: () => 'ข้อมูลบัญชีของคุณได้รับการอัปเดตโดยผู้ดูแลระบบ', line: (n, c) => `📝 สวัสดี ${n}!\nข้อมูลต่อไปนี้ได้รับการอัปเดต:\n${c}` },
+    },
+    tasks_assigned: {
+        he: { subj: c => `📋 הוקצו לך ${c} משימות חדשות`, push_t: c => `${c} משימות חדשות! 📋`, push_b: c => `הוקצו לך ${c} משימות חדשות. היכנס לצפות.`, line: (n, c, list) => `📋 שלום ${n}!\nהוקצו לך ${c} משימות חדשות:\n\n${list}` },
+        en: { subj: c => `📋 ${c} New Task(s) Assigned to You`, push_t: c => `${c} New Task(s)! 📋`, push_b: c => `You've been assigned ${c} new task(s). Tap to view.`, line: (n, c, list) => `📋 Hello ${n}!\nYou have ${c} new task(s) assigned:\n\n${list}` },
+        th: { subj: c => `📋 คุณได้รับมอบหมาย ${c} งานใหม่`, push_t: c => `${c} งานใหม่! 📋`, push_b: c => `คุณได้รับมอบหมาย ${c} งานใหม่ แตะเพื่อดู`, line: (n, c, list) => `📋 สวัสดี ${n}!\nคุณได้รับมอบหมาย ${c} งานใหม่:\n\n${list}` },
+    },
+    morning_briefing: {
+        he: { push_t: '☀️ בוקר טוב!', push_b: c => `יש לך ${c} משימות להיום.`, line: (n, c, list) => `☀️ בוקר טוב ${n}!\nיש לך ${c} משימות להיום:\n\n${list}`, none_push_t: '☀️ בוקר טוב!', none_push_b: () => 'אין לך משימות להיום 🏖️', none_line: n => `☀️ בוקר טוב ${n}! 🏖️\nאין לך משימות מתוכננות להיום.` },
+        en: { push_t: '☀️ Good Morning!', push_b: c => `You have ${c} task(s) today.`, line: (n, c, list) => `☀️ Good morning ${n}!\nYou have ${c} task(s) today:\n\n${list}`, none_push_t: '☀️ Good Morning!', none_push_b: () => 'No tasks for today 🏖️', none_line: n => `☀️ Good morning ${n}! 🏖️\nNo tasks scheduled for today.` },
+        th: { push_t: '☀️ อรุณสวัสดิ์!', push_b: c => `คุณมี ${c} งานวันนี้`, line: (n, c, list) => `☀️ อรุณสวัสดิ์ ${n}!\nคุณมี ${c} งานวันนี้:\n\n${list}`, none_push_t: '☀️ อรุณสวัสดิ์!', none_push_b: () => 'ไม่มีงานสำหรับวันนี้ 🏖️', none_line: n => `☀️ อรุณสวัสดิ์ ${n}! 🏖️\nไม่มีงานที่วางแผนไว้สำหรับวันนี้` },
+    },
+};
+
+const notifEmailWrap = (dir, align, content) => `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:10px;background:#f4f4f5;font-family:Helvetica,Arial,sans-serif;">
+<div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,.05);direction:${dir};text-align:${align};">
+<div style="background:#714B67;padding:16px 20px;"><h2 style="margin:0;color:#fff;font-size:18px;">OpsManager</h2></div>
+<div style="padding:20px;">${content}</div>
+<div style="background:#f9fafb;padding:14px 20px;text-align:center;border-top:1px solid #e5e7eb;">
+<a href="${APP_LINK}" style="background:#714B67;color:#fff;padding:10px 24px;text-decoration:none;border-radius:20px;font-size:13px;font-weight:bold;">
+${dir === 'rtl' ? 'כניסה לאפליקציה' : (align === 'left' && dir !== 'rtl' ? 'Open App' : 'เปิดแอป')}</a></div>
+</div></body></html>`;
+
+const sendNotification = async (userId, channels, type, data = {}) => {
+    try {
+        const uRes = await pool.query(
+            'SELECT id, full_name, email, line_user_id, device_token, preferred_language, role FROM users WHERE id = $1',
+            [userId]
+        );
+        if (!uRes.rows.length) return;
+        const u = uRes.rows[0];
+        const lang = u.preferred_language || 'en';
+        const T = NOTIF_T[type]?.[lang] || NOTIF_T[type]?.en;
+        if (!T) return;
+        const n = u.full_name;
+        const dir = lang === 'he' ? 'rtl' : 'ltr';
+        const align = lang === 'he' ? 'right' : 'left';
+        const tasks = data.tasks || [];
+        const taskCount = data.taskCount || tasks.length;
+        const changes = data.changes || '';
+
+        const sends = [];
+
+        // ── EMAIL ──────────────────────────────────────────────────────────
+        if (channels.includes('email') && u.email) {
+            let subject = '', html = '';
+            if (type === 'user_updated' && changes) {
+                subject = T.subj;
+                html = notifEmailWrap(dir, align, `<h3 style="color:#714B67;margin-top:0;">${T.push_t}</h3><p style="color:#374151;">${lang === 'he' ? `שלום ${n},` : (lang === 'th' ? `สวัสดี ${n},` : `Hello ${n},`)}</p><div style="background:#f3f4f6;padding:14px;border-radius:6px;border-${align === 'right' ? 'right' : 'left'}:4px solid #714B67;">${changes.replace(/\n/g, '<br>')}</div>`);
+            } else if (type === 'tasks_assigned' && tasks.length > 0) {
+                subject = T.subj(taskCount);
+                html = notifEmailWrap(dir, align, `<h3 style="color:#714B67;margin-top:0;">${T.push_t(taskCount)}</h3><p style="color:#374151;">${lang === 'he' ? `שלום ${n},` : (lang === 'th' ? `สวัสดี ${n},` : `Hello ${n},`)}</p>${buildTaskTableHtml(tasks, lang)}`);
+            }
+            if (html && subject) {
+                sends.push(
+                    transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: u.email, subject, html })
+                        .then(() => console.log(`📧 ${type} email → ${u.email}`))
+                        .catch(e => console.error(`⚠️ Email (${type}) → ${u.email}:`, e.message))
+                );
+            }
+        }
+
+        // ── LINE ───────────────────────────────────────────────────────────
+        if (channels.includes('line') && u.line_user_id) {
+            let msg = '';
+            if (type === 'user_created') {
+                msg = T.line(n, data.email || u.email, data.password || '');
+            } else if (type === 'user_updated' && changes) {
+                msg = T.line(n, changes);
+            } else if (type === 'tasks_assigned' && tasks.length > 0) {
+                msg = T.line(n, taskCount, buildTaskListLine(tasks, lang));
+            } else if (type === 'morning_briefing') {
+                msg = tasks.length === 0 ? T.none_line(n) : T.line(n, tasks.length, buildTaskListLine(tasks, lang));
+            }
+            if (msg) sends.push(sendLineMessage(u.line_user_id, msg).catch(e => console.error(`⚠️ LINE (${type}):`, e.message)));
+        }
+
+        // ── FCM PUSH ───────────────────────────────────────────────────────
+        if (channels.includes('push') && u.device_token) {
+            let title = '', body = '';
+            if (type === 'user_created') {
+                title = T.push_t; body = T.push_b(n);
+            } else if (type === 'user_updated') {
+                title = T.push_t; body = T.push_b();
+            } else if (type === 'tasks_assigned') {
+                title = T.push_t(taskCount); body = T.push_b(taskCount);
+            } else if (type === 'morning_briefing') {
+                if (tasks.length === 0) { title = T.none_push_t; body = T.none_push_b(); }
+                else { title = T.push_t; body = T.push_b(tasks.length); }
+            }
+            if (title) sends.push(sendFcmPush(u.device_token, title, body, APP_LINK));
+        }
+
+        await Promise.all(sends);
+    } catch (err) {
+        console.error(`⚠️ sendNotification (${type}) for userId ${userId}:`, err.message);
     }
 };
 
@@ -348,6 +531,18 @@ app.get('/fix-db', async (req, res) => {
             await client.query('ALTER TABLE assets ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)');
 
             await client.query('ALTER TABLE categories ADD COLUMN IF NOT EXISTS code VARCHAR(10)');
+            // Widen category code limit from 3→5 letters (idempotent via DO $$ block)
+            await client.query(`
+                DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name='categories' AND column_name='code'
+                          AND character_maximum_length < 5
+                    ) THEN
+                        ALTER TABLE categories ALTER COLUMN code TYPE VARCHAR(5);
+                    END IF;
+                END $$
+            `);
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS code VARCHAR(50)');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS image_url TEXT');
             await client.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS coordinates TEXT');
@@ -572,13 +767,15 @@ app.post('/login', async (req, res) => {
 
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) return res.status(400).json({ error: "משתמש לא נמצא" });
-    
-    const user = result.rows[0];
 
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword && password !== user.password) {
-        return res.status(400).json({ error: "סיסמה שגויה" });
+    // Multiple accounts may share the same email across different companies —
+    // find the one whose password matches.
+    let user = null;
+    for (const row of result.rows) {
+        const valid = await bcrypt.compare(password, row.password).catch(() => false);
+        if (valid || password === row.password) { user = row; break; }
     }
+    if (!user) return res.status(400).json({ error: "סיסמה שגויה" });
 
     // For MANAGER (AreaManager), effective area_id = their own id
     const effectiveAreaId = user.role === 'MANAGER' ? user.id : (user.area_id || null);
@@ -853,6 +1050,18 @@ app.post('/users', authenticateToken, async (req, res) => {
     }
     // For MANAGER with no company determined yet: company is auto-created after insert
 
+    // Email uniqueness check scoped to the same company (or globally for company-less users)
+    {
+        const emailDupQuery = newUserCompanyId
+            ? 'SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id = $2'
+            : 'SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id IS NULL';
+        const emailDupParams = newUserCompanyId ? [email, newUserCompanyId] : [email];
+        const emailDup = await pool.query(emailDupQuery, emailDupParams);
+        if (emailDup.rows.length > 0) {
+            return res.status(400).json({ error: "Email already exists" });
+        }
+    }
+
     const newUser = await pool.query(
       `INSERT INTO users (full_name, full_name_he, full_name_en, full_name_th, email, password, role, phone, parent_manager_id, preferred_language, line_user_id, area_id, company_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id, full_name, email, role, phone, preferred_language, line_user_id`,
@@ -892,14 +1101,16 @@ app.post('/users', authenticateToken, async (req, res) => {
         console.error("Error sending welcome email:", emailError);
     }
 
+    // LINE: include credentials in welcome message
     if (line_user_id) {
-        const welcomeLineDict = {
-            he: `שלום ${effectiveFullName}! 👋 ברוך הבא למערכת OpsManager. חשבונך נוצר בהצלחה.`,
-            en: `Hello ${effectiveFullName}! 👋 Welcome to OpsManager. Your account has been created successfully.`,
-            th: `สวัสดี ${effectiveFullName}! 👋 ยินดีต้อนรับสู่ OpsManager บัญชีของคุณถูกสร้างเรียบร้อยแล้ว`
-        };
-        sendLineMessage(line_user_id, welcomeLineDict[lang] || welcomeLineDict['en']).catch(err => console.error("LINE welcome error:", err));
+        const T = NOTIF_T.user_created[lang] || NOTIF_T.user_created.en;
+        sendLineMessage(line_user_id, T.line(effectiveFullName, email, password) )
+            .catch(err => console.error("LINE welcome error:", err));
     }
+
+    // FCM Push: welcome push (no-op if device_token not yet registered)
+    sendNotification(newUser.rows[0].id, ['push'], 'user_created', { email, password })
+        .catch(err => console.error("FCM welcome push error:", err));
 
     res.json(newUser.rows[0]);
 
@@ -995,12 +1206,20 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         paramCount++;
     }
 
+    // Only hash and update if the password is genuinely new (not the existing hash sent back unchanged)
+    let isPasswordChanged = false;
     if (password && password.trim() !== '') {
         const bcrypt = require('bcrypt');
-        const hashedPassword = await bcrypt.hash(password, 10);
-        setClauses.push(`password=$${paramCount}`);
-        params.push(hashedPassword);
-        paramCount++;
+        const matchesExisting = oldUser.password
+            ? await bcrypt.compare(password, oldUser.password).catch(() => false)
+            : false;
+        if (!matchesExisting) {
+            isPasswordChanged = true;
+            const hashedPassword = await bcrypt.hash(password, 10);
+            setClauses.push(`password=$${paramCount}`);
+            params.push(hashedPassword);
+            paramCount++;
+        }
     }
 
     const query = `UPDATE users SET ${setClauses.join(', ')} WHERE id=$${paramCount} RETURNING *`;
@@ -1009,28 +1228,61 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     const result = await pool.query(query, params);
     const updatedUser = result.rows[0];
 
-    let changes = [];
-    if (oldUser.full_name !== updatedUser.full_name) changes.push(`Name changed to: <strong>${updatedUser.full_name}</strong>`);
-    if (oldUser.email !== updatedUser.email) changes.push(`Email changed to: <strong>${updatedUser.email}</strong>`);
-    if (oldUser.phone !== updatedUser.phone) changes.push(`Phone updated`);
-    if (oldUser.preferred_language !== updatedUser.preferred_language) changes.push(`Language changed to: <strong>${updatedUser.preferred_language}</strong>`);
-    if (password && password.trim() !== '') changes.push('Password has been changed');
-    
-    // Track permission changes made by Big Boss
-    if (oldUser.can_manage_fields !== updatedUser.can_manage_fields) changes.push(`Field Settings Permission updated`);
-    if (oldUser.auto_approve_tasks !== updatedUser.auto_approve_tasks) changes.push(`Auto-Approve Tasks updated to: <strong>${updatedUser.auto_approve_tasks}</strong>`);
+    // Build plain-text change list for notifications
+    const changeLinesEn = [];
+    const changeLinesHe = [];
+    const changeLinesth = [];
+    if (oldUser.full_name !== updatedUser.full_name) {
+        changeLinesEn.push(`• Name → ${updatedUser.full_name}`);
+        changeLinesHe.push(`• שם → ${updatedUser.full_name}`);
+        changeLinesth.push(`• ชื่อ → ${updatedUser.full_name}`);
+    }
+    if (oldUser.email !== updatedUser.email) {
+        changeLinesEn.push(`• Email → ${updatedUser.email}`);
+        changeLinesHe.push(`• אימייל → ${updatedUser.email}`);
+        changeLinesth.push(`• อีเมล → ${updatedUser.email}`);
+    }
+    if (oldUser.phone !== updatedUser.phone) {
+        changeLinesEn.push(`• Phone updated`);
+        changeLinesHe.push(`• טלפון עודכן`);
+        changeLinesth.push(`• อัปเดตเบอร์โทร`);
+    }
+    if (oldUser.preferred_language !== updatedUser.preferred_language) {
+        changeLinesEn.push(`• Language → ${updatedUser.preferred_language}`);
+        changeLinesHe.push(`• שפה → ${updatedUser.preferred_language}`);
+        changeLinesth.push(`• ภาษา → ${updatedUser.preferred_language}`);
+    }
+    if (isPasswordChanged) {
+        changeLinesEn.push(`• Password changed 🔑`);
+        changeLinesHe.push(`• סיסמה שונתה 🔑`);
+        changeLinesth.push(`• เปลี่ยนรหัสผ่าน 🔑`);
+    }
+    if (oldUser.role !== updatedUser.role) {
+        changeLinesEn.push(`• Role → ${updatedUser.role}`);
+        changeLinesHe.push(`• תפקיד → ${updatedUser.role}`);
+        changeLinesth.push(`• บทบาท → ${updatedUser.role}`);
+    }
 
-    // Welcome LINE message when lineUserId is set for the first time
+    const changeLangMap = { he: changeLinesHe, en: changeLinesEn, th: changeLinesth };
+    const userLang = updatedUser.preferred_language || 'en';
+    const changeText = (changeLangMap[userLang] || changeLinesEn).join('\n');
+
+    // Welcome LINE message when LINE ID is set for the first time
     const oldLineId = oldUser.line_user_id;
     const newLineId = updatedUser.line_user_id;
     if (newLineId && !oldLineId) {
-        const lang2 = updatedUser.preferred_language || 'he';
-        const welcomeDict = {
-            he: `שלום ${updatedUser.full_name}! 👋 ברוך הבא למערכת OpsManager. חשבונך מחובר בהצלחה.`,
-            en: `Hello ${updatedUser.full_name}! 👋 Welcome to the team! Your account is now connected to OpsManager.`,
-            th: `สวัสดี ${updatedUser.full_name}! 👋 ยินดีต้อนรับสู่ทีม! บัญชีของคุณเชื่อมต่อกับ OpsManager แล้ว`
+        const welcomeMsg = {
+            he: `שלום ${updatedUser.full_name}! 👋 חשבונך מחובר בהצלחה ל-OpsManager.`,
+            en: `Hello ${updatedUser.full_name}! 👋 Your account is now connected to OpsManager.`,
+            th: `สวัสดี ${updatedUser.full_name}! 👋 บัญชีของคุณเชื่อมต่อกับ OpsManager แล้ว`
         };
-        sendLineMessage(newLineId, welcomeDict[lang2] || welcomeDict['en']).catch(err => console.error("❌ LINE welcome error:", err));
+        sendLineMessage(newLineId, welcomeMsg[userLang] || welcomeMsg.en).catch(err => console.error("❌ LINE welcome error:", err));
+    }
+
+    // Notify user via all 3 channels if any material change occurred
+    if (changeText) {
+        sendNotification(updatedUser.id, ['email', 'line', 'push'], 'user_updated', { changes: changeText })
+            .catch(err => console.error("❌ user_updated notification error:", err));
     }
 
     res.json({ message: "User updated successfully", user: updatedUser });
@@ -1392,17 +1644,158 @@ app.delete('/companies/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// ─── Company Deletion 2FA Flow ──────────────────────────────────────────────
+
+// GET /companies/:id/check-deletion — BIG_BOSS only; returns entity counts + isDeletable flag
+app.get('/companies/:id/check-deletion', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'BIG_BOSS only' });
+    try {
+        const { id } = req.params;
+        const [usersRes, tasksRes, locsRes, catsRes, assetsRes] = await Promise.all([
+            pool.query("SELECT COUNT(*) FROM users WHERE company_id = $1 AND role IN ('COMPANY_MANAGER','MANAGER','EMPLOYEE')", [id]),
+            pool.query('SELECT COUNT(*) FROM tasks WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM locations WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM categories WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM assets WHERE company_id = $1', [id]),
+        ]);
+        const counts = {
+            users:      parseInt(usersRes.rows[0].count),
+            tasks:      parseInt(tasksRes.rows[0].count),
+            locations:  parseInt(locsRes.rows[0].count),
+            categories: parseInt(catsRes.rows[0].count),
+            assets:     parseInt(assetsRes.rows[0].count),
+        };
+        const isDeletable = Object.values(counts).every(c => c === 0);
+        res.json({ isDeletable, counts });
+    } catch (err) {
+        console.error('GET /companies/:id/check-deletion error:', err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST /companies/:id/request-deletion — BIG_BOSS only; emails a time-limited confirmation link
+app.post('/companies/:id/request-deletion', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'BIG_BOSS only' });
+    try {
+        const { id } = req.params;
+        const companyRes = await pool.query('SELECT * FROM companies WHERE id = $1', [id]);
+        if (companyRes.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
+        const company = companyRes.rows[0];
+
+        // Re-verify company is still empty before sending the link
+        const [usersRes, tasksRes, locsRes, catsRes, assetsRes] = await Promise.all([
+            pool.query("SELECT COUNT(*) FROM users WHERE company_id = $1 AND role IN ('COMPANY_MANAGER','MANAGER','EMPLOYEE')", [id]),
+            pool.query('SELECT COUNT(*) FROM tasks WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM locations WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM categories WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM assets WHERE company_id = $1', [id]),
+        ]);
+        const totals = [usersRes, tasksRes, locsRes, catsRes, assetsRes].map(r => parseInt(r.rows[0].count));
+        if (totals.some(c => c > 0)) return res.status(409).json({ error: 'Company still has associated data. Please remove all entities first.' });
+
+        // Fetch BIG_BOSS email from DB (req.user comes from JWT — email may be stale)
+        const userRes = await pool.query('SELECT email, full_name FROM users WHERE id = $1', [req.user.id]);
+        if (userRes.rows.length === 0) return res.status(404).json({ error: 'Requesting user not found' });
+        const { email, full_name } = userRes.rows[0];
+
+        // Generate a 15-minute deletion token
+        const deletionToken = jwt.sign(
+            { company_id: id, action: 'delete_company', requested_by: req.user.id },
+            SECRET_KEY,
+            { expiresIn: '15m' }
+        );
+
+        const APP_URL = process.env.APP_URL || 'https://air-manage-app.netlify.app';
+        const confirmLink = `${APP_URL}/api/companies/confirm-delete?token=${deletionToken}`;
+        const companyLabel = company.name_en || company.name_he || company.name || `#${id}`;
+
+        await transporter.sendMail({
+            from: `"Maintenance App" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'Confirm Company Deletion',
+            html: `
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px;">
+                    <h2 style="color:#dc2626;margin-top:0;">Confirm Company Deletion</h2>
+                    <p>Hi <strong>${full_name}</strong>,</p>
+                    <p>You requested to permanently delete the company <strong>"${companyLabel}"</strong>.</p>
+                    <p>This action is <strong>irreversible</strong>. Click the button below within <strong>15 minutes</strong> to confirm:</p>
+                    <p style="margin:28px 0;">
+                        <a href="${confirmLink}"
+                           style="background:#dc2626;color:#fff;padding:13px 26px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">
+                            Confirm Deletion
+                        </a>
+                    </p>
+                    <p style="color:#6b7280;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
+                </div>
+            `,
+        });
+
+        res.json({ success: true, message: 'Confirmation email sent' });
+    } catch (err) {
+        console.error('POST /companies/:id/request-deletion error:', err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// GET /companies/confirm-delete?token=... — Email link handler; verifies JWT and permanently deletes company
+app.get('/companies/confirm-delete', async (req, res) => {
+    const { token } = req.query;
+    if (!token) return res.status(400).send('<h2 style="font-family:sans-serif;color:#dc2626;">Invalid or missing token.</h2>');
+    const APP_URL = process.env.APP_URL || 'https://air-manage-app.netlify.app';
+    try {
+        let payload;
+        try {
+            payload = jwt.verify(token, SECRET_KEY);
+        } catch (verifyErr) {
+            if (verifyErr.name === 'TokenExpiredError') {
+                return res.status(410).send('<h2 style="font-family:sans-serif;color:#dc2626;">This link has expired. Please request a new deletion confirmation from the app.</h2>');
+            }
+            return res.status(400).send('<h2 style="font-family:sans-serif;color:#dc2626;">Invalid token.</h2>');
+        }
+
+        if (payload.action !== 'delete_company') {
+            return res.status(400).send('<h2 style="font-family:sans-serif;color:#dc2626;">Invalid token action.</h2>');
+        }
+
+        const { company_id } = payload;
+        const companyRes = await pool.query('SELECT name, name_en FROM companies WHERE id = $1', [company_id]);
+        if (companyRes.rows.length === 0) {
+            return res.redirect(`${APP_URL}?deleted=already`);
+        }
+
+        // Execute the permanent deletion
+        await pool.query('UPDATE users      SET company_id = NULL WHERE company_id = $1', [company_id]);
+        await pool.query('UPDATE tasks      SET company_id = NULL WHERE company_id = $1', [company_id]);
+        await pool.query('UPDATE locations  SET company_id = NULL WHERE company_id = $1', [company_id]);
+        await pool.query('UPDATE categories SET company_id = NULL WHERE company_id = $1', [company_id]);
+        await pool.query('UPDATE assets     SET company_id = NULL WHERE company_id = $1', [company_id]);
+        await pool.query('DELETE FROM companies WHERE id = $1', [company_id]);
+
+        return res.redirect(`${APP_URL}?deleted=1`);
+    } catch (err) {
+        console.error('GET /companies/confirm-delete error:', err.message);
+        return res.status(500).send('<h2 style="font-family:sans-serif;color:#dc2626;">Server error. Please try again.</h2>');
+    }
+});
+
 app.delete('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     try {
       const { id } = req.params;
-      const subordinates = await pool.query('SELECT count(*) FROM users WHERE parent_manager_id = $1', [id]);
-      const count = parseInt(subordinates.rows[0].count);
 
-      if (count > 0) {
-          return res.status(400).json({ 
-              error: `לא ניתן למחוק מנהל זה! יש לו ${count} עובדים משויכים. אנא מחק אותם תחילה או העבר אותם למנהל אחר.` 
-          });
+      // Fetch the target user's role — subordinate constraint only applies to MANAGER, not COMPANY_MANAGER
+      const targetRes = await pool.query('SELECT role FROM users WHERE id = $1', [id]);
+      if (!targetRes.rows.length) return res.status(404).json({ error: 'User not found' });
+      const targetRole = targetRes.rows[0].role;
+
+      if (targetRole === 'MANAGER') {
+          const subordinates = await pool.query('SELECT count(*) FROM users WHERE parent_manager_id = $1', [id]);
+          const count = parseInt(subordinates.rows[0].count);
+          if (count > 0) {
+              return res.status(400).json({
+                  error: `לא ניתן למחוק מנהל זה! יש לו ${count} עובדים משויכים. אנא מחק אותם תחילה או העבר אותם למנהל אחר.`
+              });
+          }
       }
 
       await pool.query('UPDATE locations SET created_by = NULL WHERE created_by = $1', [id]);
@@ -1559,30 +1952,7 @@ app.post('/locations', authenticateToken, requireAdmin, (req, res) => {
             const check = await pool.query('SELECT id FROM locations WHERE name = $1 AND created_by = $2', [primaryName, ownerId]);
             if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: מיקום כבר קיים" });
 
-            const locs = await pool.query("SELECT code FROM locations WHERE created_by = $1 AND code LIKE 'LOC-%'", [ownerId]);
-            let max = 0;
-            locs.rows.forEach(r => { if(r.code) { let num = parseInt(r.code.split('-')[1]); if (num > max) max = num; } });
-            const generatedCode = `LOC-${String(max + 1).padStart(4, '0')}`;
-
-            let mainImageUrl = (existing_image && existing_image !== 'null') ? existing_image : null;
-            let parsedDynamicFields = [];
-            try { if (dynamic_fields && dynamic_fields !== 'null') parsedDynamicFields = JSON.parse(dynamic_fields); } catch(e){}
-
-            if (req.files && req.files.length > 0) {
-                req.files.forEach(file => {
-                    const fileUrl = file.secure_url || file.path; 
-                    if (file.fieldname === 'main_image') {
-                        mainImageUrl = fileUrl;
-                    } else if (file.fieldname.startsWith('dynamic_')) {
-                        // 🚀 התיקון הענק: פקודת הפענוח שמתרגמת את הג'יבריש חזרה לשם השדה!
-                        const fieldId = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
-                        const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId) || f.name === fieldId);
-                        if (fieldObj) fieldObj.value = fileUrl;
-                    }
-                });
-            }
-
-            // Determine area_id and company_id for the new location
+            // Determine area_id and company_id first — needed for company-scoped code generation
             let locAreaId = null;
             let locCompanyId = null;
             if (req.user.role === 'MANAGER') {
@@ -1597,6 +1967,34 @@ app.post('/locations', authenticateToken, requireAdmin, (req, res) => {
                 const owner = ownerRes.rows[0];
                 locAreaId = owner?.area_id || (owner?.role === 'MANAGER' ? ownerId : null);
                 locCompanyId = owner?.company_id ?? null;
+            }
+
+            // Generate LOC-XXXX code scoped to company_id (consistent with bulk-import)
+            const codeQ = locCompanyId
+                ? "SELECT code FROM locations WHERE code LIKE 'LOC-%' AND company_id = $1"
+                : "SELECT code FROM locations WHERE code LIKE 'LOC-%' AND created_by = $1";
+            const codeP = locCompanyId ? [locCompanyId] : [ownerId];
+            const locs = await pool.query(codeQ, codeP);
+            let max = 0;
+            locs.rows.forEach(r => { if(r.code) { let num = parseInt((r.code || '').split('-')[1]); if (!isNaN(num) && num > max) max = num; } });
+            const generatedCode = `LOC-${String(max + 1).padStart(4, '0')}`;
+
+            let mainImageUrl = (existing_image && existing_image !== 'null') ? existing_image : null;
+            let parsedDynamicFields = [];
+            try { if (dynamic_fields && dynamic_fields !== 'null') parsedDynamicFields = JSON.parse(dynamic_fields); } catch(e){}
+
+            if (req.files && req.files.length > 0) {
+                req.files.forEach(file => {
+                    const fileUrl = file.secure_url || file.path;
+                    if (file.fieldname === 'main_image') {
+                        mainImageUrl = fileUrl;
+                    } else if (file.fieldname.startsWith('dynamic_')) {
+                        // 🚀 התיקון הענק: פקודת הפענוח שמתרגמת את הג'יבריש חזרה לשם השדה!
+                        const fieldId = decodeURIComponent(file.fieldname.replace('dynamic_', ''));
+                        const fieldObj = parsedDynamicFields.find(f => String(f.id) === String(fieldId) || f.name === fieldId);
+                        if (fieldObj) fieldObj.value = fileUrl;
+                    }
+                });
             }
 
             const r = await pool.query(
@@ -1693,11 +2091,17 @@ app.get('/categories', authenticateToken, async (req, res) => {
     } catch (err) { console.error('GET /categories error:', err.message); res.json([]); }
 });
 
+const CATEGORY_CODE_RE = /^[a-zA-Z]{1,5}$/;
+
 app.post('/categories', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { name, name_he, name_en, name_th, code, created_by } = req.body;
         const ownerId = created_by || req.user.id;
         const primaryName = name_en || name_he || name || '';
+
+        if (code && !CATEGORY_CODE_RE.test(code)) {
+            return res.status(400).json({ error: 'Code must be 1-5 English letters' });
+        }
 
         const check = await pool.query('SELECT id FROM categories WHERE name = $1 AND created_by = $2', [primaryName, ownerId]);
         if (check.rows.length > 0) return res.status(400).json({ error: "כפילות: קטגוריה בשם זה כבר קיימת אצלך במערכת!" });
@@ -1734,6 +2138,10 @@ app.put('/categories/:id', authenticateToken, requireAdmin, async (req, res) => 
         const { id } = req.params;
         const { name, name_he, name_en, name_th, code } = req.body;
         const primaryName = name_en || name_he || name || '';
+
+        if (code && !CATEGORY_CODE_RE.test(code)) {
+            return res.status(400).json({ error: 'Code must be 1-5 English letters' });
+        }
         const result = await pool.query(
             'UPDATE categories SET name = $1, name_he = $2, name_en = $3, name_th = $4, code = $5 WHERE id = $6 RETURNING *',
             [primaryName, name_he || null, name_en || null, name_th || null, code, id]
@@ -1875,11 +2283,44 @@ app.put('/assets/:id', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 const deleteItem = async (table, id, res) => {
-    try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); } 
+    try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); }
     catch (e) { res.status(400).json({ error: "Cannot delete: Item is in use." }); }
 };
-app.delete('/locations/:id', authenticateToken, requireAdmin, (req, res) => deleteItem('locations', req.params.id, res));
-app.delete('/categories/:id', authenticateToken, requireAdmin, (req, res) => deleteItem('categories', req.params.id, res));
+
+app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const id = req.params.id;
+    const companyId = req.user.company_id;
+    try {
+        // Nullify FK references scoped to this tenant to avoid Postgres 23503 violations
+        await Promise.all([
+            pool.query('UPDATE tasks  SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, companyId]),
+            pool.query('UPDATE assets SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, companyId]),
+        ]);
+        await pool.query('DELETE FROM locations WHERE id = $1 AND company_id = $2', [id, companyId]);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Delete location error:', e);
+        res.status(500).json({ message: 'Server error while deleting location.' });
+    }
+});
+
+app.delete('/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const id = req.params.id;
+    const companyId = req.user.company_id;
+    try {
+        await pool.query('DELETE FROM categories WHERE id = $1', [id]);
+        res.json({ success: true });
+    } catch (e) {
+        if (e.code === '23503') {
+            const assetRes = await pool.query('SELECT COUNT(*) FROM assets WHERE category_id = $1 AND company_id = $2', [id, companyId]);
+            const assets   = parseInt(assetRes.rows[0].count, 10);
+            const detail   = assets > 0 ? `${assets} asset${assets !== 1 ? 's' : ''}` : 'other records';
+            return res.status(400).json({ message: `Cannot delete: This category is currently assigned to ${detail}.` });
+        }
+        res.status(400).json({ message: 'Cannot delete: Item is in use.' });
+    }
+});
+
 app.delete('/assets/:id', authenticateToken, requireAdmin, (req, res) => deleteItem('assets', req.params.id, res));
 
 app.get('/tasks', authenticateToken, async (req, res) => {
@@ -2018,50 +2459,40 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         createdCount = tasksToInsert.length;
     }
     
-    // 🚀 Worker & manager notifications (LINE preferred, push fallback)
+    // 🚀 Worker notifications — all 3 channels simultaneously
     try {
-        const workerRes = await pool.query('SELECT device_token, preferred_language, line_user_id, parent_manager_id FROM users WHERE id = $1', [worker_id]);
+        const workerRes = await pool.query(
+            'SELECT device_token, preferred_language, line_user_id, parent_manager_id FROM users WHERE id = $1',
+            [worker_id]
+        );
         const workerData = workerRes.rows[0];
-        const workerLang = workerData?.preferred_language || 'he';
+        // Fetch the last inserted task id so we can pass full task object
+        const lastTaskRes = await pool.query(
+            'SELECT id, title, urgency, due_date FROM tasks WHERE worker_id = $1 ORDER BY id DESC LIMIT 1',
+            [worker_id]
+        );
+        const taskObj = lastTaskRes.rows[0] || { title, urgency, due_date: null };
+        await sendNotification(worker_id, ['email', 'line', 'push'], 'tasks_assigned', {
+            tasks: [taskObj], taskCount: 1
+        });
 
-        const lineTaskDict = {
-            he: `📋 משימה חדשה הוקצתה לך: "${title}"`,
-            en: `📋 New task assigned to you: "${title}"`,
-            th: `📋 คุณได้รับมอบหมายงานใหม่: "${title}"`
-        };
-
-        if (workerData?.line_user_id) {
-            await sendLineMessage(workerData.line_user_id, lineTaskDict[workerLang] || lineTaskDict['en']);
-        } else if (workerData?.device_token) {
-            const pushDict = {
-                he: { title: 'משימה חדשה! 📋', body: `הוקצתה לך משימה חדשה: ${title}` },
-                en: { title: 'New Task! 📋', body: `You have been assigned a new task: ${title}` },
-                th: { title: 'งานใหม่! 📋', body: `คุณได้รับมอบหมายงานใหม่: ${title}` }
-            };
-            await admin.messaging().send({
-                token: workerData.device_token,
-                notification: pushDict[workerLang],
-                webpush: { fcmOptions: { link: '/' } }
-            });
-            console.log(`🔔 Notification sent to worker in ${workerLang}!`);
-        }
-
-        // Also notify the worker's manager via LINE
+        // Also notify the worker's manager via LINE (informational only)
         if (workerData?.parent_manager_id) {
             const mgrRes = await pool.query('SELECT line_user_id, preferred_language FROM users WHERE id = $1', [workerData.parent_manager_id]);
             const mgrData = mgrRes.rows[0];
             if (mgrData?.line_user_id) {
-                const mgrLang = mgrData.preferred_language || 'he';
+                const mgrLang = mgrData.preferred_language || 'en';
                 const mgrLineDict = {
                     he: `📋 משימה חדשה נוצרה לעובד שלך: "${title}"`,
                     en: `📋 New task created for your employee: "${title}"`,
                     th: `📋 สร้างงานใหม่ให้พนักงานของคุณ: "${title}"`
                 };
-                await sendLineMessage(mgrData.line_user_id, mgrLineDict[mgrLang] || mgrLineDict['en']);
+                sendLineMessage(mgrData.line_user_id, mgrLineDict[mgrLang] || mgrLineDict.en)
+                    .catch(e => console.error('⚠️ Manager LINE notify failed:', e.message));
             }
         }
     } catch (err) {
-        console.error("⚠️ Failed to send notification:", err.message);
+        console.error("⚠️ Failed to send task notification:", err.message);
     }
 
     res.json({ message: isRecurring ? `Created ${createdCount} recurring tasks` : "Task created successfully" });
@@ -2162,26 +2593,21 @@ app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
             }
         }
 
+        // Notify each worker via all 3 channels with their assigned tasks
         try {
-            for (const worker_id in notificationsMap) {
+            for (const worker_id of Object.keys(notificationsMap)) {
                 const taskCount = notificationsMap[worker_id];
-                if (taskCount > 0) {
-                    const workerRes = await pool.query('SELECT device_token FROM users WHERE id = $1', [worker_id]);
-                    const workerToken = workerRes.rows[0]?.device_token;
-
-                    if (workerToken) {
-                        await admin.messaging().send({
-                            token: workerToken,
-                            notification: {
-                                title: 'ייבוא משימות הושלם! 🚀',
-                                body: `מנהל הקצה לך ${taskCount} משימות חדשות.`
-                            },
-                            webpush: { fcmOptions: { link: '/' } }
-                        });
-                    }
-                }
+                if (taskCount < 1) continue;
+                // Fetch the tasks just inserted for this worker (most recent N)
+                const taskRows = await pool.query(
+                    'SELECT id, title, urgency, due_date FROM tasks WHERE worker_id = $1 ORDER BY id DESC LIMIT $2',
+                    [worker_id, taskCount]
+                );
+                await sendNotification(parseInt(worker_id), ['email', 'line', 'push'], 'tasks_assigned', {
+                    tasks: taskRows.rows, taskCount
+                });
             }
-        } catch (err) { console.error("⚠️ Failed to send bulk notifications:", err.message); }
+        } catch (err) { console.error("⚠️ Failed to send bulk-excel notifications:", err.message); }
 
         res.json({ success: true, message: `הוכנסו בהצלחה ${insertedCount} משימות.` });
 
@@ -2725,6 +3151,391 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     }
 });
 
+// ─── Tasks — Excel Bulk Import ────────────────────────────────────────────────
+// Accepts rows from ConfigExcelPanel ({ rows, isDryRun, target_company_id }).
+// Dry-run returns { validCount } on success or { errors } on failure.
+// Commit generates all task instances (recurring expanded 1-year) and returns
+// { inserted, updated }.
+app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
+    if (!['BIG_BOSS', 'COMPANY_MANAGER', 'MANAGER'].includes(req.user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions for bulk task import.' });
+    }
+
+    const { rows, isDryRun, target_company_id } = req.body;
+    if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
+    const { insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
+    const callerId = req.user.id;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const errors    = [];
+        const validRows = [];
+
+        // ── Frequency mapping (EN / HE / TH) ────────────────────────────────
+        const FREQ_MAP = {
+            'one-time': 'one-time', 'one time': 'one-time', 'onetime': 'one-time',
+            'חד פעמי': 'one-time', 'ครั้งเดียว': 'one-time',
+            'daily': 'daily', 'יומי': 'daily', 'รายวัน': 'daily',
+            'weekly': 'weekly', 'שבועי': 'weekly', 'รายสัปดาห์': 'weekly',
+            'monthly': 'monthly', 'חודשי': 'monthly', 'รายเดือน': 'monthly',
+            'quarterly': 'quarterly', 'רבעוני': 'quarterly', 'รายไตรมาส': 'quarterly',
+            'yearly': 'yearly', 'annual': 'yearly', 'שנתי': 'yearly', 'ประจำปี': 'yearly',
+        };
+
+        // ── Helper: find a cell value by any of the provided header aliases ──
+        const get = (row, keys) => {
+            for (const k of keys) {
+                const found = Object.keys(row).find(rk => rk.trim().toLowerCase() === k.toLowerCase());
+                if (found !== undefined && row[found] !== '' && row[found] !== null && row[found] !== undefined) {
+                    return row[found].toString().trim();
+                }
+            }
+            return '';
+        };
+
+        // ── Pre-fetch company-scoped lookup tables ───────────────────────────
+        const cWhere  = insertCompanyId ? ' AND company_id = $1' : '';
+        const cParams = insertCompanyId ? [insertCompanyId] : [];
+
+        const [usersRes, locsRes, catsRes, assetsRes] = await Promise.all([
+            insertCompanyId
+                ? client.query(`SELECT id, full_name, full_name_en, full_name_he, full_name_th FROM users WHERE company_id = $1 AND role NOT IN ('BIG_BOSS')`, [insertCompanyId])
+                : client.query(`SELECT id, full_name, full_name_en, full_name_he, full_name_th FROM users WHERE role NOT IN ('BIG_BOSS')`),
+            client.query(`SELECT id, name, name_en, name_he, name_th FROM locations WHERE 1=1${cWhere}`, cParams),
+            client.query(`SELECT id, name, name_en, name_he, name_th FROM categories WHERE 1=1${cWhere}`, cParams),
+            client.query(`SELECT id, name, name_en, name_he, name_th, code, category_id FROM assets WHERE 1=1${cWhere}`, cParams),
+        ]);
+
+        // Build multi-lang lookup map: any name variant (lowercase) → row
+        const buildLangMap = (dbRows, fields) => {
+            const map = new Map();
+            for (const r of dbRows) {
+                for (const f of fields) {
+                    const v = r[f];
+                    if (v) map.set(v.trim().toLowerCase(), r);
+                }
+            }
+            return map;
+        };
+
+        const userMap  = buildLangMap(usersRes.rows,  ['full_name', 'full_name_en', 'full_name_he', 'full_name_th']);
+        const locMap   = buildLangMap(locsRes.rows,   ['name', 'name_en', 'name_he', 'name_th']);
+        const catMap   = buildLangMap(catsRes.rows,   ['name', 'name_en', 'name_he', 'name_th']);
+        const assetMap = buildLangMap(assetsRes.rows, ['name', 'name_en', 'name_he', 'name_th', 'code']);
+
+        // MANAGER scope: pre-fetch linked employee IDs
+        let managerEmployeeIds = null;
+        if (req.user.role === 'MANAGER') {
+            const empRes = await client.query(
+                'SELECT employee_id FROM employee_managers WHERE manager_id = $1', [callerId]
+            );
+            managerEmployeeIds = new Set(empRes.rows.map(r => r.employee_id));
+        }
+
+        // ── Validate each row ────────────────────────────────────────────────
+        for (let i = 0; i < rows.length; i++) {
+            const row       = rows[i];
+            const ri        = i + 1;
+            const rowErrors = [];
+
+            // Extract all columns (support both "header *" and bare header forms)
+            const empNameEn    = get(row, ['employee_name_en *', 'employee_name_en']);
+            const empNameHe    = get(row, ['employee_name_he (Optional)', 'employee_name_he']);
+            const empNameTh    = get(row, ['employee_name_th (Optional)', 'employee_name_th']);
+            const taskNameEn   = get(row, ['task_name_en *', 'task_name_en', 'Title', 'title']);
+            const locationRaw  = get(row, ['location *', 'location', 'Location']);
+            const frequencyRaw = get(row, ['frequency *', 'frequency', 'Frequency']);
+            const dateOrDays   = get(row, ['date_or_days *', 'date_or_days', 'Date or Days']);
+            const urgencyRaw   = get(row, ['urgency (Optional)', 'urgency', 'Urgency']);
+            const categoryRaw  = get(row, ['category (Optional)', 'category', 'Category']);
+            const assetRaw     = get(row, ['asset (Optional)', 'asset', 'Asset']);
+            const imageUrlRaw  = get(row, ['image_url (Optional)', 'image_url', 'Image URL']);
+            const notesRaw     = get(row, ['notes (Optional)', 'notes', 'Notes', 'description']);
+
+            // ── Mandatory: task name ────────────────────────────────────────
+            if (!taskNameEn) rowErrors.push(`Row ${ri}: 'task_name_en' is required.`);
+
+            // ── Mandatory: employee lookup (EN → HE → TH fallback) ──────────
+            let worker_id = null;
+            const empSearch = empNameEn || empNameHe || empNameTh;
+            if (!empSearch) {
+                rowErrors.push(`Row ${ri}: 'employee_name_en' is required.`);
+            } else {
+                const empRow = userMap.get(empSearch.toLowerCase());
+                if (!empRow) {
+                    rowErrors.push(`Row ${ri}: Employee '${empSearch}' not found in this company.`);
+                } else {
+                    worker_id = empRow.id;
+                    if (req.user.role === 'MANAGER' && managerEmployeeIds && !managerEmployeeIds.has(worker_id)) {
+                        rowErrors.push(`Row ${ri}: Employee '${empSearch}' is not assigned to your team.`);
+                    }
+                }
+            }
+
+            // ── Mandatory: location lookup (EN / HE / TH) ───────────────────
+            let location_id = null;
+            if (!locationRaw) {
+                rowErrors.push(`Row ${ri}: 'location' is required.`);
+            } else {
+                const locRow = locMap.get(locationRaw.toLowerCase());
+                if (!locRow) {
+                    rowErrors.push(`Row ${ri}: Location '${locationRaw}' not found.`);
+                } else {
+                    location_id = locRow.id;
+                }
+            }
+
+            // ── Mandatory: frequency ─────────────────────────────────────────
+            let frequency = null;
+            if (!frequencyRaw) {
+                rowErrors.push(`Row ${ri}: 'frequency' is required.`);
+            } else {
+                frequency = FREQ_MAP[frequencyRaw.trim().toLowerCase()];
+                if (!frequency) {
+                    rowErrors.push(`Row ${ri}: Unknown frequency '${frequencyRaw}'. Accepted: One-time, Daily, Weekly, Monthly, Quarterly, Yearly (EN/HE/TH).`);
+                }
+            }
+
+            // ── Mandatory: date_or_days — validated against frequency ────────
+            let parsedDate = null;   // for one-time
+            let recurrence = null;   // { type, selectedDays? | monthlyDate? | quarterlyDates? | yearlyDates? }
+
+            if (!dateOrDays && frequency) {
+                rowErrors.push(`Row ${ri}: 'date_or_days' is required.`);
+            } else if (frequency && dateOrDays) {
+                const val = dateOrDays.toString().trim();
+
+                if (frequency === 'one-time') {
+                    // Expect DD/MM/YYYY
+                    const m = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+                    if (!m) {
+                        rowErrors.push(`Row ${ri}: One-time requires a date in DD/MM/YYYY format (e.g. 25/06/2025).`);
+                    } else {
+                        const d = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+                        if (isNaN(d.getTime()) || d.getMonth() !== parseInt(m[2]) - 1) {
+                            rowErrors.push(`Row ${ri}: Invalid date '${val}'.`);
+                        } else {
+                            parsedDate = d;
+                        }
+                    }
+
+                } else if (frequency === 'daily') {
+                    // Expect comma-separated numbers 1–7 (1=Sun … 7=Sat)
+                    const parts = val.split(',').map(s => parseInt(s.trim()));
+                    if (!parts.length || parts.some(n => isNaN(n) || n < 1 || n > 7)) {
+                        rowErrors.push(`Row ${ri}: Daily requires comma-separated numbers 1–7 (1=Sun, 7=Sat). E.g. "1,2,3".`);
+                    } else {
+                        recurrence = { type: 'daily', selectedDays: parts.map(n => n - 1) };
+                    }
+
+                } else if (frequency === 'weekly') {
+                    // Expect a single number 1–7
+                    const n = parseInt(val);
+                    if (isNaN(n) || n < 1 || n > 7 || val.includes(',')) {
+                        rowErrors.push(`Row ${ri}: Weekly requires a single number 1–7 (day of week, 1=Sun).`);
+                    } else {
+                        recurrence = { type: 'weekly', selectedDays: [n - 1] };
+                    }
+
+                } else if (frequency === 'monthly') {
+                    // Expect a single number 1–30
+                    const n = parseInt(val);
+                    if (isNaN(n) || n < 1 || n > 30 || val.includes(',')) {
+                        rowErrors.push(`Row ${ri}: Monthly requires a single day number 1–30 (e.g. "15").`);
+                    } else {
+                        recurrence = { type: 'monthly', monthlyDate: n };
+                    }
+
+                } else if (frequency === 'quarterly') {
+                    // Expect exactly 4 DD/MM dates, one from each quarter
+                    const parts = val.split(',').map(s => s.trim());
+                    if (parts.length !== 4) {
+                        rowErrors.push(`Row ${ri}: Quarterly requires exactly 4 dates in DD/MM format, one per quarter (e.g. "01/01,01/04,01/07,01/10").`);
+                    } else {
+                        let parseOk = true;
+                        const parsed = [];
+                        for (const p of parts) {
+                            const m = p.match(/^(\d{1,2})\/(\d{1,2})$/);
+                            if (!m) { parseOk = false; break; }
+                            const day = parseInt(m[1]), mon = parseInt(m[2]);
+                            if (day < 1 || day > 31 || mon < 1 || mon > 12) { parseOk = false; break; }
+                            parsed.push({ str: `${String(day).padStart(2,'0')}/${String(mon).padStart(2,'0')}`, mon });
+                        }
+                        if (!parseOk) {
+                            rowErrors.push(`Row ${ri}: Quarterly dates must be in DD/MM format (e.g. "01/01,01/04,01/07,01/10").`);
+                        } else {
+                            const quarters = parsed.map(p => p.mon <= 3 ? 1 : p.mon <= 6 ? 2 : p.mon <= 9 ? 3 : 4);
+                            if (new Set(quarters).size !== 4) {
+                                rowErrors.push(`Row ${ri}: Each quarterly date must fall in a different quarter (Q1: Jan–Mar, Q2: Apr–Jun, Q3: Jul–Sep, Q4: Oct–Dec).`);
+                            } else {
+                                recurrence = { type: 'quarterly', quarterlyDates: parsed.map(p => p.str) };
+                            }
+                        }
+                    }
+
+                } else if (frequency === 'yearly') {
+                    // Expect a single DD/MM date
+                    const m = val.match(/^(\d{1,2})\/(\d{1,2})$/);
+                    if (!m) {
+                        rowErrors.push(`Row ${ri}: Yearly requires a date in DD/MM format (e.g. "15/06").`);
+                    } else {
+                        const day = parseInt(m[1]), mon = parseInt(m[2]);
+                        recurrence = { type: 'yearly', yearlyDates: [`${String(day).padStart(2,'0')}/${String(mon).padStart(2,'0')}`] };
+                    }
+                }
+            }
+
+            // ── Optional: urgency (EN / HE / TH) ────────────────────────────
+            const URGENT_VALS = new Set(['urgent', 'high', 'דחוף', 'גבוהה', 'ด่วน', 'สูง']);
+            const urgency = urgencyRaw && URGENT_VALS.has(urgencyRaw.trim().toLowerCase()) ? 'High' : 'Normal';
+
+            // ── Optional: category lookup (EN / HE / TH) ────────────────────
+            let category_id = null;
+            if (categoryRaw) {
+                const catRow = catMap.get(categoryRaw.toLowerCase());
+                if (!catRow) {
+                    rowErrors.push(`Row ${ri}: Category '${categoryRaw}' not found.`);
+                } else {
+                    category_id = catRow.id;
+                }
+            }
+
+            // ── Optional: asset lookup (EN / HE / TH / code) ────────────────
+            let asset_id = null;
+            if (assetRaw) {
+                const assetRow = assetMap.get(assetRaw.toLowerCase());
+                if (!assetRow) {
+                    rowErrors.push(`Row ${ri}: Asset '${assetRaw}' not found.`);
+                } else {
+                    asset_id = assetRow.id;
+                    if (category_id && assetRow.category_id && String(assetRow.category_id) !== String(category_id)) {
+                        rowErrors.push(`Row ${ri}: Asset '${assetRaw}' does not belong to category '${categoryRaw}'.`);
+                    }
+                }
+            }
+
+            // ── Optional: image URL ──────────────────────────────────────────
+            const URL_RE = /^https?:\/\/.+/i;
+            const images = [];
+            if (imageUrlRaw) {
+                if (!URL_RE.test(imageUrlRaw)) {
+                    rowErrors.push(`Row ${ri}: image_url must be a valid URL starting with http:// or https://.`);
+                } else {
+                    images.push(imageUrlRaw);
+                }
+            }
+
+            if (rowErrors.length > 0) {
+                errors.push(...rowErrors);
+            } else {
+                validRows.push({
+                    title:       taskNameEn,
+                    description: notesRaw || '',
+                    urgency,
+                    worker_id,
+                    location_id,
+                    asset_id,
+                    images,
+                    company_id:  insertCompanyId,
+                    created_by:  callerId,
+                    // scheduling
+                    frequency,
+                    parsedDate,   // Date obj for one-time
+                    recurrence,   // { type, ... } for recurring
+                });
+            }
+        }
+
+        // ── Dry-run response ─────────────────────────────────────────────────
+        if (isDryRun) {
+            await client.query('ROLLBACK');
+            if (errors.length > 0) {
+                return res.json({ errors, message: 'Found blocking errors.' });
+            }
+            return res.json({ validCount: validRows.length, message: `${validRows.length} tasks ready to import.` });
+        }
+
+        // ── Commit: stop on any errors ───────────────────────────────────────
+        if (errors.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Please fix errors before importing.', details: errors });
+        }
+
+        // ── Generate task instances ──────────────────────────────────────────
+        let insertedCount = 0;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const yearEnd = new Date(today);
+        yearEnd.setFullYear(yearEnd.getFullYear() + 1);
+
+        for (const t of validRows) {
+            if (t.frequency === 'one-time') {
+                await client.query(
+                    `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
+                     VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10)`,
+                    [t.title, t.description, t.urgency, t.parsedDate, t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
+                );
+                insertedCount++;
+            } else {
+                const rec = t.recurrence;
+                for (let d = new Date(today); d <= yearEnd; d.setDate(d.getDate() + 1)) {
+                    let match = false;
+                    if (rec.type === 'daily' || rec.type === 'weekly') {
+                        match = rec.selectedDays.includes(d.getDay());
+                    } else if (rec.type === 'monthly') {
+                        match = d.getDate() === rec.monthlyDate;
+                    } else if (rec.type === 'quarterly') {
+                        const s = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+                        match = rec.quarterlyDates.includes(s);
+                    } else if (rec.type === 'yearly') {
+                        const s = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+                        match = rec.yearlyDates.includes(s);
+                    }
+                    if (match) {
+                        await client.query(
+                            `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
+                             VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10)`,
+                            [t.title, t.description, t.urgency, new Date(d), t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
+                        );
+                        insertedCount++;
+                    }
+                }
+            }
+        }
+
+        await client.query('COMMIT');
+
+        // Notify each worker via all 3 channels (after commit so tasks are queryable)
+        try {
+            const workerIds = [...new Set(validRows.map(r => r.worker_id))];
+            for (const wid of workerIds) {
+                const workerTaskCount = validRows.filter(r => r.worker_id === wid).length;
+                const taskRows = await pool.query(
+                    'SELECT id, title, urgency, due_date FROM tasks WHERE worker_id = $1 AND created_by = $2 ORDER BY id DESC LIMIT $3',
+                    [wid, callerId, workerTaskCount]
+                );
+                await sendNotification(wid, ['email', 'line', 'push'], 'tasks_assigned', {
+                    tasks: taskRows.rows, taskCount: workerTaskCount
+                });
+            }
+        } catch (notifErr) {
+            console.error('⚠️ bulk-import notifications failed (tasks saved OK):', notifErr.message);
+        }
+
+        res.json({ inserted: insertedCount, updated: 0, message: `Successfully created ${insertedCount} task instance(s).` });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('POST /tasks/bulk-import error:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 app.get('/api/upgrade-db', async (req, res) => {
     try {
         await pool.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS code VARCHAR(3);`);
@@ -2861,8 +3672,54 @@ app.post('/api/reset-password', async (req, res) => {
     }
 });
 
+// ==========================================
+// ☀️ CRON: Morning Briefing — 09:00 Asia/Bangkok
+//    Target: EMPLOYEEs only | Channels: LINE + In-App Push (NO email)
+// ==========================================
+const runMorningBriefing = async () => {
+    console.log('⏰ [CRON] Running Morning Briefing (09:00 Bangkok)...');
+    try {
+        const empRes = await pool.query(
+            "SELECT id, full_name, line_user_id, device_token, preferred_language FROM users WHERE role = 'EMPLOYEE'"
+        );
+        const pendingRes = await pool.query(
+            "SELECT id, title, urgency, due_date, worker_id FROM tasks WHERE DATE(due_date) = CURRENT_DATE AND status = 'PENDING'"
+        );
+        const pendingToday = pendingRes.rows;
+
+        for (const emp of empRes.rows) {
+            const lang = emp.preferred_language || 'en';
+            const T = NOTIF_T.morning_briefing[lang] || NOTIF_T.morning_briefing.en;
+            const empTasks = pendingToday.filter(t => t.worker_id === emp.id);
+            const sends = [];
+
+            if (emp.line_user_id) {
+                const msg = empTasks.length === 0
+                    ? T.none_line(emp.full_name)
+                    : T.line(emp.full_name, empTasks.length, buildTaskListLine(empTasks, lang));
+                sends.push(sendLineMessage(emp.line_user_id, msg).catch(e => console.error(`⚠️ LINE morning briefing (${emp.id}):`, e.message)));
+            }
+            if (emp.device_token) {
+                const title = empTasks.length === 0 ? T.none_push_t : T.push_t;
+                const body  = empTasks.length === 0 ? T.none_push_b() : T.push_b(empTasks.length);
+                sends.push(sendFcmPush(emp.device_token, title, body, APP_LINK));
+            }
+            if (sends.length) await Promise.all(sends);
+        }
+        console.log(`✅ [CRON] Morning Briefing dispatched to ${empRes.rows.length} employees.`);
+    } catch (err) {
+        console.error('❌ [CRON] Morning Briefing failed:', err.message);
+    }
+};
+
+// Morning Briefing: 09:00 Asia/Bangkok — LINE + Push only, NO email
+cron.schedule('0 9 * * *', runMorningBriefing, { scheduled: true, timezone: 'Asia/Bangkok' });
+
+// ==========================================
+// 📊 CRON: End-of-Day Report — 16:00 Asia/Bangkok
+// ==========================================
 const runDailyReport = async (manager_id = null) => {
-    console.log(`⏰ Running Daily Task Check${manager_id ? ` for manager ${manager_id}'s team` : ' for EVERYONE'}...`);
+    console.log(`⏰ [EOD] Running End-of-Day Report${manager_id ? ` for manager ${manager_id}` : ' for EVERYONE'}...`);
 
     const dict = {
         he: {
@@ -2952,10 +3809,14 @@ const runDailyReport = async (manager_id = null) => {
     };
 
     try {
-        const usersRes = await pool.query("SELECT id, full_name, email, role, parent_manager_id, device_token, preferred_language, line_user_id FROM users");
+        const usersRes = await pool.query(
+            "SELECT id, full_name, email, role, parent_manager_id, device_token, preferred_language, line_user_id, company_id FROM users"
+        );
         const allUsers = usersRes.rows;
         const tasksRes = await pool.query("SELECT * FROM tasks WHERE DATE(due_date) = CURRENT_DATE");
         const todayTasks = tasksRes.rows;
+        const companiesRes = await pool.query("SELECT id, COALESCE(name_en, name, 'Company') AS display_name FROM companies");
+        const companyMap = Object.fromEntries(companiesRes.rows.map(c => [c.id, c.display_name]));
 
         // הפונקציה המקורית שלך לעטיפת המייל
         const getEmailTemplate = (langDict, content) => `
@@ -3028,134 +3889,167 @@ const runDailyReport = async (manager_id = null) => {
                 </div>
             `);
 
+            // ── EMPLOYEE: All 3 channels simultaneously ────────────────────
+            const empSends = [];
+            if (emp.email) {
+                empSends.push(transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: emp.email, subject: emailSubj, html: htmlBody })
+                    .catch(e => console.error(`❌ EOD email employee ${emp.email}:`, e.message)));
+            }
             if (emp.line_user_id) {
-                // Build detailed task list for LINE message
                 let lineMsg = `${pushTitle}\n${pushBody}`;
                 if (!isNone) {
                     lineMsg += `\n\n--- ${l.th_task} ---`;
                     wTasks.forEach(t => {
-                        const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
-                        lineMsg += `\n• ${t.title}: ${isDone ? l.status_done : l.status_not}`;
+                        const done = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                        lineMsg += `\n• ${t.title}: ${done ? l.status_done : l.status_not}`;
                     });
                     lineMsg += `\n\n${completed.length} ${l.out_of} ${wTasks.length}`;
                 }
-                try { await sendLineMessage(emp.line_user_id, lineMsg); }
-                catch (e) { console.error(`❌ LINE send failed for employee ${emp.email}:`, e.message); }
-            } else if (emp.email) {
-                try { await transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: emp.email, subject: emailSubj, html: htmlBody }); }
-                catch (e) { console.error(`❌ Email send failed for employee ${emp.email}:`, e.message); }
+                empSends.push(sendLineMessage(emp.line_user_id, lineMsg)
+                    .catch(e => console.error(`❌ EOD LINE employee ${emp.email}:`, e.message)));
             }
-            if (emp.device_token) admin.messaging().send({ token: emp.device_token, notification: { title: pushTitle, body: pushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.error("FCM push error:", e.message));
+            if (emp.device_token) {
+                empSends.push(sendFcmPush(emp.device_token, pushTitle, pushBody, APP_LINK));
+            }
+            await Promise.all(empSends);
         }
 
-        // ==========================================
-        // 2. שליחת דוחות מלאים למנהלים (כולל מי שאין לו משימות)
-        // ==========================================
-        const leaders = allUsers.filter(u => (u.role === 'MANAGER' || u.role === 'BIG_BOSS') && (!manager_id || u.id === manager_id));
-        for (const leader of leaders) {
-            const relevantEmps = leader.role === 'BIG_BOSS' 
-                ? employees 
-                : employees.filter(e => e.parent_manager_id === leader.id);
+        // Shared helper: build employee sub-block HTML for manager reports
+        const buildEmpBlock = (emp, wTasks, l) => {
+            const done = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+            const isNone = wTasks.length === 0;
+            const isPerfect = !isNone && done.length === wTasks.length;
+            const icon = isNone ? '🏖️' : (isPerfect ? '✅' : '❌');
+            const statusColor = isNone ? '#6b7280' : (isPerfect ? '#166534' : '#991b1b');
+            const bgColor = isNone ? '#f9fafb' : (isPerfect ? '#f0fdf4' : '#fef2f2');
+            const badge = isNone ? l.status_none : `${done.length} ${l.out_of} ${wTasks.length}`;
+            let html = `<div style="margin-bottom:10px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
+                <div style="background:${bgColor};padding:8px 10px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-weight:bold;font-size:13px;color:${statusColor};">${icon} ${emp.full_name}</span>
+                    <span style="font-size:11px;color:#6b7280;background:#fff;padding:2px 6px;border-radius:10px;border:1px solid #ddd;">${badge}</span>
+                </div>`;
+            if (!isNone) {
+                html += `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <tr style="background:#f9fafb;color:#4b5563;text-align:${l.align};">
+                        <th style="padding:5px 6px;border-bottom:1px solid #eee;">${l.th_task}</th>
+                        <th style="padding:5px 6px;border-bottom:1px solid #eee;">${l.th_status}</th>
+                    </tr>`;
+                wTasks.forEach(t => {
+                    const d = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                    html += `<tr>
+                        <td style="padding:5px 6px;border-bottom:1px solid #eee;">${t.title}</td>
+                        <td style="padding:5px 6px;border-bottom:1px solid #eee;">
+                            <span style="background:${d ? '#dcfce7' : '#fee2e2'};color:${d ? '#166534' : '#991b1b'};padding:2px 5px;border-radius:4px;font-size:10px;">${d ? l.status_done : l.status_not}</span>
+                        </td></tr>`;
+                });
+                html += `</table>`;
+            }
+            return html + `</div>`;
+        };
 
-            if (relevantEmps.length === 0) continue;
-
-            const l = dict[leader.preferred_language] || dict['he'];
-            let allTeamPerfect = true;
-            let allTeamNone = true;
-
-            let leaderContent = `<div>`;
-
-            relevantEmps.forEach(emp => {
+        // ── 2. MANAGERs → Email Only ───────────────────────────────────────
+        const managers = allUsers.filter(u => u.role === 'MANAGER' && (!manager_id || u.id === manager_id));
+        for (const mgr of managers) {
+            if (!mgr.email) continue;
+            const mgrEmps = employees.filter(e => e.parent_manager_id === mgr.id);
+            if (mgrEmps.length === 0) continue;
+            const l = dict[mgr.preferred_language] || dict['en'];
+            let allPerfect = true, allNone = true;
+            let content = '<div>';
+            mgrEmps.forEach(emp => {
                 const wTasks = todayTasks.filter(t => t.worker_id === emp.id);
-                const completed = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
-                
-                const isEmpNone = wTasks.length === 0;
-                const isEmpPerfect = !isEmpNone && (completed.length === wTasks.length);
-
-                if (!isEmpNone) allTeamNone = false;
-                if (!isEmpPerfect && !isEmpNone) allTeamPerfect = false;
-
-                let empStatusColor = isEmpNone ? '#6b7280' : (isEmpPerfect ? '#166534' : '#991b1b');
-                let empBgColor = isEmpNone ? '#f9fafb' : (isEmpPerfect ? '#f0fdf4' : '#fef2f2');
-                let empIcon = isEmpNone ? '🏖️' : (isEmpPerfect ? '🌟' : '⚠️');
-                let empBadge = isEmpNone ? l.status_none : `${completed.length} ${l.out_of} ${wTasks.length}`;
-
-                leaderContent += `
-                    <div style="margin-bottom:12px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden;">
-                        <div style="background:${empBgColor}; padding:8px 10px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-weight:bold; font-size:14px; color:${empStatusColor};">${empIcon} ${emp.full_name}</span>
-                            <span style="font-size:11px; color:#6b7280; background:#fff; padding:2px 6px; border-radius:10px; border:1px solid #ddd;">${empBadge}</span>
-                        </div>`;
-                
-                if (!isEmpNone) {
-                    leaderContent += `
-                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
-                            <tr style="background:#f9fafb; text-align:${l.align}; color:#4b5563;">
-                                <th style="padding:6px; border-bottom:1px solid #eee;">${l.th_task}</th>
-                                <th style="padding:6px; border-bottom:1px solid #eee;">${l.th_status}</th>
-                            </tr>
-                    `;
-
-                    wTasks.forEach(t => {
-                        const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
-                        leaderContent += `
-                            <tr>
-                                <td style="padding:6px; border-bottom:1px solid #eee;">${t.title}</td>
-                                <td style="padding:6px; border-bottom:1px solid #eee;">
-                                    <span style="background:${isDone ? '#dcfce7' : '#fee2e2'}; color:${isDone ? '#166534' : '#991b1b'}; padding:2px 4px; border-radius:4px; white-space:nowrap; font-size:10px;">
-                                        ${isDone ? l.status_done : l.status_not}
-                                    </span>
-                                </td>
-                            </tr>
-                        `;
-                    });
-                    leaderContent += `</table>`;
-                }
-                leaderContent += `</div>`;
+                const done = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+                if (wTasks.length > 0) allNone = false;
+                if (wTasks.length > 0 && done.length < wTasks.length) allPerfect = false;
+                content += buildEmpBlock(emp, wTasks, l);
             });
-
-            leaderContent += `</div>`;
-            const leaderHtml = getEmailTemplate(l, leaderContent);
-
-            let lSubj = allTeamNone ? l.m_none_subj : (allTeamPerfect ? l.m_perf_subj : l.m_pend_subj);
-            let lPushTitle = allTeamNone ? l.push_m_none_title : (allTeamPerfect ? l.push_m_perf_title : l.push_m_pend_title);
-            let lPushBody = allTeamNone ? l.push_m_none_body : (allTeamPerfect ? l.push_m_perf_body : l.push_m_pend_body);
-
-            // Build detailed plain-text report for LINE (HTML not supported in LINE)
-            let lineReport = `${lPushTitle}\n${lPushBody}\n`;
-            relevantEmps.forEach(emp => {
-                const empTasks = todayTasks.filter(t => t.worker_id === emp.id);
-                const empDone = empTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
-                const empIcon = empTasks.length === 0 ? '🏖️' : (empDone.length === empTasks.length ? '🌟' : '⚠️');
-                lineReport += `\n${empIcon} ${emp.full_name} (${empDone.length}/${empTasks.length})`;
-                if (empTasks.length === 0) {
-                    lineReport += `\n  ${l.status_none}`;
-                } else {
-                    empTasks.forEach(t => {
-                        const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
-                        lineReport += `\n  • ${t.title}: ${isDone ? l.status_done : l.status_not}`;
-                    });
-                }
-            });
-
-            // Send via LINE if available
-            if (leader.line_user_id) {
-                try { await sendLineMessage(leader.line_user_id, lineReport); }
-                catch (e) { console.error(`❌ LINE send failed for leader ${leader.email}:`, e.message); }
-            }
-            // Always send full detailed email to manager/admin
-            if (leader.email) {
-                try { await transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: leader.email, subject: lSubj, html: leaderHtml }); }
-                catch (e) { console.error(`❌ Email send failed for leader ${leader.email}:`, e.message); }
-            }
-            if (leader.device_token) admin.messaging().send({ token: leader.device_token, notification: { title: lPushTitle, body: lPushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.error("FCM push error:", e.message));
+            content += '</div>';
+            const subj = allNone ? l.m_none_subj : (allPerfect ? l.m_perf_subj : l.m_pend_subj);
+            transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: mgr.email, subject: subj, html: getEmailTemplate(l, content) })
+                .catch(e => console.error(`❌ EOD email MANAGER ${mgr.email}:`, e.message));
         }
-        console.log("✅ [CRON] Daily Check completed for everyone.");
-    } catch (error) { console.error("❌ [CRON] Failed:", error); }
+
+        // ── 3. COMPANY_MANAGERs → Email Only (per-company grouping) ────────
+        if (!manager_id) {
+            const companyManagers = allUsers.filter(u => u.role === 'COMPANY_MANAGER');
+            for (const cm of companyManagers) {
+                if (!cm.email || !cm.company_id) continue;
+                const cmEmps = employees.filter(e => e.company_id === cm.company_id);
+                if (cmEmps.length === 0) continue;
+                const l = dict[cm.preferred_language] || dict['en'];
+                const coName = companyMap[cm.company_id] || 'Company';
+                let content = `<div><h3 style="color:#714B67;margin:0 0 12px 0;">${coName} — ${l.m_title}</h3>`;
+                let allPerfect = true, allNone = true;
+                cmEmps.forEach(emp => {
+                    const wTasks = todayTasks.filter(t => t.worker_id === emp.id);
+                    const done = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+                    if (wTasks.length > 0) allNone = false;
+                    if (wTasks.length > 0 && done.length < wTasks.length) allPerfect = false;
+                    content += buildEmpBlock(emp, wTasks, l);
+                });
+                content += '</div>';
+                const subj = allNone ? l.m_none_subj : (allPerfect ? l.m_perf_subj : l.m_pend_subj);
+                transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: cm.email, subject: subj, html: getEmailTemplate(l, content) })
+                    .catch(e => console.error(`❌ EOD email COMPANY_MANAGER ${cm.email}:`, e.message));
+            }
+        }
+
+        // ── 4. BIG_BOSS → Email Only (Master: Company → Manager → Employee → Tasks) ──
+        if (!manager_id) {
+            const bigBosses = allUsers.filter(u => u.role === 'BIG_BOSS');
+            for (const boss of bigBosses) {
+                if (!boss.email) continue;
+                const l = dict[boss.preferred_language] || dict['en'];
+
+                // Group employees by company_id
+                const companiesWithEmps = {};
+                employees.forEach(emp => {
+                    const cid = emp.company_id || 0;
+                    if (!companiesWithEmps[cid]) companiesWithEmps[cid] = [];
+                    companiesWithEmps[cid].push(emp);
+                });
+
+                let masterContent = `<div><h2 style="color:#714B67;margin:0 0 16px 0;">📊 ${l.m_title}</h2>`;
+                let grandPerfect = true, grandNone = true;
+
+                for (const [cid, coEmps] of Object.entries(companiesWithEmps)) {
+                    const coName = companyMap[parseInt(cid)] || `Company #${cid}`;
+                    let coAllPerfect = true, coAllNone = true;
+
+                    // Company header + employee blocks
+                    let coContent = '';
+                    coEmps.forEach(emp => {
+                        const wTasks = todayTasks.filter(t => t.worker_id === emp.id);
+                        const done = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+                        if (wTasks.length > 0) coAllNone = false;
+                        if (wTasks.length > 0 && done.length < wTasks.length) coAllPerfect = false;
+                        if (wTasks.length > 0) grandNone = false;
+                        if (wTasks.length > 0 && done.length < wTasks.length) grandPerfect = false;
+                        coContent += buildEmpBlock(emp, wTasks, l);
+                    });
+
+                    const coIcon = coAllNone ? '🏖️' : (coAllPerfect ? '✅' : '❌');
+                    masterContent += `<div style="margin-bottom:20px;border:2px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+                        <div style="background:#714B67;padding:10px 14px;">
+                            <span style="color:#fff;font-weight:bold;font-size:14px;">${coIcon} ${coName}</span>
+                        </div>
+                        <div style="padding:10px;">${coContent}</div>
+                    </div>`;
+                }
+                masterContent += '</div>';
+
+                const subj = grandNone ? l.m_none_subj : (grandPerfect ? l.m_perf_subj : l.m_pend_subj);
+                transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: boss.email, subject: `[Master] ${subj}`, html: getEmailTemplate(l, masterContent) })
+                    .catch(e => console.error(`❌ EOD email BIG_BOSS ${boss.email}:`, e.message));
+            }
+        }
+
+        console.log("✅ [EOD] Daily Report completed for everyone.");
+    } catch (error) { console.error("❌ [EOD] runDailyReport failed:", error); }
 };
 
-// 1. Automatic daily run at 15:00 Asia/Bangkok
-cron.schedule('0 15 * * *', runDailyReport, { scheduled: true, timezone: "Asia/Bangkok" });
+// EOD Report: 16:00 Asia/Bangkok — Email only for leaders, All 3 channels for employees
+cron.schedule('0 16 * * *', runDailyReport, { scheduled: true, timezone: 'Asia/Bangkok' });
 
 // 2. POST /api/trigger-daily-reports — manual trigger with optional manager_id filter
 app.post('/api/trigger-daily-reports', async (req, res) => {
@@ -3561,13 +4455,19 @@ app.put('/companies/:id', authenticateToken, async (req, res) => {
 
 // Helper: resolve the area_id + company_id that every inserted row must carry,
 // based on the authenticated caller.  Enforces company-scoping for non-BIG_BOSS roles.
-async function resolveCallerScope(reqUser) {
+// For BIG_BOSS acting on a tenant workspace, pass the validated targetCompanyId.
+async function resolveCallerScope(reqUser, targetCompanyId = null) {
     const { role, id, area_id } = reqUser;
-    // CRITICAL: always pull company_id from the JWT, never from the request body
+    // CRITICAL: always pull company_id from the JWT, never from the request body —
+    // EXCEPT for BIG_BOSS who may act on behalf of a specific tenant company.
     let insertCompanyId = reqUser.company_id ?? null;
     let insertAreaId    = area_id ?? null;
 
-    if (role === 'MANAGER') {
+    if (role === 'BIG_BOSS' && targetCompanyId) {
+        // BIG_BOSS is acting on behalf of a tenant — scope inserts to that company
+        insertCompanyId = targetCompanyId;
+        insertAreaId    = null;
+    } else if (role === 'MANAGER') {
         insertAreaId = id;                         // MANAGER's area = their own id
         if (!insertCompanyId) {
             const r = await pool.query('SELECT company_id FROM users WHERE id = $1', [id]);
@@ -3589,7 +4489,9 @@ app.get('/locations/export', authenticateToken, requireAdmin, async (req, res) =
             : ALLOWED;
         if (!requested.length) return res.status(400).json({ error: 'No valid fields requested' });
 
-        const cols = requested.map(f => `locations.${f}`).join(', ');
+        const cols = requested.map(f =>
+            f === 'address' ? `coordinates::jsonb->>'link' AS address` : `locations.${f}`
+        ).join(', ');
         let query = `SELECT ${cols} FROM locations WHERE 1=1`;
         const params = [];
         let pi = 1;
@@ -3609,10 +4511,11 @@ app.get('/locations/export', authenticateToken, requireAdmin, async (req, res) =
 });
 
 app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
-    const { rows, isDryRun } = req.body;
+    const { rows, isDryRun, target_company_id } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
 
-    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
     const callerId = req.user.id;
     const client = await pool.connect();
     try {
@@ -3620,19 +4523,42 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
         const errors = [];
         const validRows = [];
 
+        const GMAPS_RE = /google\.com\/maps|maps\.app\.goo\.gl/i;
+        const URL_RE   = /^https?:\/\/.+/i;
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const ri  = i + 1;
-            const name_en = (row.name_en || row['Name (EN)'] || '').toString().trim();
-            const name_he = (row.name_he || row['שם בעברית']  || '').toString().trim();
-            const name_th = (row.name_th || row['ชื่อ (TH)']  || '').toString().trim();
+            const name_en = (row.name_en || row['Name (EN)'] || row['name_en *'] || '').toString().trim();
+            const name_he = (row.name_he || row['שם בעברית']  || row['name_he (Optional)'] || '').toString().trim();
+            const name_th = (row.name_th || row['ชื่อ (TH)']  || row['name_th (Optional)'] || '').toString().trim();
             const primaryName = name_en || name_he || name_th;
-            const code    = (row.code    || row['Code']    || '').toString().trim() || null;
-            const address = (row.address || row['Address'] || '').toString().trim() || null;
-            const rowId   = row.id ? parseInt(row.id, 10) : null;
+            // code is auto-generated — ignore any code column supplied by the file
+            const mapUrl   = (row.address || row['Address'] || row['address (Optional)'] || '').toString().trim() || null;
+            const imageUrl = (row.image_url || row['image_url (Optional)'] || '').toString().trim() || null;
+            const rowId    = row.id ? parseInt(row.id, 10) : null;
 
             if (!primaryName) { errors.push(`Row ${ri}: at least one name field is required`); continue; }
-            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, code, address });
+            if (mapUrl && !GMAPS_RE.test(mapUrl)) {
+                errors.push(`Row ${ri}: address must be a valid Google Maps URL (google.com/maps or maps.app.goo.gl)`);
+                continue;
+            }
+            if (imageUrl && !URL_RE.test(imageUrl)) {
+                errors.push(`Row ${ri}: image_url must be a valid URL starting with http:// or https://`);
+                continue;
+            }
+            // Duplicate-name check (new rows only): block commit-time unique-constraint failures early
+            if (!rowId) {
+                const dupQ  = insertCompanyId
+                    ? 'SELECT id FROM locations WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id=$2'
+                    : 'SELECT id FROM locations WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id IS NULL';
+                const dupP  = insertCompanyId ? [primaryName, insertCompanyId] : [primaryName];
+                const dupR  = await client.query(dupQ, dupP);
+                if (dupR.rows.length > 0) {
+                    errors.push(`Row ${ri}: Location '${primaryName}' already exists in your company`);
+                    continue;
+                }
+            }
+            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, mapUrl, imageUrl });
         }
 
         if (errors.length > 0 || isDryRun) {
@@ -3652,22 +4578,24 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
                     }
                 }
                 await client.query(
-                    'UPDATE locations SET name=$1, name_he=$2, name_en=$3, name_th=$4, code=COALESCE($5,code), address=$6 WHERE id=$7',
-                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.code, vr.address, vr.rowId]
+                    'UPDATE locations SET name=$1, name_he=$2, name_en=$3, name_th=$4, coordinates=COALESCE($5,coordinates), image_url=COALESCE($6,image_url) WHERE id=$7',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.mapUrl !== null ? JSON.stringify({ link: vr.mapUrl }) : null, vr.imageUrl, vr.rowId]
                 );
                 updated++;
             } else {
-                // Auto-generate LOC-XXXX code when none provided
-                let finalCode = vr.code;
-                if (!finalCode) {
-                    const ex = await client.query("SELECT code FROM locations WHERE code LIKE 'LOC-%'");
-                    let max = 0;
-                    ex.rows.forEach(r => { const n = parseInt((r.code || '').split('-')[1]); if (!isNaN(n) && n > max) max = n; });
-                    finalCode = `LOC-${String(max + 1).padStart(4, '0')}`;
-                }
+                // Auto-generate LOC-XXXX code, scoped to the caller's company
+                const codeQ  = insertCompanyId
+                    ? "SELECT code FROM locations WHERE code LIKE 'LOC-%' AND company_id = $1"
+                    : "SELECT code FROM locations WHERE code LIKE 'LOC-%'";
+                const codeP  = insertCompanyId ? [insertCompanyId] : [];
+                const ex     = await client.query(codeQ, codeP);
+                let max = 0;
+                ex.rows.forEach(r => { const n = parseInt((r.code || '').split('-')[1]); if (!isNaN(n) && n > max) max = n; });
+                const finalCode  = `LOC-${String(max + 1).padStart(4, '0')}`;
+                const coordValue = vr.mapUrl ? JSON.stringify({ link: vr.mapUrl }) : null;
                 await client.query(
-                    'INSERT INTO locations (name, name_he, name_en, name_th, code, address, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, finalCode, vr.address, callerId, insertAreaId, insertCompanyId]
+                    'INSERT INTO locations (name, name_he, name_en, name_th, code, coordinates, image_url, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, finalCode, coordValue, vr.imageUrl, callerId, insertAreaId, insertCompanyId]
                 );
                 inserted++;
             }
@@ -3712,10 +4640,11 @@ app.get('/categories/export', authenticateToken, requireAdmin, async (req, res) 
 });
 
 app.post('/categories/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
-    const { rows, isDryRun } = req.body;
+    const { rows, isDryRun, target_company_id } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
 
-    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
     const callerId = req.user.id;
     const client = await pool.connect();
     try {
@@ -3726,14 +4655,29 @@ app.post('/categories/bulk-import', authenticateToken, requireAdmin, async (req,
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const ri  = i + 1;
-            const name_en = (row.name_en || row['Name (EN)'] || '').toString().trim();
-            const name_he = (row.name_he || row['שם בעברית']  || '').toString().trim();
-            const name_th = (row.name_th || row['ชื่อ (TH)']  || '').toString().trim();
+            const name_en = (row.name_en || row['Name (EN)'] || row['name_en *'] || '').toString().trim();
+            const name_he = (row.name_he || row['שם בעברית']  || row['name_he (Optional)'] || '').toString().trim();
+            const name_th = (row.name_th || row['ชื่อ (TH)']  || row['name_th (Optional)'] || '').toString().trim();
             const primaryName = name_en || name_he || name_th;
-            const code  = (row.code || row['Code'] || '').toString().trim() || null;
+            const code  = (row.code || row['Code'] || row['code *'] || '').toString().trim() || null;
             const rowId = row.id ? parseInt(row.id, 10) : null;
 
             if (!primaryName) { errors.push(`Row ${ri}: at least one name field is required`); continue; }
+            if (code && !CATEGORY_CODE_RE.test(code)) {
+                errors.push(`Row ${ri}: code must be 1-5 English letters`); continue;
+            }
+            // Duplicate-name check (new rows only)
+            if (!rowId) {
+                const dupQ  = insertCompanyId
+                    ? 'SELECT id FROM categories WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id=$2'
+                    : 'SELECT id FROM categories WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id IS NULL';
+                const dupP  = insertCompanyId ? [primaryName, insertCompanyId] : [primaryName];
+                const dupR  = await client.query(dupQ, dupP);
+                if (dupR.rows.length > 0) {
+                    errors.push(`Row ${ri}: Category '${primaryName}' already exists in your company`);
+                    continue;
+                }
+            }
             validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, code });
         }
 
@@ -3805,10 +4749,11 @@ app.get('/assets/export', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 app.post('/assets/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
-    const { rows, isDryRun } = req.body;
+    const { rows, isDryRun, target_company_id } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
 
-    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
     const callerId = req.user.id;
     const client = await pool.connect();
     try {
@@ -3831,39 +4776,54 @@ app.post('/assets/bulk-import', authenticateToken, requireAdmin, async (req, res
             const row = rows[i];
             const ri  = i + 1;
             const rowErrors = [];
-            const name_en = (row.name_en || row['Name (EN)'] || '').toString().trim();
-            const name_he = (row.name_he || row['שם בעברית']  || '').toString().trim();
-            const name_th = (row.name_th || row['ชื่อ (TH)']  || '').toString().trim();
+            const name_en = (row.name_en || row['Name (EN)'] || row['name_en *'] || '').toString().trim();
+            const name_he = (row.name_he || row['שם בעברית']  || row['name_he (Optional)'] || '').toString().trim();
+            const name_th = (row.name_th || row['ชื่อ (TH)']  || row['name_th (Optional)'] || '').toString().trim();
             const primaryName = name_en || name_he || name_th;
-            const code  = (row.code  || row['Code']  || '').toString().trim() || null;
+            // code is always auto-generated — ignore any code column supplied by the file
             const rowId = row.id ? parseInt(row.id, 10) : null;
 
             if (!primaryName) rowErrors.push(`Row ${ri}: at least one name field is required`);
 
             // FK: category — resolve by code or name, must belong to caller's company
             let category_id = null;
-            const catRaw = (row.category_id || row['Category'] || '').toString().trim();
-            if (catRaw) {
+            const catRaw = (row.category_id || row['Category'] || row['category *'] || '').toString().trim();
+            if (!rowId && !catRaw) {
+                rowErrors.push(`Row ${ri}: category is required`);
+            } else if (catRaw) {
                 category_id = catByCode.get(catRaw.toLowerCase()) || catByName.get(catRaw.toLowerCase()) || null;
                 if (!category_id) rowErrors.push(`Row ${ri}: Category '${catRaw}' not found in your company`);
             }
 
             // FK: location — resolve by code or name, must belong to caller's company
             let location_id = null;
-            const locRaw = (row.location_id || row['Location'] || '').toString().trim();
+            const locRaw = (row.location_id || row['Location'] || row['location (Optional)'] || '').toString().trim();
             if (locRaw) {
                 location_id = locByCode.get(locRaw.toLowerCase()) || locByName.get(locRaw.toLowerCase()) || null;
                 if (!location_id) rowErrors.push(`Row ${ri}: Location '${locRaw}' not found in your company`);
             }
 
+            // Duplicate-name check (new rows only)
+            if (!rowId && rowErrors.length === 0) {
+                const dupQ  = insertCompanyId
+                    ? 'SELECT id FROM assets WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id=$2'
+                    : 'SELECT id FROM assets WHERE (LOWER(name)=LOWER($1) OR LOWER(name_en)=LOWER($1) OR LOWER(name_he)=LOWER($1) OR LOWER(name_th)=LOWER($1)) AND company_id IS NULL';
+                const dupP  = insertCompanyId ? [primaryName, insertCompanyId] : [primaryName];
+                const dupR  = await client.query(dupQ, dupP);
+                if (dupR.rows.length > 0) rowErrors.push(`Row ${ri}: Asset '${primaryName}' already exists in your company`);
+            }
+
             if (rowErrors.length > 0) { errors.push(...rowErrors); continue; }
-            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, code, category_id, location_id });
+            validRows.push({ rowId, primaryName, name_en: name_en || null, name_he: name_he || null, name_th: name_th || null, category_id, location_id });
         }
 
         if (errors.length > 0 || isDryRun) {
             await client.query('ROLLBACK');
             return res.json({ errors, validCount: validRows.length });
         }
+
+        // In-memory counters per category code to avoid duplicate codes within this batch
+        const batchCounters = {};
 
         let inserted = 0, updated = 0;
         for (const vr of validRows) {
@@ -3876,23 +4836,30 @@ app.post('/assets/bulk-import', authenticateToken, requireAdmin, async (req, res
                     }
                 }
                 await client.query(
-                    'UPDATE assets SET name=$1, name_he=$2, name_en=$3, name_th=$4, code=COALESCE($5,code), category_id=COALESCE($6,category_id), location_id=COALESCE($7,location_id) WHERE id=$8',
-                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.code, vr.category_id, vr.location_id, vr.rowId]
+                    'UPDATE assets SET name=$1, name_he=$2, name_en=$3, name_th=$4, category_id=COALESCE($5,category_id), location_id=COALESCE($6,location_id) WHERE id=$7',
+                    [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, vr.category_id, vr.location_id, vr.rowId]
                 );
                 updated++;
             } else {
-                // Auto-generate code from category prefix
-                let finalCode = vr.code;
-                if (!finalCode) {
-                    const catCode = vr.category_id
-                        ? ((await client.query('SELECT code FROM categories WHERE id = $1', [vr.category_id])).rows[0]?.code || 'GEN').toUpperCase()
-                        : 'GEN';
-                    const pattern = `^${catCode}-[0-9]+$`;
-                    const ex = await client.query('SELECT code FROM assets WHERE code ~ $1', [pattern]);
+                // Auto-generate code from category prefix with in-memory counter for batch safety
+                const catCode = vr.category_id
+                    ? ((await client.query('SELECT code FROM categories WHERE id = $1', [vr.category_id])).rows[0]?.code || 'GEN').toUpperCase()
+                    : 'GEN';
+
+                if (!(catCode in batchCounters)) {
+                    // Seed from DB: highest existing sequential number for this category prefix + company
+                    const patternQ = insertCompanyId
+                        ? 'SELECT code FROM assets WHERE code ~ $1 AND company_id = $2'
+                        : 'SELECT code FROM assets WHERE code ~ $1';
+                    const patternP = insertCompanyId ? [`^${catCode}-[0-9]+$`, insertCompanyId] : [`^${catCode}-[0-9]+$`];
+                    const ex = await client.query(patternQ, patternP);
                     let maxNum = 0;
                     ex.rows.forEach(r => { const n = parseInt((r.code || '').split('-')[1]); if (!isNaN(n) && n > maxNum) maxNum = n; });
-                    finalCode = `${catCode}-${String(maxNum + 1).padStart(4, '0')}`;
+                    batchCounters[catCode] = maxNum;
                 }
+                batchCounters[catCode]++;
+                const finalCode = `${catCode}-${String(batchCounters[catCode]).padStart(4, '0')}`;
+
                 await client.query(
                     'INSERT INTO assets (name, name_he, name_en, name_th, code, category_id, location_id, created_by, area_id, company_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
                     [vr.primaryName, vr.name_he, vr.name_en, vr.name_th, finalCode, vr.category_id, vr.location_id, callerId, insertAreaId, insertCompanyId]
@@ -3943,29 +4910,53 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
     // MANAGERs cannot create peer managers — only BIG_BOSS and COMPANY_MANAGER
     if (req.user.role === 'MANAGER') return res.status(403).json({ error: 'MANAGERs cannot bulk-import managers' });
 
-    const { rows, isDryRun } = req.body;
+    const { rows, isDryRun, target_company_id } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
 
-    const { insertCompanyId } = await resolveCallerScope(req.user);
+    const { insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const errors   = [];
         const validRows = [];
 
+        const EMAIL_RE    = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.com$/i;
+        const LINE_ID_RE  = /^U[a-zA-Z0-9]+$/;
+        const LANG_MAP    = { english: 'en', hebrew: 'he', thai: 'th' };
+
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const ri  = i + 1;
-            const full_name = (row.full_name || row['Full Name'] || '').toString().trim();
-            const email     = (row.email     || row['Email']     || '').toString().trim().toLowerCase();
-            const phone     = (row.phone     || row['Phone']     || '').toString().trim() || null;
-            const password  = (row.password  || '').toString().trim();
-            const rowId     = row.id ? parseInt(row.id, 10) : null;
+            const name_en  = (row['name_en *'] || row.name_en  || row.full_name || row['Full Name'] || '').toString().trim();
+            const name_he  = (row['name_he (Optional)'] || row.name_he  || '').toString().trim() || null;
+            const name_th  = (row['name_th (Optional)'] || row.name_th  || '').toString().trim() || null;
+            const email    = (row['email *']    || row.email    || row['Email']  || '').toString().trim().toLowerCase();
+            const phone    = (row['phone (Optional)']   || row.phone    || row['Phone']  || '').toString().trim() || null;
+            const password = (row['password *'] || row.password || '').toString().trim();
+            const rawLang  = (row['language (Optional)'] || row.language || '').toString().trim().toLowerCase();
+            const lang     = LANG_MAP[rawLang] || 'en';
+            const rawLineId = (row['line_user_id (Optional)'] || row.line_user_id || '').toString().trim() || null;
+            const rowId    = row.id ? parseInt(row.id, 10) : null;
+            const profilePicUrl = (row['profile_picture_url (Optional)'] || row.profile_picture_url || '').toString().trim() || null;
 
-            if (!full_name)              { errors.push(`Row ${ri}: full_name is required`);                  continue; }
-            if (!rowId && !email)        { errors.push(`Row ${ri}: email is required for new managers`);     continue; }
-            if (!rowId && !password)     { errors.push(`Row ${ri}: password is required for new managers`);  continue; }
-            validRows.push({ rowId, full_name, email, phone, password });
+            const URL_RE_MGR = /^https?:\/\/.+/i;
+            if (!name_en)              { errors.push(`Row ${ri}: name_en is required`);                        continue; }
+            if (!rowId && !email)      { errors.push(`Row ${ri}: email is required for new managers`);         continue; }
+            if (!rowId && !password)   { errors.push(`Row ${ri}: password is required for new managers`);      continue; }
+            if (email && !EMAIL_RE.test(email))      { errors.push(`Row ${ri}: Invalid email format. Must end with .com and contain valid characters.`); continue; }
+            if (rawLineId && !LINE_ID_RE.test(rawLineId)) { errors.push(`Row ${ri}: Line ID must start with uppercase 'U' followed by numbers/letters.`); continue; }
+            if (profilePicUrl && !URL_RE_MGR.test(profilePicUrl)) { errors.push(`Row ${ri}: profile_picture_url must be a valid URL starting with http:// or https://`); continue; }
+            // Duplicate email check (new rows only) — scoped to the same company
+            if (!rowId && email) {
+                const dupQ = insertCompanyId
+                    ? "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id = $2"
+                    : "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id IS NULL";
+                const dupP = insertCompanyId ? [email, insertCompanyId] : [email];
+                const dupR = await client.query(dupQ, dupP);
+                if (dupR.rows.length > 0) { errors.push(`Row ${ri}: Email '${email}' is already registered`); continue; }
+            }
+            validRows.push({ rowId, name_en, name_he, name_th, email, phone, password, lang, line_user_id: rawLineId, profile_picture_url: profilePicUrl });
         }
 
         if (errors.length > 0 || isDryRun) {
@@ -3985,10 +4976,15 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
                     }
                 }
                 const setClauses = ['full_name=$1', 'full_name_en=$1'];
-                const vals = [vr.full_name];
+                const vals = [vr.name_en];
                 let pi = 2;
-                if (vr.email)  { setClauses.push(`email=$${pi++}`);  vals.push(vr.email);  }
-                if (vr.phone !== null) { setClauses.push(`phone=$${pi++}`); vals.push(vr.phone); }
+                if (vr.name_he !== null)    { setClauses.push(`full_name_he=$${pi++}`);     vals.push(vr.name_he); }
+                if (vr.name_th !== null)    { setClauses.push(`full_name_th=$${pi++}`);     vals.push(vr.name_th); }
+                if (vr.email)               { setClauses.push(`email=$${pi++}`);             vals.push(vr.email); }
+                if (vr.phone !== null)      { setClauses.push(`phone=$${pi++}`);             vals.push(vr.phone); }
+                if (vr.line_user_id !== null) { setClauses.push(`line_user_id=$${pi++}`);   vals.push(vr.line_user_id); }
+                if (vr.profile_picture_url !== null) { setClauses.push(`profile_picture_url=$${pi++}`); vals.push(vr.profile_picture_url); }
+                setClauses.push(`preferred_language=$${pi++}`); vals.push(vr.lang);
                 if (vr.password) { const hp = await bcrypt.hash(vr.password, 10); setClauses.push(`password=$${pi++}`); vals.push(hp); }
                 vals.push(vr.rowId);
                 await client.query(`UPDATE users SET ${setClauses.join(', ')} WHERE id=$${pi}`, vals);
@@ -3996,9 +4992,9 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
             } else {
                 const hashedPw = await bcrypt.hash(vr.password, 10);
                 const newMgr = await client.query(
-                    `INSERT INTO users (full_name, full_name_en, email, password, role, phone, company_id)
-                     VALUES ($1,$1,$2,$3,'MANAGER',$4,$5) RETURNING id`,
-                    [vr.full_name, vr.email, hashedPw, vr.phone, insertCompanyId]
+                    `INSERT INTO users (full_name, full_name_en, full_name_he, full_name_th, email, password, role, phone, company_id, line_user_id, preferred_language, profile_picture_url)
+                     VALUES ($1,$1,$2,$3,$4,$5,'MANAGER',$6,$7,$8,$9,$10) RETURNING id`,
+                    [vr.name_en, vr.name_he, vr.name_th, vr.email, hashedPw, vr.phone, insertCompanyId, vr.line_user_id, vr.lang, vr.profile_picture_url]
                 );
                 // MANAGER's area_id = their own id (defines their area)
                 await client.query('UPDATE users SET area_id = id WHERE id = $1', [newMgr.rows[0].id]);
@@ -4050,10 +5046,11 @@ app.get('/employees/export', authenticateToken, requireAdmin, async (req, res) =
 });
 
 app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, res) => {
-    const { rows, isDryRun } = req.body;
+    const { rows, isDryRun, target_company_id } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
 
-    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user);
+    const { insertAreaId, insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
     const callerId = req.user.id;
     const client = await pool.connect();
     try {
@@ -4061,18 +5058,41 @@ app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, 
         const errors   = [];
         const validRows = [];
 
+        const EMAIL_RE_EMP   = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.com$/i;
+        const LINE_ID_RE_EMP = /^U[a-zA-Z0-9]+$/;
+        const LANG_MAP_EMP   = { english: 'en', hebrew: 'he', thai: 'th' };
+
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const ri  = i + 1;
-            const full_name = (row.full_name || row['Full Name'] || '').toString().trim();
-            const email     = (row.email     || row['Email']     || '').toString().trim().toLowerCase();
-            const phone     = (row.phone     || row['Phone']     || '').toString().trim() || null;
-            const password  = (row.password  || '').toString().trim();
-            const rowId     = row.id ? parseInt(row.id, 10) : null;
+            const name_en  = (row['name_en *'] || row.name_en  || row.full_name || row['Full Name'] || '').toString().trim();
+            const name_he  = (row['name_he (Optional)'] || row.name_he  || '').toString().trim() || null;
+            const name_th  = (row['name_th (Optional)'] || row.name_th  || '').toString().trim() || null;
+            const email    = (row['email *']    || row.email    || row['Email']  || '').toString().trim().toLowerCase();
+            const phone    = (row['phone (Optional)']   || row.phone    || row['Phone']  || '').toString().trim() || null;
+            const password = (row['password *'] || row.password || '').toString().trim();
+            const rawLang  = (row['language (Optional)'] || row.language || '').toString().trim().toLowerCase();
+            const lang     = LANG_MAP_EMP[rawLang] || 'en';
+            const rawLineId = (row['line_user_id (Optional)'] || row.line_user_id || '').toString().trim() || null;
+            const rowId    = row.id ? parseInt(row.id, 10) : null;
+            const profilePicUrl = (row['profile_picture_url (Optional)'] || row.profile_picture_url || '').toString().trim() || null;
 
-            if (!full_name)          { errors.push(`Row ${ri}: full_name is required`);                  continue; }
-            if (!rowId && !email)    { errors.push(`Row ${ri}: email is required for new employees`);    continue; }
-            if (!rowId && !password) { errors.push(`Row ${ri}: password is required for new employees`); continue; }
+            const URL_RE_EMP = /^https?:\/\/.+/i;
+            if (!name_en)            { errors.push(`Row ${ri}: name_en is required`);                        continue; }
+            if (!rowId && !email)    { errors.push(`Row ${ri}: email is required for new employees`);        continue; }
+            if (!rowId && !password) { errors.push(`Row ${ri}: password is required for new employees`);     continue; }
+            if (email && !EMAIL_RE_EMP.test(email))      { errors.push(`Row ${ri}: Invalid email format. Must end with .com and contain valid characters.`); continue; }
+            if (rawLineId && !LINE_ID_RE_EMP.test(rawLineId)) { errors.push(`Row ${ri}: Line ID must start with uppercase 'U' followed by numbers/letters.`); continue; }
+            if (profilePicUrl && !URL_RE_EMP.test(profilePicUrl)) { errors.push(`Row ${ri}: profile_picture_url must be a valid URL starting with http:// or https://`); continue; }
+            // Duplicate email check (new rows only) — scoped to the same company
+            if (!rowId && email) {
+                const dupQ = insertCompanyId
+                    ? "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id = $2"
+                    : "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id IS NULL";
+                const dupP = insertCompanyId ? [email, insertCompanyId] : [email];
+                const dupR = await client.query(dupQ, dupP);
+                if (dupR.rows.length > 0) { errors.push(`Row ${ri}: Email '${email}' is already registered`); continue; }
+            }
 
             // For updates: verify employee belongs to caller's company
             if (rowId && insertCompanyId) {
@@ -4087,7 +5107,7 @@ app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, 
                 const chk = await client.query('SELECT 1 FROM employee_managers WHERE manager_id = $1 AND employee_id = $2', [callerId, rowId]);
                 if (chk.rowCount === 0) { errors.push(`Row ${ri}: Employee id=${rowId} is not in your team`); continue; }
             }
-            validRows.push({ rowId, full_name, email, phone, password });
+            validRows.push({ rowId, name_en, name_he, name_th, email, phone, password, lang, line_user_id: rawLineId, profile_picture_url: profilePicUrl });
         }
 
         if (errors.length > 0 || isDryRun) {
@@ -4099,10 +5119,15 @@ app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, 
         for (const vr of validRows) {
             if (vr.rowId) {
                 const setClauses = ['full_name=$1', 'full_name_en=$1'];
-                const vals = [vr.full_name];
+                const vals = [vr.name_en];
                 let pi = 2;
-                if (vr.email) { setClauses.push(`email=$${pi++}`); vals.push(vr.email); }
-                if (vr.phone !== null) { setClauses.push(`phone=$${pi++}`); vals.push(vr.phone); }
+                if (vr.name_he !== null)      { setClauses.push(`full_name_he=$${pi++}`);   vals.push(vr.name_he); }
+                if (vr.name_th !== null)      { setClauses.push(`full_name_th=$${pi++}`);   vals.push(vr.name_th); }
+                if (vr.email)                 { setClauses.push(`email=$${pi++}`);           vals.push(vr.email); }
+                if (vr.phone !== null)        { setClauses.push(`phone=$${pi++}`);           vals.push(vr.phone); }
+                if (vr.line_user_id !== null) { setClauses.push(`line_user_id=$${pi++}`);   vals.push(vr.line_user_id); }
+                if (vr.profile_picture_url !== null) { setClauses.push(`profile_picture_url=$${pi++}`); vals.push(vr.profile_picture_url); }
+                setClauses.push(`preferred_language=$${pi++}`); vals.push(vr.lang);
                 if (vr.password) { const hp = await bcrypt.hash(vr.password, 10); setClauses.push(`password=$${pi++}`); vals.push(hp); }
                 vals.push(vr.rowId);
                 await client.query(`UPDATE users SET ${setClauses.join(', ')} WHERE id=$${pi}`, vals);
@@ -4110,9 +5135,9 @@ app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, 
             } else {
                 const hashedPw = await bcrypt.hash(vr.password, 10);
                 const newEmp = await client.query(
-                    `INSERT INTO users (full_name, full_name_en, email, password, role, phone, company_id, area_id, parent_manager_id)
-                     VALUES ($1,$1,$2,$3,'EMPLOYEE',$4,$5,$6,$7) RETURNING id`,
-                    [vr.full_name, vr.email, hashedPw, vr.phone, insertCompanyId, insertAreaId, callerId]
+                    `INSERT INTO users (full_name, full_name_en, full_name_he, full_name_th, email, password, role, phone, company_id, area_id, parent_manager_id, line_user_id, preferred_language, profile_picture_url)
+                     VALUES ($1,$1,$2,$3,$4,$5,'EMPLOYEE',$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+                    [vr.name_en, vr.name_he, vr.name_th, vr.email, hashedPw, vr.phone, insertCompanyId, insertAreaId, callerId, vr.line_user_id, vr.lang, vr.profile_picture_url]
                 );
                 // M:M link: employee ↔ importing manager (MANAGER or COMPANY_MANAGER)
                 await client.query(
@@ -4170,6 +5195,20 @@ app.listen(port, async () => {
         await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_stuck BOOLEAN DEFAULT FALSE');
         await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_description TEXT');
         await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_file_url TEXT');
+
+        // ── Widen categories.code to VARCHAR(5) — fixes "value too long for character varying(3)" on commit ──
+        await pool.query(`
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='categories' AND column_name='code'
+                      AND character_maximum_length IS NOT NULL
+                      AND character_maximum_length < 5
+                ) THEN
+                    ALTER TABLE categories ALTER COLUMN code TYPE VARCHAR(5);
+                END IF;
+            END $$
+        `);
 
         // ── 4-Tier RBAC: area_id grouping — CRITICAL: must exist before GET /users & GET /managers run ──
         await pool.query('ALTER TABLE users      ADD COLUMN IF NOT EXISTS area_id INTEGER');
@@ -4286,6 +5325,65 @@ app.listen(port, async () => {
 
         // ── Retire SUPERVISOR role: migrate all SUPERVISORs to EMPLOYEE (idempotent) ──
         await pool.query("UPDATE users SET role = 'EMPLOYEE' WHERE role = 'SUPERVISOR'");
+
+        // ── Ensure locations.code column exists (idempotent) ──
+        await pool.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS code VARCHAR(50)');
+
+        // ── Backfill LOC-XXXX codes for any locations that still have code = NULL ──
+        // Groups by company_id so each company gets its own sequential LOC-0001, LOC-0002…
+        await pool.query(`
+            DO $$
+            DECLARE
+                loc     RECORD;
+                max_num INT;
+            BEGIN
+                FOR loc IN (
+                    SELECT id, company_id FROM locations WHERE code IS NULL ORDER BY id
+                )
+                LOOP
+                    SELECT COALESCE(MAX(
+                        CASE WHEN l.code ~ '^LOC-[0-9]+$'
+                             THEN CAST(SUBSTRING(l.code FROM 5) AS INT)
+                             ELSE 0 END
+                    ), 0) INTO max_num
+                    FROM locations l
+                    WHERE (loc.company_id IS NULL AND l.company_id IS NULL)
+                       OR (loc.company_id IS NOT NULL AND l.company_id = loc.company_id);
+
+                    UPDATE locations
+                    SET code = 'LOC-' || LPAD((max_num + 1)::TEXT, 4, '0')
+                    WHERE id = loc.id;
+                END LOOP;
+            END $$
+        `);
+
+        // ── Email uniqueness: drop global UNIQUE(email), add per-company composite indexes ──
+        // Users in different companies may share the same email address.
+        // Users with no company (e.g. BIG_BOSS) still require a globally unique email.
+        await pool.query(`
+            DO $$
+            BEGIN
+                -- Drop the old global unique constraint if it still exists
+                IF EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'users_email_key' AND conrelid = 'users'::regclass
+                ) THEN
+                    ALTER TABLE users DROP CONSTRAINT users_email_key;
+                END IF;
+            END $$
+        `);
+        // Per-company uniqueness: email must be unique within a company
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS users_email_company_unique
+            ON users (email, company_id)
+            WHERE company_id IS NOT NULL
+        `);
+        // Global uniqueness for company-less users (BIG_BOSS, etc.)
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS users_email_no_company_unique
+            ON users (email)
+            WHERE company_id IS NULL
+        `);
 
         console.log("✅ DB columns verified.");
     } catch (e) {
