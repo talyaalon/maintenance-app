@@ -3,7 +3,7 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
 import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2, ListChecks } from 'lucide-react';
-import AdvancedExcel from './AdvancedExcel';
+import ConfigExcelPanel from './ConfigExcelPanel';
 import CreateTaskForm from './CreateTaskForm';
 import TaskCard from './TaskCard';
 
@@ -549,7 +549,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
           </div>
       </div>
 
-      {showExcel && <AdvancedExcel token={token} t={t} user={user} onRefresh={onRefresh} onClose={() => setShowExcel(false)} />}
+      {showExcel && <ConfigExcelPanel section="tasks" token={token} t={t} onClose={() => setShowExcel(false)} onSuccess={onRefresh} />}
       {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} scopedCompanyId={scopedCompanyId} />}
 
       <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 mb-5 mx-auto max-w-3xl">
