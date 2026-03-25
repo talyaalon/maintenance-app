@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Building2, Plus, ChevronRight, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck, Send, FileSpreadsheet } from 'lucide-react';
 import ScopedTasksModal from './ScopedTasksModal';
 import MultiLangNameInput from './MultiLangNameInput';
@@ -864,7 +864,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'managers' && (
-                        <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} companyId={cid} />
+                        <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} companyId={cid} />
                     )}
                     addPanel={openPanel === 'add-user-manager' ? (
                         <InlineUserForm
@@ -975,7 +975,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'employees' && (
-                        <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} companyId={cid} />
+                        <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} companyId={cid} />
                     )}
                     addPanel={openPanel === 'add-user-employee' ? (
                         <InlineUserForm
@@ -1071,7 +1071,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'locations' && (
-                        <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} companyId={cid} />
+                        <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} companyId={cid} />
                     )}
                     addPanel={openPanel === 'add-loc' ? (
                         <InlineLocationForm
@@ -1131,7 +1131,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'categories' && (
-                        <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} companyId={cid} />
+                        <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} companyId={cid} />
                     )}
                     addPanel={openPanel === 'add-cat' ? (
                         <InlineCategoryForm
@@ -1191,7 +1191,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'assets' && (
-                        <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} companyId={cid} />
+                        <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} companyId={cid} />
                     )}
                     addPanel={openPanel === 'add-asset' ? (
                         <InlineAssetForm
@@ -1443,6 +1443,8 @@ const CompaniesTab = ({ token, t, user, lang }) => {
     const [selectedCompany, setSelectedCompany] = useState(null);
     const [openPanel, setOpenPanel] = useState(null); // 'new-company' | 'edit-company:{id}'
     const [deleteConfirm, setDeleteConfirm] = useState(null);
+    // Used to restore selected company once after initial fetch (F5 reload persistence)
+    const didRestoreCompany = useRef(false);
 
     const fetchCompanies = async () => {
         setLoading(true);
@@ -1452,7 +1454,8 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                 fetch(`${BASE}/companies`, { headers }).then(r => r.json()).catch(() => []),
                 fetch(`${BASE}/users`, { headers }).then(r => r.json()).catch(() => []),
             ]);
-            setCompanies(Array.isArray(companiesData) ? companiesData : []);
+            const list = Array.isArray(companiesData) ? companiesData : [];
+            setCompanies(list);
             // Build map of company_id -> COMPANY_MANAGER for list display
             const mgrs = {};
             (Array.isArray(usersData) ? usersData : []).forEach(u => {
@@ -1461,6 +1464,15 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                 }
             });
             setCompanyManagers(mgrs);
+            // Restore selected company on first load (F5 reload)
+            if (!didRestoreCompany.current && list.length > 0) {
+                didRestoreCompany.current = true;
+                const storedId = sessionStorage.getItem('selectedCompanyId');
+                if (storedId) {
+                    const found = list.find(c => String(c.id) === storedId);
+                    if (found) setSelectedCompany(found);
+                }
+            }
         } catch (e) {
             console.error('fetchCompanies error:', e);
             setCompanies([]);
@@ -1494,7 +1506,7 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                     t={t}
                     lang={lang}
                     user={user}
-                    onBack={() => setSelectedCompany(null)}
+                    onBack={() => { setSelectedCompany(null); sessionStorage.removeItem('selectedCompanyId'); }}
                 />
             </div>
         );
@@ -1554,7 +1566,7 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                                 <div className={`bg-white rounded-2xl border shadow-sm hover:shadow-md transition overflow-hidden ${isEditOpen ? 'border-[#714B67]/30' : 'border-gray-200'}`}>
                                     <button
                                         className="w-full flex items-center gap-3 p-4 text-left"
-                                        onClick={() => setSelectedCompany(company)}
+                                        onClick={() => { setSelectedCompany(company); sessionStorage.setItem('selectedCompanyId', String(company.id)); }}
                                     >
                                         {/* Logo / Avatar */}
                                         {company?.profile_image_url ? (

@@ -435,10 +435,10 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           </div>
                       </div>
                       {openExcelSection === 'categories' && (
-                          <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} />
+                          <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                       )}
                       {openExcelSection === 'assets' && (
-                          <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} />
+                          <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                       )}
                       <div className="space-y-3">
                           {wCategories.length === 0 && <p className="text-gray-400 text-center text-sm py-4">{t.no_categories_for_manager || 'אין קטגוריות למנהל זה.'}</p>}
@@ -517,7 +517,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               )}
                           </div>
                           {openExcelSection === 'managers' && (
-                              <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} />
+                              <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                           )}
                       </div>
 
@@ -536,7 +536,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                               )}
                           </div>
                           {openExcelSection === 'employees' && (
-                              <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} />
+                              <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                           )}
                       </div>
                   </div>
@@ -563,7 +563,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                           </div>
                       </div>
                       {openExcelSection === 'locations' && (
-                          <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={fetchData} />
+                          <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                       )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

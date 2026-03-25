@@ -121,10 +121,19 @@ function App() {
       localStorage.setItem('appActiveTab', activeTab);
   }, [activeTab]);
 
-  // Reset to Tasks tab on login so a stale tab (e.g. Settings saved by a
-  // previous session) never lands the new user on a blank screen.
+  // Reset to Tasks tab on genuine new login, but NOT on F5 page reload.
+  // We track the current session's user ID in sessionStorage: if it already
+  // matches the user being loaded, this is a reload — keep the saved tab.
+  // If it differs (or is absent), it's a new/different login — reset to tasks.
   useEffect(() => {
-      if (user) setActiveTab('tasks');
+      if (!user) {
+          sessionStorage.removeItem('sessionUserId');
+          return;
+      }
+      const prev = sessionStorage.getItem('sessionUserId');
+      if (prev === String(user.id)) return; // same session (F5 reload) — keep tab
+      setActiveTab('tasks');
+      sessionStorage.setItem('sessionUserId', String(user.id));
   }, [user?.id]);
 
   // מודאלים

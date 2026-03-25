@@ -835,7 +835,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'managers' && (
-                        <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="managers" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                     )}
                     addPanel={openPanel === 'add-user-manager' ? (
                         <InlineUserForm
@@ -943,7 +943,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'employees' && (
-                        <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="employees" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                     )}
                     addPanel={openPanel === 'add-user-employee' ? (
                         <InlineUserForm
@@ -1036,7 +1036,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'locations' && (
-                        <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="locations" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                     )}
                     addPanel={openPanel === 'add-loc' ? (
                         <InlineLocationForm
@@ -1098,7 +1098,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'categories' && (
-                        <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="categories" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                     )}
                     addPanel={openPanel === 'add-cat' ? (
                         <InlineCategoryForm
@@ -1153,7 +1153,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     )}
                     excelPanel={canUseExcel && openExcelSection === 'assets' && (
-                        <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} />
+                        <ConfigExcelPanel section="assets" t={t} onClose={() => setOpenExcelSection(null)} token={token} onSuccess={() => { fetchData(); setOpenExcelSection(null); }} />
                     )}
                     addPanel={openPanel === 'add-asset' ? (
                         <InlineAssetForm
