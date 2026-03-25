@@ -1089,9 +1089,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                             <div className="flex items-center gap-2">
                                 <span className="flex-1 min-w-0 truncate">
                                     {itemName(l)}
-                                    {l?.name_th && lang !== 'th' && (
-                                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{l.name_th}</span>
-                                    )}
                                 </span>
                                 {l?.code && <span className="text-[10px] text-gray-400 font-mono shrink-0">{l.code}</span>}
                                 <RowActions
@@ -1149,9 +1146,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                             <div className="flex items-center gap-2">
                                 <span className="flex-1 min-w-0 truncate">
                                     {itemName(c)}
-                                    {c?.name_th && lang !== 'th' && (
-                                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{c.name_th}</span>
-                                    )}
                                 </span>
                                 {c?.code && <span className="text-xs text-gray-400 font-mono shrink-0">{c.code}</span>}
                                 <RowActions
@@ -1211,9 +1205,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                             <div className="flex items-center gap-2">
                                 <span className="flex-1 min-w-0 truncate">
                                     {itemName(a)}
-                                    {a?.name_th && lang !== 'th' && (
-                                        <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{a.name_th}</span>
-                                    )}
                                 </span>
                                 {a?.code && <span className="text-xs text-gray-400 font-mono shrink-0">{a.code}</span>}
                                 <RowActions
