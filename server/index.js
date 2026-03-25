@@ -132,6 +132,189 @@ const sendLineMessage = async (lineUserId, text) => {
     }
 };
 
+// ==========================================
+// 🔔 NotificationService — Core dispatcher
+//    sendNotification(userId, channels[], type, data)
+//    channels: ['email','line','push']
+//    types: 'user_created' | 'user_updated' | 'tasks_assigned' | 'morning_briefing'
+// ==========================================
+
+const sendFcmPush = async (token, title, body, link = '/') => {
+    if (!token) return;
+    try {
+        await admin.messaging().send({
+            token,
+            notification: { title, body },
+            webpush: { fcmOptions: { link } }
+        });
+        console.log(`🔔 FCM push sent`);
+    } catch (err) {
+        console.error('⚠️ FCM send failed:', err.message);
+    }
+};
+
+const buildTaskListLine = (tasks, lang) => {
+    const urgL = { low: { he: 'נמוכה', en: 'Low', th: 'ต่ำ' }, medium: { he: 'בינונית', en: 'Medium', th: 'ปานกลาง' }, high: { he: 'גבוהה', en: 'High', th: 'สูง' } };
+    return tasks.map((t, i) => {
+        const urg = urgL[t.urgency]?.[lang] || t.urgency || '';
+        const date = t.due_date ? new Date(t.due_date).toLocaleDateString('en-GB') : '';
+        return `${i + 1}. ${t.title}\n   📅 ${date}  ⚡ ${urg}`;
+    }).join('\n');
+};
+
+const buildTaskTableHtml = (tasks, lang) => {
+    const hdr = { he: ['#', 'משימה', 'תאריך', 'עדיפות'], en: ['#', 'Task', 'Date', 'Priority'], th: ['#', 'งาน', 'วันที่', 'ลำดับความสำคัญ'] };
+    const urgL = { low: { he: 'נמוכה', en: 'Low', th: 'ต่ำ' }, medium: { he: 'בינונית', en: 'Medium', th: 'ปานกลาง' }, high: { he: 'גבוהה', en: 'High', th: 'สูง' } };
+    const [h0, h1, h2, h3] = hdr[lang] || hdr.en;
+    const rows = tasks.map((t, i) => {
+        const date = t.due_date ? new Date(t.due_date).toLocaleDateString('en-GB') : '';
+        const urg = urgL[t.urgency]?.[lang] || t.urgency || '';
+        const urgColor = t.urgency === 'high' ? '#991b1b' : (t.urgency === 'medium' ? '#92400e' : '#166534');
+        const urgBg   = t.urgency === 'high' ? '#fee2e2' : (t.urgency === 'medium' ? '#fef3c7' : '#dcfce7');
+        return `<tr>
+            <td style="padding:7px 8px;border-bottom:1px solid #e5e7eb;color:#6b7280;">${i + 1}</td>
+            <td style="padding:7px 8px;border-bottom:1px solid #e5e7eb;color:#111827;font-weight:500;">${t.title}</td>
+            <td style="padding:7px 8px;border-bottom:1px solid #e5e7eb;color:#6b7280;">${date}</td>
+            <td style="padding:7px 8px;border-bottom:1px solid #e5e7eb;">
+                <span style="background:${urgBg};color:${urgColor};padding:2px 8px;border-radius:10px;font-size:11px;">${urg}</span>
+            </td></tr>`;
+    }).join('');
+    return `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;">
+        <tr style="background:#f3f4f6;">
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;font-size:12px;">${h0}</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;font-size:12px;">${h1}</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;font-size:12px;">${h2}</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;font-size:12px;">${h3}</th>
+        </tr>${rows}</table>`;
+};
+
+const NOTIF_T = {
+    user_created: {
+        he: {
+            subj: '👋 פרטי חשבון - OpsManager',
+            mgr_subj: '💼 חשבון מנהל נוצר - OpsManager',
+            push_t: 'ברוך הבא! 👋',
+            push_b: n => `שלום ${n}! חשבונך נוצר בהצלחה.`,
+            line: (n, e, p) => `👋 שלום ${n}!\nחשבונך נוצר במערכת OpsManager.\n\n📧 אימייל: ${e}\n🔑 סיסמה: ${p}`,
+        },
+        en: {
+            subj: '👋 Account Created - OpsManager',
+            mgr_subj: '💼 Manager Account Created - OpsManager',
+            push_t: 'Welcome! 👋',
+            push_b: n => `Hello ${n}! Your account has been created.`,
+            line: (n, e, p) => `👋 Hello ${n}!\nYour OpsManager account is ready.\n\n📧 Email: ${e}\n🔑 Password: ${p}`,
+        },
+        th: {
+            subj: '👋 สร้างบัญชีแล้ว - OpsManager',
+            mgr_subj: '💼 สร้างบัญชีผู้จัดการแล้ว - OpsManager',
+            push_t: 'ยินดีต้อนรับ! 👋',
+            push_b: n => `สวัสดี ${n}! บัญชีของคุณถูกสร้างเรียบร้อยแล้ว`,
+            line: (n, e, p) => `👋 สวัสดี ${n}!\nบัญชี OpsManager ของคุณพร้อมแล้ว\n\n📧 อีเมล: ${e}\n🔑 รหัสผ่าน: ${p}`,
+        },
+    },
+    user_updated: {
+        he: { subj: '📝 פרטי חשבונך עודכנו - OpsManager', push_t: 'חשבון עודכן 📝', push_b: () => 'פרטי חשבונך עודכנו על ידי מנהל.', line: (n, c) => `📝 שלום ${n}!\nהפרטים הבאים עודכנו:\n${c}` },
+        en: { subj: '📝 Your account has been updated - OpsManager', push_t: 'Account Updated 📝', push_b: () => 'Your account details were updated by an admin.', line: (n, c) => `📝 Hello ${n}!\nThe following was updated:\n${c}` },
+        th: { subj: '📝 บัญชีของคุณได้รับการอัปเดต - OpsManager', push_t: 'อัปเดตบัญชี 📝', push_b: () => 'ข้อมูลบัญชีของคุณได้รับการอัปเดตโดยผู้ดูแลระบบ', line: (n, c) => `📝 สวัสดี ${n}!\nข้อมูลต่อไปนี้ได้รับการอัปเดต:\n${c}` },
+    },
+    tasks_assigned: {
+        he: { subj: c => `📋 הוקצו לך ${c} משימות חדשות`, push_t: c => `${c} משימות חדשות! 📋`, push_b: c => `הוקצו לך ${c} משימות חדשות. היכנס לצפות.`, line: (n, c, list) => `📋 שלום ${n}!\nהוקצו לך ${c} משימות חדשות:\n\n${list}` },
+        en: { subj: c => `📋 ${c} New Task(s) Assigned to You`, push_t: c => `${c} New Task(s)! 📋`, push_b: c => `You've been assigned ${c} new task(s). Tap to view.`, line: (n, c, list) => `📋 Hello ${n}!\nYou have ${c} new task(s) assigned:\n\n${list}` },
+        th: { subj: c => `📋 คุณได้รับมอบหมาย ${c} งานใหม่`, push_t: c => `${c} งานใหม่! 📋`, push_b: c => `คุณได้รับมอบหมาย ${c} งานใหม่ แตะเพื่อดู`, line: (n, c, list) => `📋 สวัสดี ${n}!\nคุณได้รับมอบหมาย ${c} งานใหม่:\n\n${list}` },
+    },
+    morning_briefing: {
+        he: { push_t: '☀️ בוקר טוב!', push_b: c => `יש לך ${c} משימות להיום.`, line: (n, c, list) => `☀️ בוקר טוב ${n}!\nיש לך ${c} משימות להיום:\n\n${list}`, none_push_t: '☀️ בוקר טוב!', none_push_b: () => 'אין לך משימות להיום 🏖️', none_line: n => `☀️ בוקר טוב ${n}! 🏖️\nאין לך משימות מתוכננות להיום.` },
+        en: { push_t: '☀️ Good Morning!', push_b: c => `You have ${c} task(s) today.`, line: (n, c, list) => `☀️ Good morning ${n}!\nYou have ${c} task(s) today:\n\n${list}`, none_push_t: '☀️ Good Morning!', none_push_b: () => 'No tasks for today 🏖️', none_line: n => `☀️ Good morning ${n}! 🏖️\nNo tasks scheduled for today.` },
+        th: { push_t: '☀️ อรุณสวัสดิ์!', push_b: c => `คุณมี ${c} งานวันนี้`, line: (n, c, list) => `☀️ อรุณสวัสดิ์ ${n}!\nคุณมี ${c} งานวันนี้:\n\n${list}`, none_push_t: '☀️ อรุณสวัสดิ์!', none_push_b: () => 'ไม่มีงานสำหรับวันนี้ 🏖️', none_line: n => `☀️ อรุณสวัสดิ์ ${n}! 🏖️\nไม่มีงานที่วางแผนไว้สำหรับวันนี้` },
+    },
+};
+
+const notifEmailWrap = (dir, align, content) => `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:10px;background:#f4f4f5;font-family:Helvetica,Arial,sans-serif;">
+<div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,.05);direction:${dir};text-align:${align};">
+<div style="background:#714B67;padding:16px 20px;"><h2 style="margin:0;color:#fff;font-size:18px;">OpsManager</h2></div>
+<div style="padding:20px;">${content}</div>
+<div style="background:#f9fafb;padding:14px 20px;text-align:center;border-top:1px solid #e5e7eb;">
+<a href="${APP_LINK}" style="background:#714B67;color:#fff;padding:10px 24px;text-decoration:none;border-radius:20px;font-size:13px;font-weight:bold;">
+${dir === 'rtl' ? 'כניסה לאפליקציה' : (align === 'left' && dir !== 'rtl' ? 'Open App' : 'เปิดแอป')}</a></div>
+</div></body></html>`;
+
+const sendNotification = async (userId, channels, type, data = {}) => {
+    try {
+        const uRes = await pool.query(
+            'SELECT id, full_name, email, line_user_id, device_token, preferred_language, role FROM users WHERE id = $1',
+            [userId]
+        );
+        if (!uRes.rows.length) return;
+        const u = uRes.rows[0];
+        const lang = u.preferred_language || 'en';
+        const T = NOTIF_T[type]?.[lang] || NOTIF_T[type]?.en;
+        if (!T) return;
+        const n = u.full_name;
+        const dir = lang === 'he' ? 'rtl' : 'ltr';
+        const align = lang === 'he' ? 'right' : 'left';
+        const tasks = data.tasks || [];
+        const taskCount = data.taskCount || tasks.length;
+        const changes = data.changes || '';
+
+        const sends = [];
+
+        // ── EMAIL ──────────────────────────────────────────────────────────
+        if (channels.includes('email') && u.email) {
+            let subject = '', html = '';
+            if (type === 'user_updated' && changes) {
+                subject = T.subj;
+                html = notifEmailWrap(dir, align, `<h3 style="color:#714B67;margin-top:0;">${T.push_t}</h3><p style="color:#374151;">${lang === 'he' ? `שלום ${n},` : (lang === 'th' ? `สวัสดี ${n},` : `Hello ${n},`)}</p><div style="background:#f3f4f6;padding:14px;border-radius:6px;border-${align === 'right' ? 'right' : 'left'}:4px solid #714B67;">${changes.replace(/\n/g, '<br>')}</div>`);
+            } else if (type === 'tasks_assigned' && tasks.length > 0) {
+                subject = T.subj(taskCount);
+                html = notifEmailWrap(dir, align, `<h3 style="color:#714B67;margin-top:0;">${T.push_t(taskCount)}</h3><p style="color:#374151;">${lang === 'he' ? `שלום ${n},` : (lang === 'th' ? `สวัสดี ${n},` : `Hello ${n},`)}</p>${buildTaskTableHtml(tasks, lang)}`);
+            }
+            if (html && subject) {
+                sends.push(
+                    transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: u.email, subject, html })
+                        .then(() => console.log(`📧 ${type} email → ${u.email}`))
+                        .catch(e => console.error(`⚠️ Email (${type}) → ${u.email}:`, e.message))
+                );
+            }
+        }
+
+        // ── LINE ───────────────────────────────────────────────────────────
+        if (channels.includes('line') && u.line_user_id) {
+            let msg = '';
+            if (type === 'user_created') {
+                msg = T.line(n, data.email || u.email, data.password || '');
+            } else if (type === 'user_updated' && changes) {
+                msg = T.line(n, changes);
+            } else if (type === 'tasks_assigned' && tasks.length > 0) {
+                msg = T.line(n, taskCount, buildTaskListLine(tasks, lang));
+            } else if (type === 'morning_briefing') {
+                msg = tasks.length === 0 ? T.none_line(n) : T.line(n, tasks.length, buildTaskListLine(tasks, lang));
+            }
+            if (msg) sends.push(sendLineMessage(u.line_user_id, msg).catch(e => console.error(`⚠️ LINE (${type}):`, e.message)));
+        }
+
+        // ── FCM PUSH ───────────────────────────────────────────────────────
+        if (channels.includes('push') && u.device_token) {
+            let title = '', body = '';
+            if (type === 'user_created') {
+                title = T.push_t; body = T.push_b(n);
+            } else if (type === 'user_updated') {
+                title = T.push_t; body = T.push_b();
+            } else if (type === 'tasks_assigned') {
+                title = T.push_t(taskCount); body = T.push_b(taskCount);
+            } else if (type === 'morning_briefing') {
+                if (tasks.length === 0) { title = T.none_push_t; body = T.none_push_b(); }
+                else { title = T.push_t; body = T.push_b(tasks.length); }
+            }
+            if (title) sends.push(sendFcmPush(u.device_token, title, body, APP_LINK));
+        }
+
+        await Promise.all(sends);
+    } catch (err) {
+        console.error(`⚠️ sendNotification (${type}) for userId ${userId}:`, err.message);
+    }
+};
+
 
 // ==========================================
 // 📧 שליחת מייל למשתמש חדש (מותאם לשפות ולתפקידים)
@@ -904,14 +1087,16 @@ app.post('/users', authenticateToken, async (req, res) => {
         console.error("Error sending welcome email:", emailError);
     }
 
+    // LINE: include credentials in welcome message
     if (line_user_id) {
-        const welcomeLineDict = {
-            he: `שלום ${effectiveFullName}! 👋 ברוך הבא למערכת OpsManager. חשבונך נוצר בהצלחה.`,
-            en: `Hello ${effectiveFullName}! 👋 Welcome to OpsManager. Your account has been created successfully.`,
-            th: `สวัสดี ${effectiveFullName}! 👋 ยินดีต้อนรับสู่ OpsManager บัญชีของคุณถูกสร้างเรียบร้อยแล้ว`
-        };
-        sendLineMessage(line_user_id, welcomeLineDict[lang] || welcomeLineDict['en']).catch(err => console.error("LINE welcome error:", err));
+        const T = NOTIF_T.user_created[lang] || NOTIF_T.user_created.en;
+        sendLineMessage(line_user_id, T.line(effectiveFullName, email, password) )
+            .catch(err => console.error("LINE welcome error:", err));
     }
+
+    // FCM Push: welcome push (no-op if device_token not yet registered)
+    sendNotification(newUser.rows[0].id, ['push'], 'user_created', { email, password })
+        .catch(err => console.error("FCM welcome push error:", err));
 
     res.json(newUser.rows[0]);
 
@@ -1021,28 +1206,61 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     const result = await pool.query(query, params);
     const updatedUser = result.rows[0];
 
-    let changes = [];
-    if (oldUser.full_name !== updatedUser.full_name) changes.push(`Name changed to: <strong>${updatedUser.full_name}</strong>`);
-    if (oldUser.email !== updatedUser.email) changes.push(`Email changed to: <strong>${updatedUser.email}</strong>`);
-    if (oldUser.phone !== updatedUser.phone) changes.push(`Phone updated`);
-    if (oldUser.preferred_language !== updatedUser.preferred_language) changes.push(`Language changed to: <strong>${updatedUser.preferred_language}</strong>`);
-    if (password && password.trim() !== '') changes.push('Password has been changed');
-    
-    // Track permission changes made by Big Boss
-    if (oldUser.can_manage_fields !== updatedUser.can_manage_fields) changes.push(`Field Settings Permission updated`);
-    if (oldUser.auto_approve_tasks !== updatedUser.auto_approve_tasks) changes.push(`Auto-Approve Tasks updated to: <strong>${updatedUser.auto_approve_tasks}</strong>`);
+    // Build plain-text change list for notifications
+    const changeLinesEn = [];
+    const changeLinesHe = [];
+    const changeLinesth = [];
+    if (oldUser.full_name !== updatedUser.full_name) {
+        changeLinesEn.push(`• Name → ${updatedUser.full_name}`);
+        changeLinesHe.push(`• שם → ${updatedUser.full_name}`);
+        changeLinesth.push(`• ชื่อ → ${updatedUser.full_name}`);
+    }
+    if (oldUser.email !== updatedUser.email) {
+        changeLinesEn.push(`• Email → ${updatedUser.email}`);
+        changeLinesHe.push(`• אימייל → ${updatedUser.email}`);
+        changeLinesth.push(`• อีเมล → ${updatedUser.email}`);
+    }
+    if (oldUser.phone !== updatedUser.phone) {
+        changeLinesEn.push(`• Phone updated`);
+        changeLinesHe.push(`• טלפון עודכן`);
+        changeLinesth.push(`• อัปเดตเบอร์โทร`);
+    }
+    if (oldUser.preferred_language !== updatedUser.preferred_language) {
+        changeLinesEn.push(`• Language → ${updatedUser.preferred_language}`);
+        changeLinesHe.push(`• שפה → ${updatedUser.preferred_language}`);
+        changeLinesth.push(`• ภาษา → ${updatedUser.preferred_language}`);
+    }
+    if (password && password.trim() !== '') {
+        changeLinesEn.push(`• Password changed 🔑`);
+        changeLinesHe.push(`• סיסמה שונתה 🔑`);
+        changeLinesth.push(`• เปลี่ยนรหัสผ่าน 🔑`);
+    }
+    if (oldUser.role !== updatedUser.role) {
+        changeLinesEn.push(`• Role → ${updatedUser.role}`);
+        changeLinesHe.push(`• תפקיד → ${updatedUser.role}`);
+        changeLinesth.push(`• บทบาท → ${updatedUser.role}`);
+    }
 
-    // Welcome LINE message when lineUserId is set for the first time
+    const changeLangMap = { he: changeLinesHe, en: changeLinesEn, th: changeLinesth };
+    const userLang = updatedUser.preferred_language || 'en';
+    const changeText = (changeLangMap[userLang] || changeLinesEn).join('\n');
+
+    // Welcome LINE message when LINE ID is set for the first time
     const oldLineId = oldUser.line_user_id;
     const newLineId = updatedUser.line_user_id;
     if (newLineId && !oldLineId) {
-        const lang2 = updatedUser.preferred_language || 'he';
-        const welcomeDict = {
-            he: `שלום ${updatedUser.full_name}! 👋 ברוך הבא למערכת OpsManager. חשבונך מחובר בהצלחה.`,
-            en: `Hello ${updatedUser.full_name}! 👋 Welcome to the team! Your account is now connected to OpsManager.`,
-            th: `สวัสดี ${updatedUser.full_name}! 👋 ยินดีต้อนรับสู่ทีม! บัญชีของคุณเชื่อมต่อกับ OpsManager แล้ว`
+        const welcomeMsg = {
+            he: `שלום ${updatedUser.full_name}! 👋 חשבונך מחובר בהצלחה ל-OpsManager.`,
+            en: `Hello ${updatedUser.full_name}! 👋 Your account is now connected to OpsManager.`,
+            th: `สวัสดี ${updatedUser.full_name}! 👋 บัญชีของคุณเชื่อมต่อกับ OpsManager แล้ว`
         };
-        sendLineMessage(newLineId, welcomeDict[lang2] || welcomeDict['en']).catch(err => console.error("❌ LINE welcome error:", err));
+        sendLineMessage(newLineId, welcomeMsg[userLang] || welcomeMsg.en).catch(err => console.error("❌ LINE welcome error:", err));
+    }
+
+    // Notify user via all 3 channels if any material change occurred
+    if (changeText) {
+        sendNotification(updatedUser.id, ['email', 'line', 'push'], 'user_updated', { changes: changeText })
+            .catch(err => console.error("❌ user_updated notification error:", err));
     }
 
     res.json({ message: "User updated successfully", user: updatedUser });
@@ -2217,50 +2435,40 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         createdCount = tasksToInsert.length;
     }
     
-    // 🚀 Worker & manager notifications (LINE preferred, push fallback)
+    // 🚀 Worker notifications — all 3 channels simultaneously
     try {
-        const workerRes = await pool.query('SELECT device_token, preferred_language, line_user_id, parent_manager_id FROM users WHERE id = $1', [worker_id]);
+        const workerRes = await pool.query(
+            'SELECT device_token, preferred_language, line_user_id, parent_manager_id FROM users WHERE id = $1',
+            [worker_id]
+        );
         const workerData = workerRes.rows[0];
-        const workerLang = workerData?.preferred_language || 'he';
+        // Fetch the last inserted task id so we can pass full task object
+        const lastTaskRes = await pool.query(
+            'SELECT id, title, urgency, due_date FROM tasks WHERE worker_id = $1 ORDER BY id DESC LIMIT 1',
+            [worker_id]
+        );
+        const taskObj = lastTaskRes.rows[0] || { title, urgency, due_date: null };
+        await sendNotification(worker_id, ['email', 'line', 'push'], 'tasks_assigned', {
+            tasks: [taskObj], taskCount: 1
+        });
 
-        const lineTaskDict = {
-            he: `📋 משימה חדשה הוקצתה לך: "${title}"`,
-            en: `📋 New task assigned to you: "${title}"`,
-            th: `📋 คุณได้รับมอบหมายงานใหม่: "${title}"`
-        };
-
-        if (workerData?.line_user_id) {
-            await sendLineMessage(workerData.line_user_id, lineTaskDict[workerLang] || lineTaskDict['en']);
-        } else if (workerData?.device_token) {
-            const pushDict = {
-                he: { title: 'משימה חדשה! 📋', body: `הוקצתה לך משימה חדשה: ${title}` },
-                en: { title: 'New Task! 📋', body: `You have been assigned a new task: ${title}` },
-                th: { title: 'งานใหม่! 📋', body: `คุณได้รับมอบหมายงานใหม่: ${title}` }
-            };
-            await admin.messaging().send({
-                token: workerData.device_token,
-                notification: pushDict[workerLang],
-                webpush: { fcmOptions: { link: '/' } }
-            });
-            console.log(`🔔 Notification sent to worker in ${workerLang}!`);
-        }
-
-        // Also notify the worker's manager via LINE
+        // Also notify the worker's manager via LINE (informational only)
         if (workerData?.parent_manager_id) {
             const mgrRes = await pool.query('SELECT line_user_id, preferred_language FROM users WHERE id = $1', [workerData.parent_manager_id]);
             const mgrData = mgrRes.rows[0];
             if (mgrData?.line_user_id) {
-                const mgrLang = mgrData.preferred_language || 'he';
+                const mgrLang = mgrData.preferred_language || 'en';
                 const mgrLineDict = {
                     he: `📋 משימה חדשה נוצרה לעובד שלך: "${title}"`,
                     en: `📋 New task created for your employee: "${title}"`,
                     th: `📋 สร้างงานใหม่ให้พนักงานของคุณ: "${title}"`
                 };
-                await sendLineMessage(mgrData.line_user_id, mgrLineDict[mgrLang] || mgrLineDict['en']);
+                sendLineMessage(mgrData.line_user_id, mgrLineDict[mgrLang] || mgrLineDict.en)
+                    .catch(e => console.error('⚠️ Manager LINE notify failed:', e.message));
             }
         }
     } catch (err) {
-        console.error("⚠️ Failed to send notification:", err.message);
+        console.error("⚠️ Failed to send task notification:", err.message);
     }
 
     res.json({ message: isRecurring ? `Created ${createdCount} recurring tasks` : "Task created successfully" });
@@ -2361,26 +2569,21 @@ app.post('/tasks/bulk-excel', authenticateToken, async (req, res) => {
             }
         }
 
+        // Notify each worker via all 3 channels with their assigned tasks
         try {
-            for (const worker_id in notificationsMap) {
+            for (const worker_id of Object.keys(notificationsMap)) {
                 const taskCount = notificationsMap[worker_id];
-                if (taskCount > 0) {
-                    const workerRes = await pool.query('SELECT device_token FROM users WHERE id = $1', [worker_id]);
-                    const workerToken = workerRes.rows[0]?.device_token;
-
-                    if (workerToken) {
-                        await admin.messaging().send({
-                            token: workerToken,
-                            notification: {
-                                title: 'ייבוא משימות הושלם! 🚀',
-                                body: `מנהל הקצה לך ${taskCount} משימות חדשות.`
-                            },
-                            webpush: { fcmOptions: { link: '/' } }
-                        });
-                    }
-                }
+                if (taskCount < 1) continue;
+                // Fetch the tasks just inserted for this worker (most recent N)
+                const taskRows = await pool.query(
+                    'SELECT id, title, urgency, due_date FROM tasks WHERE worker_id = $1 ORDER BY id DESC LIMIT $2',
+                    [worker_id, taskCount]
+                );
+                await sendNotification(parseInt(worker_id), ['email', 'line', 'push'], 'tasks_assigned', {
+                    tasks: taskRows.rows, taskCount
+                });
             }
-        } catch (err) { console.error("⚠️ Failed to send bulk notifications:", err.message); }
+        } catch (err) { console.error("⚠️ Failed to send bulk-excel notifications:", err.message); }
 
         res.json({ success: true, message: `הוכנסו בהצלחה ${insertedCount} משימות.` });
 
@@ -3280,6 +3483,24 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
         }
 
         await client.query('COMMIT');
+
+        // Notify each worker via all 3 channels (after commit so tasks are queryable)
+        try {
+            const workerIds = [...new Set(validRows.map(r => r.worker_id))];
+            for (const wid of workerIds) {
+                const workerTaskCount = validRows.filter(r => r.worker_id === wid).length;
+                const taskRows = await pool.query(
+                    'SELECT id, title, urgency, due_date FROM tasks WHERE worker_id = $1 AND created_by = $2 ORDER BY id DESC LIMIT $3',
+                    [wid, callerId, workerTaskCount]
+                );
+                await sendNotification(wid, ['email', 'line', 'push'], 'tasks_assigned', {
+                    tasks: taskRows.rows, taskCount: workerTaskCount
+                });
+            }
+        } catch (notifErr) {
+            console.error('⚠️ bulk-import notifications failed (tasks saved OK):', notifErr.message);
+        }
+
         res.json({ inserted: insertedCount, updated: 0, message: `Successfully created ${insertedCount} task instance(s).` });
 
     } catch (err) {
@@ -3427,8 +3648,54 @@ app.post('/api/reset-password', async (req, res) => {
     }
 });
 
+// ==========================================
+// ☀️ CRON: Morning Briefing — 09:00 Asia/Bangkok
+//    Target: EMPLOYEEs only | Channels: LINE + In-App Push (NO email)
+// ==========================================
+const runMorningBriefing = async () => {
+    console.log('⏰ [CRON] Running Morning Briefing (09:00 Bangkok)...');
+    try {
+        const empRes = await pool.query(
+            "SELECT id, full_name, line_user_id, device_token, preferred_language FROM users WHERE role = 'EMPLOYEE'"
+        );
+        const pendingRes = await pool.query(
+            "SELECT id, title, urgency, due_date, worker_id FROM tasks WHERE DATE(due_date) = CURRENT_DATE AND status = 'PENDING'"
+        );
+        const pendingToday = pendingRes.rows;
+
+        for (const emp of empRes.rows) {
+            const lang = emp.preferred_language || 'en';
+            const T = NOTIF_T.morning_briefing[lang] || NOTIF_T.morning_briefing.en;
+            const empTasks = pendingToday.filter(t => t.worker_id === emp.id);
+            const sends = [];
+
+            if (emp.line_user_id) {
+                const msg = empTasks.length === 0
+                    ? T.none_line(emp.full_name)
+                    : T.line(emp.full_name, empTasks.length, buildTaskListLine(empTasks, lang));
+                sends.push(sendLineMessage(emp.line_user_id, msg).catch(e => console.error(`⚠️ LINE morning briefing (${emp.id}):`, e.message)));
+            }
+            if (emp.device_token) {
+                const title = empTasks.length === 0 ? T.none_push_t : T.push_t;
+                const body  = empTasks.length === 0 ? T.none_push_b() : T.push_b(empTasks.length);
+                sends.push(sendFcmPush(emp.device_token, title, body, APP_LINK));
+            }
+            if (sends.length) await Promise.all(sends);
+        }
+        console.log(`✅ [CRON] Morning Briefing dispatched to ${empRes.rows.length} employees.`);
+    } catch (err) {
+        console.error('❌ [CRON] Morning Briefing failed:', err.message);
+    }
+};
+
+// Morning Briefing: 09:00 Asia/Bangkok — LINE + Push only, NO email
+cron.schedule('0 9 * * *', runMorningBriefing, { scheduled: true, timezone: 'Asia/Bangkok' });
+
+// ==========================================
+// 📊 CRON: End-of-Day Report — 16:00 Asia/Bangkok
+// ==========================================
 const runDailyReport = async (manager_id = null) => {
-    console.log(`⏰ Running Daily Task Check${manager_id ? ` for manager ${manager_id}'s team` : ' for EVERYONE'}...`);
+    console.log(`⏰ [EOD] Running End-of-Day Report${manager_id ? ` for manager ${manager_id}` : ' for EVERYONE'}...`);
 
     const dict = {
         he: {
@@ -3518,10 +3785,14 @@ const runDailyReport = async (manager_id = null) => {
     };
 
     try {
-        const usersRes = await pool.query("SELECT id, full_name, email, role, parent_manager_id, device_token, preferred_language, line_user_id FROM users");
+        const usersRes = await pool.query(
+            "SELECT id, full_name, email, role, parent_manager_id, device_token, preferred_language, line_user_id, company_id FROM users"
+        );
         const allUsers = usersRes.rows;
         const tasksRes = await pool.query("SELECT * FROM tasks WHERE DATE(due_date) = CURRENT_DATE");
         const todayTasks = tasksRes.rows;
+        const companiesRes = await pool.query("SELECT id, COALESCE(name_en, name, 'Company') AS display_name FROM companies");
+        const companyMap = Object.fromEntries(companiesRes.rows.map(c => [c.id, c.display_name]));
 
         // הפונקציה המקורית שלך לעטיפת המייל
         const getEmailTemplate = (langDict, content) => `
@@ -3594,134 +3865,167 @@ const runDailyReport = async (manager_id = null) => {
                 </div>
             `);
 
+            // ── EMPLOYEE: All 3 channels simultaneously ────────────────────
+            const empSends = [];
+            if (emp.email) {
+                empSends.push(transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: emp.email, subject: emailSubj, html: htmlBody })
+                    .catch(e => console.error(`❌ EOD email employee ${emp.email}:`, e.message)));
+            }
             if (emp.line_user_id) {
-                // Build detailed task list for LINE message
                 let lineMsg = `${pushTitle}\n${pushBody}`;
                 if (!isNone) {
                     lineMsg += `\n\n--- ${l.th_task} ---`;
                     wTasks.forEach(t => {
-                        const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
-                        lineMsg += `\n• ${t.title}: ${isDone ? l.status_done : l.status_not}`;
+                        const done = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                        lineMsg += `\n• ${t.title}: ${done ? l.status_done : l.status_not}`;
                     });
                     lineMsg += `\n\n${completed.length} ${l.out_of} ${wTasks.length}`;
                 }
-                try { await sendLineMessage(emp.line_user_id, lineMsg); }
-                catch (e) { console.error(`❌ LINE send failed for employee ${emp.email}:`, e.message); }
-            } else if (emp.email) {
-                try { await transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: emp.email, subject: emailSubj, html: htmlBody }); }
-                catch (e) { console.error(`❌ Email send failed for employee ${emp.email}:`, e.message); }
+                empSends.push(sendLineMessage(emp.line_user_id, lineMsg)
+                    .catch(e => console.error(`❌ EOD LINE employee ${emp.email}:`, e.message)));
             }
-            if (emp.device_token) admin.messaging().send({ token: emp.device_token, notification: { title: pushTitle, body: pushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.error("FCM push error:", e.message));
+            if (emp.device_token) {
+                empSends.push(sendFcmPush(emp.device_token, pushTitle, pushBody, APP_LINK));
+            }
+            await Promise.all(empSends);
         }
 
-        // ==========================================
-        // 2. שליחת דוחות מלאים למנהלים (כולל מי שאין לו משימות)
-        // ==========================================
-        const leaders = allUsers.filter(u => (u.role === 'MANAGER' || u.role === 'BIG_BOSS') && (!manager_id || u.id === manager_id));
-        for (const leader of leaders) {
-            const relevantEmps = leader.role === 'BIG_BOSS' 
-                ? employees 
-                : employees.filter(e => e.parent_manager_id === leader.id);
+        // Shared helper: build employee sub-block HTML for manager reports
+        const buildEmpBlock = (emp, wTasks, l) => {
+            const done = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+            const isNone = wTasks.length === 0;
+            const isPerfect = !isNone && done.length === wTasks.length;
+            const icon = isNone ? '🏖️' : (isPerfect ? '✅' : '❌');
+            const statusColor = isNone ? '#6b7280' : (isPerfect ? '#166534' : '#991b1b');
+            const bgColor = isNone ? '#f9fafb' : (isPerfect ? '#f0fdf4' : '#fef2f2');
+            const badge = isNone ? l.status_none : `${done.length} ${l.out_of} ${wTasks.length}`;
+            let html = `<div style="margin-bottom:10px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
+                <div style="background:${bgColor};padding:8px 10px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-weight:bold;font-size:13px;color:${statusColor};">${icon} ${emp.full_name}</span>
+                    <span style="font-size:11px;color:#6b7280;background:#fff;padding:2px 6px;border-radius:10px;border:1px solid #ddd;">${badge}</span>
+                </div>`;
+            if (!isNone) {
+                html += `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <tr style="background:#f9fafb;color:#4b5563;text-align:${l.align};">
+                        <th style="padding:5px 6px;border-bottom:1px solid #eee;">${l.th_task}</th>
+                        <th style="padding:5px 6px;border-bottom:1px solid #eee;">${l.th_status}</th>
+                    </tr>`;
+                wTasks.forEach(t => {
+                    const d = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
+                    html += `<tr>
+                        <td style="padding:5px 6px;border-bottom:1px solid #eee;">${t.title}</td>
+                        <td style="padding:5px 6px;border-bottom:1px solid #eee;">
+                            <span style="background:${d ? '#dcfce7' : '#fee2e2'};color:${d ? '#166534' : '#991b1b'};padding:2px 5px;border-radius:4px;font-size:10px;">${d ? l.status_done : l.status_not}</span>
+                        </td></tr>`;
+                });
+                html += `</table>`;
+            }
+            return html + `</div>`;
+        };
 
-            if (relevantEmps.length === 0) continue;
-
-            const l = dict[leader.preferred_language] || dict['he'];
-            let allTeamPerfect = true;
-            let allTeamNone = true;
-
-            let leaderContent = `<div>`;
-
-            relevantEmps.forEach(emp => {
+        // ── 2. MANAGERs → Email Only ───────────────────────────────────────
+        const managers = allUsers.filter(u => u.role === 'MANAGER' && (!manager_id || u.id === manager_id));
+        for (const mgr of managers) {
+            if (!mgr.email) continue;
+            const mgrEmps = employees.filter(e => e.parent_manager_id === mgr.id);
+            if (mgrEmps.length === 0) continue;
+            const l = dict[mgr.preferred_language] || dict['en'];
+            let allPerfect = true, allNone = true;
+            let content = '<div>';
+            mgrEmps.forEach(emp => {
                 const wTasks = todayTasks.filter(t => t.worker_id === emp.id);
-                const completed = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
-                
-                const isEmpNone = wTasks.length === 0;
-                const isEmpPerfect = !isEmpNone && (completed.length === wTasks.length);
-
-                if (!isEmpNone) allTeamNone = false;
-                if (!isEmpPerfect && !isEmpNone) allTeamPerfect = false;
-
-                let empStatusColor = isEmpNone ? '#6b7280' : (isEmpPerfect ? '#166534' : '#991b1b');
-                let empBgColor = isEmpNone ? '#f9fafb' : (isEmpPerfect ? '#f0fdf4' : '#fef2f2');
-                let empIcon = isEmpNone ? '🏖️' : (isEmpPerfect ? '🌟' : '⚠️');
-                let empBadge = isEmpNone ? l.status_none : `${completed.length} ${l.out_of} ${wTasks.length}`;
-
-                leaderContent += `
-                    <div style="margin-bottom:12px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden;">
-                        <div style="background:${empBgColor}; padding:8px 10px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-weight:bold; font-size:14px; color:${empStatusColor};">${empIcon} ${emp.full_name}</span>
-                            <span style="font-size:11px; color:#6b7280; background:#fff; padding:2px 6px; border-radius:10px; border:1px solid #ddd;">${empBadge}</span>
-                        </div>`;
-                
-                if (!isEmpNone) {
-                    leaderContent += `
-                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
-                            <tr style="background:#f9fafb; text-align:${l.align}; color:#4b5563;">
-                                <th style="padding:6px; border-bottom:1px solid #eee;">${l.th_task}</th>
-                                <th style="padding:6px; border-bottom:1px solid #eee;">${l.th_status}</th>
-                            </tr>
-                    `;
-
-                    wTasks.forEach(t => {
-                        const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
-                        leaderContent += `
-                            <tr>
-                                <td style="padding:6px; border-bottom:1px solid #eee;">${t.title}</td>
-                                <td style="padding:6px; border-bottom:1px solid #eee;">
-                                    <span style="background:${isDone ? '#dcfce7' : '#fee2e2'}; color:${isDone ? '#166534' : '#991b1b'}; padding:2px 4px; border-radius:4px; white-space:nowrap; font-size:10px;">
-                                        ${isDone ? l.status_done : l.status_not}
-                                    </span>
-                                </td>
-                            </tr>
-                        `;
-                    });
-                    leaderContent += `</table>`;
-                }
-                leaderContent += `</div>`;
+                const done = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+                if (wTasks.length > 0) allNone = false;
+                if (wTasks.length > 0 && done.length < wTasks.length) allPerfect = false;
+                content += buildEmpBlock(emp, wTasks, l);
             });
-
-            leaderContent += `</div>`;
-            const leaderHtml = getEmailTemplate(l, leaderContent);
-
-            let lSubj = allTeamNone ? l.m_none_subj : (allTeamPerfect ? l.m_perf_subj : l.m_pend_subj);
-            let lPushTitle = allTeamNone ? l.push_m_none_title : (allTeamPerfect ? l.push_m_perf_title : l.push_m_pend_title);
-            let lPushBody = allTeamNone ? l.push_m_none_body : (allTeamPerfect ? l.push_m_perf_body : l.push_m_pend_body);
-
-            // Build detailed plain-text report for LINE (HTML not supported in LINE)
-            let lineReport = `${lPushTitle}\n${lPushBody}\n`;
-            relevantEmps.forEach(emp => {
-                const empTasks = todayTasks.filter(t => t.worker_id === emp.id);
-                const empDone = empTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
-                const empIcon = empTasks.length === 0 ? '🏖️' : (empDone.length === empTasks.length ? '🌟' : '⚠️');
-                lineReport += `\n${empIcon} ${emp.full_name} (${empDone.length}/${empTasks.length})`;
-                if (empTasks.length === 0) {
-                    lineReport += `\n  ${l.status_none}`;
-                } else {
-                    empTasks.forEach(t => {
-                        const isDone = t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL';
-                        lineReport += `\n  • ${t.title}: ${isDone ? l.status_done : l.status_not}`;
-                    });
-                }
-            });
-
-            // Send via LINE if available
-            if (leader.line_user_id) {
-                try { await sendLineMessage(leader.line_user_id, lineReport); }
-                catch (e) { console.error(`❌ LINE send failed for leader ${leader.email}:`, e.message); }
-            }
-            // Always send full detailed email to manager/admin
-            if (leader.email) {
-                try { await transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: leader.email, subject: lSubj, html: leaderHtml }); }
-                catch (e) { console.error(`❌ Email send failed for leader ${leader.email}:`, e.message); }
-            }
-            if (leader.device_token) admin.messaging().send({ token: leader.device_token, notification: { title: lPushTitle, body: lPushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.error("FCM push error:", e.message));
+            content += '</div>';
+            const subj = allNone ? l.m_none_subj : (allPerfect ? l.m_perf_subj : l.m_pend_subj);
+            transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: mgr.email, subject: subj, html: getEmailTemplate(l, content) })
+                .catch(e => console.error(`❌ EOD email MANAGER ${mgr.email}:`, e.message));
         }
-        console.log("✅ [CRON] Daily Check completed for everyone.");
-    } catch (error) { console.error("❌ [CRON] Failed:", error); }
+
+        // ── 3. COMPANY_MANAGERs → Email Only (per-company grouping) ────────
+        if (!manager_id) {
+            const companyManagers = allUsers.filter(u => u.role === 'COMPANY_MANAGER');
+            for (const cm of companyManagers) {
+                if (!cm.email || !cm.company_id) continue;
+                const cmEmps = employees.filter(e => e.company_id === cm.company_id);
+                if (cmEmps.length === 0) continue;
+                const l = dict[cm.preferred_language] || dict['en'];
+                const coName = companyMap[cm.company_id] || 'Company';
+                let content = `<div><h3 style="color:#714B67;margin:0 0 12px 0;">${coName} — ${l.m_title}</h3>`;
+                let allPerfect = true, allNone = true;
+                cmEmps.forEach(emp => {
+                    const wTasks = todayTasks.filter(t => t.worker_id === emp.id);
+                    const done = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+                    if (wTasks.length > 0) allNone = false;
+                    if (wTasks.length > 0 && done.length < wTasks.length) allPerfect = false;
+                    content += buildEmpBlock(emp, wTasks, l);
+                });
+                content += '</div>';
+                const subj = allNone ? l.m_none_subj : (allPerfect ? l.m_perf_subj : l.m_pend_subj);
+                transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: cm.email, subject: subj, html: getEmailTemplate(l, content) })
+                    .catch(e => console.error(`❌ EOD email COMPANY_MANAGER ${cm.email}:`, e.message));
+            }
+        }
+
+        // ── 4. BIG_BOSS → Email Only (Master: Company → Manager → Employee → Tasks) ──
+        if (!manager_id) {
+            const bigBosses = allUsers.filter(u => u.role === 'BIG_BOSS');
+            for (const boss of bigBosses) {
+                if (!boss.email) continue;
+                const l = dict[boss.preferred_language] || dict['en'];
+
+                // Group employees by company_id
+                const companiesWithEmps = {};
+                employees.forEach(emp => {
+                    const cid = emp.company_id || 0;
+                    if (!companiesWithEmps[cid]) companiesWithEmps[cid] = [];
+                    companiesWithEmps[cid].push(emp);
+                });
+
+                let masterContent = `<div><h2 style="color:#714B67;margin:0 0 16px 0;">📊 ${l.m_title}</h2>`;
+                let grandPerfect = true, grandNone = true;
+
+                for (const [cid, coEmps] of Object.entries(companiesWithEmps)) {
+                    const coName = companyMap[parseInt(cid)] || `Company #${cid}`;
+                    let coAllPerfect = true, coAllNone = true;
+
+                    // Company header + employee blocks
+                    let coContent = '';
+                    coEmps.forEach(emp => {
+                        const wTasks = todayTasks.filter(t => t.worker_id === emp.id);
+                        const done = wTasks.filter(t => t.status === 'COMPLETED' || t.status === 'WAITING_APPROVAL');
+                        if (wTasks.length > 0) coAllNone = false;
+                        if (wTasks.length > 0 && done.length < wTasks.length) coAllPerfect = false;
+                        if (wTasks.length > 0) grandNone = false;
+                        if (wTasks.length > 0 && done.length < wTasks.length) grandPerfect = false;
+                        coContent += buildEmpBlock(emp, wTasks, l);
+                    });
+
+                    const coIcon = coAllNone ? '🏖️' : (coAllPerfect ? '✅' : '❌');
+                    masterContent += `<div style="margin-bottom:20px;border:2px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+                        <div style="background:#714B67;padding:10px 14px;">
+                            <span style="color:#fff;font-weight:bold;font-size:14px;">${coIcon} ${coName}</span>
+                        </div>
+                        <div style="padding:10px;">${coContent}</div>
+                    </div>`;
+                }
+                masterContent += '</div>';
+
+                const subj = grandNone ? l.m_none_subj : (grandPerfect ? l.m_perf_subj : l.m_pend_subj);
+                transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: boss.email, subject: `[Master] ${subj}`, html: getEmailTemplate(l, masterContent) })
+                    .catch(e => console.error(`❌ EOD email BIG_BOSS ${boss.email}:`, e.message));
+            }
+        }
+
+        console.log("✅ [EOD] Daily Report completed for everyone.");
+    } catch (error) { console.error("❌ [EOD] runDailyReport failed:", error); }
 };
 
-// 1. Automatic daily run at 15:00 Asia/Bangkok
-cron.schedule('0 15 * * *', runDailyReport, { scheduled: true, timezone: "Asia/Bangkok" });
+// EOD Report: 16:00 Asia/Bangkok — Email only for leaders, All 3 channels for employees
+cron.schedule('0 16 * * *', runDailyReport, { scheduled: true, timezone: 'Asia/Bangkok' });
 
 // 2. POST /api/trigger-daily-reports — manual trigger with optional manager_id filter
 app.post('/api/trigger-daily-reports', async (req, res) => {
