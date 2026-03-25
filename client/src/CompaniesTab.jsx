@@ -370,7 +370,7 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
                     className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]">
                     <option value="">Select category…</option>
                     {(categories ?? []).map(c => (
-                        <option key={c.id} value={String(c.id)}>{c.name_en || c.name}</option>
+                        <option key={c.id} value={String(c.id)}>{c['name_' + lang] || c.name_en || c.name}</option>
                     ))}
                 </select>
             </div>
@@ -380,7 +380,7 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
                     className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]">
                     <option value="">None</option>
                     {(locations ?? []).map(l => (
-                        <option key={l.id} value={String(l.id)}>{l.name_en || l.name}</option>
+                        <option key={l.id} value={String(l.id)}>{l['name_' + lang] || l.name_en || l.name}</option>
                     ))}
                 </select>
             </div>
@@ -1093,6 +1093,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                                         <span className="ml-1.5 text-[10px] text-gray-400 font-normal">{l.name_th}</span>
                                     )}
                                 </span>
+                                {l?.code && <span className="text-[10px] text-gray-400 font-mono shrink-0">{l.code}</span>}
                                 <RowActions
                                     onEdit={() => togglePanel(`edit-loc:${l.id}`)}
                                     editOpen={openPanel === `edit-loc:${l.id}`}
