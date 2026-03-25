@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Trash2, Pencil, MapPin, Plus, X, Save, Navigation } from 'lucide-react';
 
 const API = 'https://maintenance-app-staging.onrender.com';
@@ -7,7 +8,7 @@ const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const emptyForm = () => ({ name_he: '', name_en: '', name_th: '', address: '' });
 
 // ─── Branded delete-confirm modal ────────────────────────────────────────────
-const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
+const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => createPortal(
     <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
         <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in">
             <p className="text-gray-800 font-medium text-center mb-6">{message}</p>
@@ -26,7 +27,8 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
                 </button>
             </div>
         </div>
-    </div>
+    </div>,
+    document.body
 );
 
 const LocationsTab = ({ token, t, lang = 'en' }) => {

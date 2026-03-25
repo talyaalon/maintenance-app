@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Building2, Plus, ChevronRight, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck, Send, FileSpreadsheet, AlertTriangle, Mail, CheckCircle2 } from 'lucide-react';
 import ScopedTasksModal from './ScopedTasksModal';
 import MultiLangNameInput from './MultiLangNameInput';
@@ -7,7 +8,7 @@ import ConfigExcelPanel from './ConfigExcelPanel';
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
 // ─── Confirm delete modal (kept as modal — it's just a confirmation, not an edit form) ──
-const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
+const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => createPortal(
     <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
         <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
             <p className="text-gray-800 font-medium text-center mb-6">{message}</p>
@@ -20,7 +21,8 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
                 </button>
             </div>
         </div>
-    </div>
+    </div>,
+    document.body
 );
 
 // ─── Company Deletion: Blocker Modal (company has data) ──────────────────────
@@ -33,7 +35,7 @@ const DeletionBlockerModal = ({ company, counts, onClose, t }) => {
         { key: 'assets',     label: t?.assets_label     || 'assets' },
     ].filter(i => counts[i.key] > 0);
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
                 <div className="flex items-center gap-2 mb-4">
@@ -55,12 +57,13 @@ const DeletionBlockerModal = ({ company, counts, onClose, t }) => {
                     {t?.close || 'Close'}
                 </button>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
 // ─── Company Deletion: Confirmation Modal (company is empty, request email) ──
-const DeletionConfirmModal = ({ company, onConfirm, onCancel, requesting, emailSent, t }) => (
+const DeletionConfirmModal = ({ company, onConfirm, onCancel, requesting, emailSent, t }) => createPortal(
     <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
         <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
             {emailSent ? (
@@ -99,7 +102,8 @@ const DeletionConfirmModal = ({ company, onConfirm, onCancel, requesting, emailS
                 </>
             )}
         </div>
-    </div>
+    </div>,
+    document.body
 );
 
 // ─── Section card with optional Add button + addPanel slot ────────────────────

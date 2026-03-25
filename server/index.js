@@ -2291,24 +2291,16 @@ app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) =
     const id = req.params.id;
     const companyId = req.user.company_id;
     try {
-        // Pre-deletion check — scoped strictly to this tenant to prevent cross-company FK bleed
-        const [assetRes, taskRes] = await Promise.all([
-            pool.query('SELECT COUNT(*) FROM assets WHERE location_id = $1 AND company_id = $2', [id, companyId]),
-            pool.query('SELECT COUNT(*) FROM tasks  WHERE location_id = $1 AND company_id = $2', [id, companyId]),
+        // Nullify FK references scoped to this tenant to avoid Postgres 23503 violations
+        await Promise.all([
+            pool.query('UPDATE tasks  SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, companyId]),
+            pool.query('UPDATE assets SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, companyId]),
         ]);
-        const assets = parseInt(assetRes.rows[0].count, 10);
-        const tasks  = parseInt(taskRes.rows[0].count, 10);
-        if (assets > 0 || tasks > 0) {
-            const parts = [];
-            if (assets > 0) parts.push(`${assets} asset${assets !== 1 ? 's' : ''}`);
-            if (tasks  > 0) parts.push(`${tasks} task${tasks !== 1 ? 's' : ''}`);
-            return res.status(400).json({ message: `Cannot delete: This location is currently assigned to ${parts.join(' and ')}.` });
-        }
-        // Scoped delete — only removes this company's record, immune to other tenants' FK references
         await pool.query('DELETE FROM locations WHERE id = $1 AND company_id = $2', [id, companyId]);
         res.json({ success: true });
     } catch (e) {
-        res.status(400).json({ message: 'Cannot delete: Item is in use.' });
+        console.error('Delete location error:', e);
+        res.status(500).json({ message: 'Server error while deleting location.' });
     }
 });
 
