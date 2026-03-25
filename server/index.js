@@ -2752,6 +2752,373 @@ app.post('/tasks/import-process', authenticateToken, async (req, res) => {
     }
 });
 
+// ─── Tasks — Excel Bulk Import ────────────────────────────────────────────────
+// Accepts rows from ConfigExcelPanel ({ rows, isDryRun, target_company_id }).
+// Dry-run returns { validCount } on success or { errors } on failure.
+// Commit generates all task instances (recurring expanded 1-year) and returns
+// { inserted, updated }.
+app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
+    if (!['BIG_BOSS', 'COMPANY_MANAGER', 'MANAGER'].includes(req.user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions for bulk task import.' });
+    }
+
+    const { rows, isDryRun, target_company_id } = req.body;
+    if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+
+    const safeTargetCompanyId = req.user.role === 'BIG_BOSS' ? (target_company_id || null) : null;
+    const { insertCompanyId } = await resolveCallerScope(req.user, safeTargetCompanyId);
+    const callerId = req.user.id;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const errors    = [];
+        const validRows = [];
+
+        // ── Frequency mapping (EN / HE / TH) ────────────────────────────────
+        const FREQ_MAP = {
+            'one-time': 'one-time', 'one time': 'one-time', 'onetime': 'one-time',
+            'חד פעמי': 'one-time', 'ครั้งเดียว': 'one-time',
+            'daily': 'daily', 'יומי': 'daily', 'รายวัน': 'daily',
+            'weekly': 'weekly', 'שבועי': 'weekly', 'รายสัปดาห์': 'weekly',
+            'monthly': 'monthly', 'חודשי': 'monthly', 'รายเดือน': 'monthly',
+            'quarterly': 'quarterly', 'רבעוני': 'quarterly', 'รายไตรมาส': 'quarterly',
+            'yearly': 'yearly', 'annual': 'yearly', 'שנתי': 'yearly', 'ประจำปี': 'yearly',
+        };
+
+        // ── Helper: find a cell value by any of the provided header aliases ──
+        const get = (row, keys) => {
+            for (const k of keys) {
+                const found = Object.keys(row).find(rk => rk.trim().toLowerCase() === k.toLowerCase());
+                if (found !== undefined && row[found] !== '' && row[found] !== null && row[found] !== undefined) {
+                    return row[found].toString().trim();
+                }
+            }
+            return '';
+        };
+
+        // ── Pre-fetch company-scoped lookup tables ───────────────────────────
+        const cWhere  = insertCompanyId ? ' AND company_id = $1' : '';
+        const cParams = insertCompanyId ? [insertCompanyId] : [];
+
+        const [usersRes, locsRes, catsRes, assetsRes] = await Promise.all([
+            insertCompanyId
+                ? client.query(`SELECT id, full_name, full_name_en, full_name_he, full_name_th FROM users WHERE company_id = $1 AND role NOT IN ('BIG_BOSS')`, [insertCompanyId])
+                : client.query(`SELECT id, full_name, full_name_en, full_name_he, full_name_th FROM users WHERE role NOT IN ('BIG_BOSS')`),
+            client.query(`SELECT id, name, name_en, name_he, name_th FROM locations WHERE 1=1${cWhere}`, cParams),
+            client.query(`SELECT id, name, name_en, name_he, name_th FROM categories WHERE 1=1${cWhere}`, cParams),
+            client.query(`SELECT id, name, name_en, name_he, name_th, code, category_id FROM assets WHERE 1=1${cWhere}`, cParams),
+        ]);
+
+        // Build multi-lang lookup map: any name variant (lowercase) → row
+        const buildLangMap = (dbRows, fields) => {
+            const map = new Map();
+            for (const r of dbRows) {
+                for (const f of fields) {
+                    const v = r[f];
+                    if (v) map.set(v.trim().toLowerCase(), r);
+                }
+            }
+            return map;
+        };
+
+        const userMap  = buildLangMap(usersRes.rows,  ['full_name', 'full_name_en', 'full_name_he', 'full_name_th']);
+        const locMap   = buildLangMap(locsRes.rows,   ['name', 'name_en', 'name_he', 'name_th']);
+        const catMap   = buildLangMap(catsRes.rows,   ['name', 'name_en', 'name_he', 'name_th']);
+        const assetMap = buildLangMap(assetsRes.rows, ['name', 'name_en', 'name_he', 'name_th', 'code']);
+
+        // MANAGER scope: pre-fetch linked employee IDs
+        let managerEmployeeIds = null;
+        if (req.user.role === 'MANAGER') {
+            const empRes = await client.query(
+                'SELECT employee_id FROM employee_managers WHERE manager_id = $1', [callerId]
+            );
+            managerEmployeeIds = new Set(empRes.rows.map(r => r.employee_id));
+        }
+
+        // ── Validate each row ────────────────────────────────────────────────
+        for (let i = 0; i < rows.length; i++) {
+            const row       = rows[i];
+            const ri        = i + 1;
+            const rowErrors = [];
+
+            // Extract all columns (support both "header *" and bare header forms)
+            const empNameEn    = get(row, ['employee_name_en *', 'employee_name_en']);
+            const empNameHe    = get(row, ['employee_name_he (Optional)', 'employee_name_he']);
+            const empNameTh    = get(row, ['employee_name_th (Optional)', 'employee_name_th']);
+            const taskNameEn   = get(row, ['task_name_en *', 'task_name_en', 'Title', 'title']);
+            const locationRaw  = get(row, ['location *', 'location', 'Location']);
+            const frequencyRaw = get(row, ['frequency *', 'frequency', 'Frequency']);
+            const dateOrDays   = get(row, ['date_or_days *', 'date_or_days', 'Date or Days']);
+            const urgencyRaw   = get(row, ['urgency (Optional)', 'urgency', 'Urgency']);
+            const categoryRaw  = get(row, ['category (Optional)', 'category', 'Category']);
+            const assetRaw     = get(row, ['asset (Optional)', 'asset', 'Asset']);
+            const imageUrlRaw  = get(row, ['image_url (Optional)', 'image_url', 'Image URL']);
+            const notesRaw     = get(row, ['notes (Optional)', 'notes', 'Notes', 'description']);
+
+            // ── Mandatory: task name ────────────────────────────────────────
+            if (!taskNameEn) rowErrors.push(`Row ${ri}: 'task_name_en' is required.`);
+
+            // ── Mandatory: employee lookup (EN → HE → TH fallback) ──────────
+            let worker_id = null;
+            const empSearch = empNameEn || empNameHe || empNameTh;
+            if (!empSearch) {
+                rowErrors.push(`Row ${ri}: 'employee_name_en' is required.`);
+            } else {
+                const empRow = userMap.get(empSearch.toLowerCase());
+                if (!empRow) {
+                    rowErrors.push(`Row ${ri}: Employee '${empSearch}' not found in this company.`);
+                } else {
+                    worker_id = empRow.id;
+                    if (req.user.role === 'MANAGER' && managerEmployeeIds && !managerEmployeeIds.has(worker_id)) {
+                        rowErrors.push(`Row ${ri}: Employee '${empSearch}' is not assigned to your team.`);
+                    }
+                }
+            }
+
+            // ── Mandatory: location lookup (EN / HE / TH) ───────────────────
+            let location_id = null;
+            if (!locationRaw) {
+                rowErrors.push(`Row ${ri}: 'location' is required.`);
+            } else {
+                const locRow = locMap.get(locationRaw.toLowerCase());
+                if (!locRow) {
+                    rowErrors.push(`Row ${ri}: Location '${locationRaw}' not found.`);
+                } else {
+                    location_id = locRow.id;
+                }
+            }
+
+            // ── Mandatory: frequency ─────────────────────────────────────────
+            let frequency = null;
+            if (!frequencyRaw) {
+                rowErrors.push(`Row ${ri}: 'frequency' is required.`);
+            } else {
+                frequency = FREQ_MAP[frequencyRaw.trim().toLowerCase()];
+                if (!frequency) {
+                    rowErrors.push(`Row ${ri}: Unknown frequency '${frequencyRaw}'. Accepted: One-time, Daily, Weekly, Monthly, Quarterly, Yearly (EN/HE/TH).`);
+                }
+            }
+
+            // ── Mandatory: date_or_days — validated against frequency ────────
+            let parsedDate = null;   // for one-time
+            let recurrence = null;   // { type, selectedDays? | monthlyDate? | quarterlyDates? | yearlyDates? }
+
+            if (!dateOrDays && frequency) {
+                rowErrors.push(`Row ${ri}: 'date_or_days' is required.`);
+            } else if (frequency && dateOrDays) {
+                const val = dateOrDays.toString().trim();
+
+                if (frequency === 'one-time') {
+                    // Expect DD/MM/YYYY
+                    const m = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+                    if (!m) {
+                        rowErrors.push(`Row ${ri}: One-time requires a date in DD/MM/YYYY format (e.g. 25/06/2025).`);
+                    } else {
+                        const d = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+                        if (isNaN(d.getTime()) || d.getMonth() !== parseInt(m[2]) - 1) {
+                            rowErrors.push(`Row ${ri}: Invalid date '${val}'.`);
+                        } else {
+                            parsedDate = d;
+                        }
+                    }
+
+                } else if (frequency === 'daily') {
+                    // Expect comma-separated numbers 1–7 (1=Sun … 7=Sat)
+                    const parts = val.split(',').map(s => parseInt(s.trim()));
+                    if (!parts.length || parts.some(n => isNaN(n) || n < 1 || n > 7)) {
+                        rowErrors.push(`Row ${ri}: Daily requires comma-separated numbers 1–7 (1=Sun, 7=Sat). E.g. "1,2,3".`);
+                    } else {
+                        recurrence = { type: 'daily', selectedDays: parts.map(n => n - 1) };
+                    }
+
+                } else if (frequency === 'weekly') {
+                    // Expect a single number 1–7
+                    const n = parseInt(val);
+                    if (isNaN(n) || n < 1 || n > 7 || val.includes(',')) {
+                        rowErrors.push(`Row ${ri}: Weekly requires a single number 1–7 (day of week, 1=Sun).`);
+                    } else {
+                        recurrence = { type: 'weekly', selectedDays: [n - 1] };
+                    }
+
+                } else if (frequency === 'monthly') {
+                    // Expect a single number 1–30
+                    const n = parseInt(val);
+                    if (isNaN(n) || n < 1 || n > 30 || val.includes(',')) {
+                        rowErrors.push(`Row ${ri}: Monthly requires a single day number 1–30 (e.g. "15").`);
+                    } else {
+                        recurrence = { type: 'monthly', monthlyDate: n };
+                    }
+
+                } else if (frequency === 'quarterly') {
+                    // Expect exactly 4 DD/MM dates, one from each quarter
+                    const parts = val.split(',').map(s => s.trim());
+                    if (parts.length !== 4) {
+                        rowErrors.push(`Row ${ri}: Quarterly requires exactly 4 dates in DD/MM format, one per quarter (e.g. "01/01,01/04,01/07,01/10").`);
+                    } else {
+                        let parseOk = true;
+                        const parsed = [];
+                        for (const p of parts) {
+                            const m = p.match(/^(\d{1,2})\/(\d{1,2})$/);
+                            if (!m) { parseOk = false; break; }
+                            const day = parseInt(m[1]), mon = parseInt(m[2]);
+                            if (day < 1 || day > 31 || mon < 1 || mon > 12) { parseOk = false; break; }
+                            parsed.push({ str: `${String(day).padStart(2,'0')}/${String(mon).padStart(2,'0')}`, mon });
+                        }
+                        if (!parseOk) {
+                            rowErrors.push(`Row ${ri}: Quarterly dates must be in DD/MM format (e.g. "01/01,01/04,01/07,01/10").`);
+                        } else {
+                            const quarters = parsed.map(p => p.mon <= 3 ? 1 : p.mon <= 6 ? 2 : p.mon <= 9 ? 3 : 4);
+                            if (new Set(quarters).size !== 4) {
+                                rowErrors.push(`Row ${ri}: Each quarterly date must fall in a different quarter (Q1: Jan–Mar, Q2: Apr–Jun, Q3: Jul–Sep, Q4: Oct–Dec).`);
+                            } else {
+                                recurrence = { type: 'quarterly', quarterlyDates: parsed.map(p => p.str) };
+                            }
+                        }
+                    }
+
+                } else if (frequency === 'yearly') {
+                    // Expect a single DD/MM date
+                    const m = val.match(/^(\d{1,2})\/(\d{1,2})$/);
+                    if (!m) {
+                        rowErrors.push(`Row ${ri}: Yearly requires a date in DD/MM format (e.g. "15/06").`);
+                    } else {
+                        const day = parseInt(m[1]), mon = parseInt(m[2]);
+                        recurrence = { type: 'yearly', yearlyDates: [`${String(day).padStart(2,'0')}/${String(mon).padStart(2,'0')}`] };
+                    }
+                }
+            }
+
+            // ── Optional: urgency (EN / HE / TH) ────────────────────────────
+            const URGENT_VALS = new Set(['urgent', 'high', 'דחוף', 'גבוהה', 'ด่วน', 'สูง']);
+            const urgency = urgencyRaw && URGENT_VALS.has(urgencyRaw.trim().toLowerCase()) ? 'High' : 'Normal';
+
+            // ── Optional: category lookup (EN / HE / TH) ────────────────────
+            let category_id = null;
+            if (categoryRaw) {
+                const catRow = catMap.get(categoryRaw.toLowerCase());
+                if (!catRow) {
+                    rowErrors.push(`Row ${ri}: Category '${categoryRaw}' not found.`);
+                } else {
+                    category_id = catRow.id;
+                }
+            }
+
+            // ── Optional: asset lookup (EN / HE / TH / code) ────────────────
+            let asset_id = null;
+            if (assetRaw) {
+                const assetRow = assetMap.get(assetRaw.toLowerCase());
+                if (!assetRow) {
+                    rowErrors.push(`Row ${ri}: Asset '${assetRaw}' not found.`);
+                } else {
+                    asset_id = assetRow.id;
+                    if (category_id && assetRow.category_id && String(assetRow.category_id) !== String(category_id)) {
+                        rowErrors.push(`Row ${ri}: Asset '${assetRaw}' does not belong to category '${categoryRaw}'.`);
+                    }
+                }
+            }
+
+            // ── Optional: image URL ──────────────────────────────────────────
+            const URL_RE = /^https?:\/\/.+/i;
+            const images = [];
+            if (imageUrlRaw) {
+                if (!URL_RE.test(imageUrlRaw)) {
+                    rowErrors.push(`Row ${ri}: image_url must be a valid URL starting with http:// or https://.`);
+                } else {
+                    images.push(imageUrlRaw);
+                }
+            }
+
+            if (rowErrors.length > 0) {
+                errors.push(...rowErrors);
+            } else {
+                validRows.push({
+                    title:       taskNameEn,
+                    description: notesRaw || '',
+                    urgency,
+                    worker_id,
+                    location_id,
+                    asset_id,
+                    images,
+                    company_id:  insertCompanyId,
+                    created_by:  callerId,
+                    // scheduling
+                    frequency,
+                    parsedDate,   // Date obj for one-time
+                    recurrence,   // { type, ... } for recurring
+                });
+            }
+        }
+
+        // ── Dry-run response ─────────────────────────────────────────────────
+        if (isDryRun) {
+            await client.query('ROLLBACK');
+            if (errors.length > 0) {
+                return res.json({ errors, message: 'Found blocking errors.' });
+            }
+            return res.json({ validCount: validRows.length, message: `${validRows.length} tasks ready to import.` });
+        }
+
+        // ── Commit: stop on any errors ───────────────────────────────────────
+        if (errors.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Please fix errors before importing.', details: errors });
+        }
+
+        // ── Generate task instances ──────────────────────────────────────────
+        let insertedCount = 0;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const yearEnd = new Date(today);
+        yearEnd.setFullYear(yearEnd.getFullYear() + 1);
+
+        for (const t of validRows) {
+            if (t.frequency === 'one-time') {
+                await client.query(
+                    `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
+                     VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10)`,
+                    [t.title, t.description, t.urgency, t.parsedDate, t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
+                );
+                insertedCount++;
+            } else {
+                const rec = t.recurrence;
+                for (let d = new Date(today); d <= yearEnd; d.setDate(d.getDate() + 1)) {
+                    let match = false;
+                    if (rec.type === 'daily' || rec.type === 'weekly') {
+                        match = rec.selectedDays.includes(d.getDay());
+                    } else if (rec.type === 'monthly') {
+                        match = d.getDate() === rec.monthlyDate;
+                    } else if (rec.type === 'quarterly') {
+                        const s = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+                        match = rec.quarterlyDates.includes(s);
+                    } else if (rec.type === 'yearly') {
+                        const s = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+                        match = rec.yearlyDates.includes(s);
+                    }
+                    if (match) {
+                        await client.query(
+                            `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
+                             VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10)`,
+                            [t.title, t.description, t.urgency, new Date(d), t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
+                        );
+                        insertedCount++;
+                    }
+                }
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ inserted: insertedCount, updated: 0, message: `Successfully created ${insertedCount} task instance(s).` });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('POST /tasks/bulk-import error:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 app.get('/api/upgrade-db', async (req, res) => {
     try {
         await pool.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS code VARCHAR(3);`);
