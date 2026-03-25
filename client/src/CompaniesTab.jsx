@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Building2, Plus, ChevronRight, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck, Send, FileSpreadsheet } from 'lucide-react';
+import { Building2, Plus, ChevronRight, LayoutGrid, Users, MapPin, Tag, Box, Shield, X, Pencil, Trash2, ArrowLeft, Loader2, Settings, UserCheck, Send, FileSpreadsheet, AlertTriangle, Mail, CheckCircle2 } from 'lucide-react';
 import ScopedTasksModal from './ScopedTasksModal';
 import MultiLangNameInput from './MultiLangNameInput';
 import ConfigExcelPanel from './ConfigExcelPanel';
@@ -19,6 +19,85 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
                     {t?.delete_btn || 'Delete'}
                 </button>
             </div>
+        </div>
+    </div>
+);
+
+// ─── Company Deletion: Blocker Modal (company has data) ──────────────────────
+const DeletionBlockerModal = ({ company, counts, onClose, t }) => {
+    const items = [
+        { key: 'users',      label: t?.users_label      || 'users' },
+        { key: 'tasks',      label: t?.tasks_label      || 'tasks' },
+        { key: 'locations',  label: t?.locations_label  || 'locations' },
+        { key: 'categories', label: t?.categories_label || 'categories' },
+        { key: 'assets',     label: t?.assets_label     || 'assets' },
+    ].filter(i => counts[i.key] > 0);
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+                <div className="flex items-center gap-2 mb-4">
+                    <AlertTriangle size={20} className="text-amber-500 shrink-0" />
+                    <h3 className="font-bold text-gray-800 text-base">{t?.cannot_delete || 'Cannot Delete Company'}</h3>
+                </div>
+                <p className="text-sm text-gray-600 mb-3">
+                    {t?.delete_blocker_intro || 'Please remove all associated data first:'}
+                </p>
+                <ul className="space-y-1 mb-5">
+                    {items.map(i => (
+                        <li key={i.key} className="flex items-center gap-2 text-sm text-red-600 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                            {counts[i.key]} {i.label}
+                        </li>
+                    ))}
+                </ul>
+                <button onClick={onClose} className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-700 font-bold transition text-sm">
+                    {t?.close || 'Close'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// ─── Company Deletion: Confirmation Modal (company is empty, request email) ──
+const DeletionConfirmModal = ({ company, onConfirm, onCancel, requesting, emailSent, t }) => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200] p-4">
+        <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+            {emailSent ? (
+                <div className="text-center">
+                    <CheckCircle2 size={40} className="text-green-500 mx-auto mb-3" />
+                    <h3 className="font-bold text-gray-800 text-base mb-2">{t?.email_sent_title || 'Email Sent!'}</h3>
+                    <p className="text-sm text-gray-500 mb-5">
+                        {t?.email_sent_body || 'A confirmation link has been sent to your email address. The link expires in 15 minutes.'}
+                    </p>
+                    <button onClick={onCancel} className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-700 font-bold transition text-sm">
+                        {t?.close || 'Close'}
+                    </button>
+                </div>
+            ) : (
+                <>
+                    <div className="flex items-center gap-2 mb-4">
+                        <Mail size={20} className="text-[#714B67] shrink-0" />
+                        <h3 className="font-bold text-gray-800 text-base">{t?.confirm_delete_title || 'Request Company Deletion'}</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-1">
+                        {t?.confirm_delete_company || 'Delete company'}{' '}
+                        <strong>"{company?.name_en || company?.name}"</strong>?
+                    </p>
+                    <p className="text-sm text-gray-400 mb-5">
+                        {t?.deletion_email_note || 'A confirmation link will be emailed to your address. You must click it within 15 minutes to complete the deletion.'}
+                    </p>
+                    <div className="flex gap-3">
+                        <button onClick={onCancel} disabled={requesting} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition text-sm">
+                            {t?.cancel || 'Cancel'}
+                        </button>
+                        <button onClick={onConfirm} disabled={requesting} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition text-sm">
+                            {requesting && <Loader2 size={13} className="animate-spin" />}
+                            {t?.send_email || 'Send Email'}
+                        </button>
+                    </div>
+                </>
+            )}
         </div>
     </div>
 );
@@ -1425,6 +1504,8 @@ const CompaniesTab = ({ token, t, user, lang }) => {
     const [selectedCompany, setSelectedCompany] = useState(null);
     const [openPanel, setOpenPanel] = useState(null); // 'new-company' | 'edit-company:{id}'
     const [deleteConfirm, setDeleteConfirm] = useState(null);
+    // Deletion 2FA flow state
+    const [deletionState, setDeletionState] = useState(null); // { company, phase: 'checking'|'blocked'|'confirm', counts?, requesting?, emailSent? }
     // Used to restore selected company once after initial fetch (F5 reload persistence)
     const didRestoreCompany = useRef(false);
 
@@ -1465,16 +1546,45 @@ const CompaniesTab = ({ token, t, user, lang }) => {
 
     useEffect(() => { fetchCompanies(); }, [token]);
 
-    const handleDelete = async (company) => {
+    // Step 1: check-deletion → decide which modal to show
+    const handleDeleteClick = async (company) => {
+        setDeletionState({ company, phase: 'checking' });
         try {
-            const res = await fetch(`${BASE}/companies/${company.id}`, {
-                method: 'DELETE',
+            const res = await fetch(`${BASE}/companies/${company.id}/check-deletion`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (res.ok) fetchCompanies();
-            else alert(t?.error_delete || 'Error deleting company');
-        } catch (e) { console.error(e); }
-        setDeleteConfirm(null);
+            const data = await res.json();
+            if (data.isDeletable) {
+                setDeletionState({ company, phase: 'confirm', emailSent: false, requesting: false });
+            } else {
+                setDeletionState({ company, phase: 'blocked', counts: data.counts });
+            }
+        } catch (e) {
+            console.error(e);
+            setDeletionState(null);
+        }
+    };
+
+    // Step 2: request-deletion → send confirmation email
+    const handleRequestDeletion = async () => {
+        if (!deletionState?.company) return;
+        setDeletionState(prev => ({ ...prev, requesting: true }));
+        try {
+            const res = await fetch(`${BASE}/companies/${deletionState.company.id}/request-deletion`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+                setDeletionState(prev => ({ ...prev, requesting: false, emailSent: true }));
+            } else {
+                const d = await res.json();
+                alert(d?.error || 'Error requesting deletion');
+                setDeletionState(prev => ({ ...prev, requesting: false }));
+            }
+        } catch (e) {
+            console.error(e);
+            setDeletionState(prev => ({ ...prev, requesting: false }));
+        }
     };
 
     const togglePanel = (key) => setOpenPanel(prev => prev === key ? null : key);
@@ -1591,10 +1701,12 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                                         </button>
                                         <div className="w-px bg-gray-100" />
                                         <button
-                                            onClick={() => setDeleteConfirm(company)}
+                                            onClick={() => handleDeleteClick(company)}
                                             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-50 transition"
                                         >
-                                            <Trash2 size={13} />
+                                            {deletionState?.company?.id === company.id && deletionState.phase === 'checking'
+                                                ? <Loader2 size={13} className="animate-spin" />
+                                                : <Trash2 size={13} />}
                                             {t?.delete_btn || 'Delete'}
                                         </button>
                                     </div>
@@ -1619,11 +1731,21 @@ const CompaniesTab = ({ token, t, user, lang }) => {
                 </div>
             )}
 
-            {deleteConfirm && (
-                <ConfirmDeleteModal
-                    message={`${t?.confirm_delete_company || 'Delete company'} "${deleteConfirm?.name}"?`}
-                    onConfirm={() => handleDelete(deleteConfirm)}
-                    onCancel={() => setDeleteConfirm(null)}
+            {deletionState?.phase === 'blocked' && (
+                <DeletionBlockerModal
+                    company={deletionState.company}
+                    counts={deletionState.counts}
+                    onClose={() => setDeletionState(null)}
+                    t={t}
+                />
+            )}
+            {(deletionState?.phase === 'confirm') && (
+                <DeletionConfirmModal
+                    company={deletionState.company}
+                    onConfirm={handleRequestDeletion}
+                    onCancel={() => setDeletionState(null)}
+                    requesting={deletionState.requesting}
+                    emailSent={deletionState.emailSent}
                     t={t}
                 />
             )}

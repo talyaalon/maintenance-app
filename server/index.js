@@ -1404,6 +1404,140 @@ app.delete('/companies/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// ─── Company Deletion 2FA Flow ──────────────────────────────────────────────
+
+// GET /companies/:id/check-deletion — BIG_BOSS only; returns entity counts + isDeletable flag
+app.get('/companies/:id/check-deletion', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'BIG_BOSS only' });
+    try {
+        const { id } = req.params;
+        const [usersRes, tasksRes, locsRes, catsRes, assetsRes] = await Promise.all([
+            pool.query("SELECT COUNT(*) FROM users WHERE company_id = $1 AND role IN ('COMPANY_MANAGER','MANAGER','EMPLOYEE')", [id]),
+            pool.query('SELECT COUNT(*) FROM tasks WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM locations WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM categories WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM assets WHERE company_id = $1', [id]),
+        ]);
+        const counts = {
+            users:      parseInt(usersRes.rows[0].count),
+            tasks:      parseInt(tasksRes.rows[0].count),
+            locations:  parseInt(locsRes.rows[0].count),
+            categories: parseInt(catsRes.rows[0].count),
+            assets:     parseInt(assetsRes.rows[0].count),
+        };
+        const isDeletable = Object.values(counts).every(c => c === 0);
+        res.json({ isDeletable, counts });
+    } catch (err) {
+        console.error('GET /companies/:id/check-deletion error:', err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST /companies/:id/request-deletion — BIG_BOSS only; emails a time-limited confirmation link
+app.post('/companies/:id/request-deletion', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'BIG_BOSS only' });
+    try {
+        const { id } = req.params;
+        const companyRes = await pool.query('SELECT * FROM companies WHERE id = $1', [id]);
+        if (companyRes.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
+        const company = companyRes.rows[0];
+
+        // Re-verify company is still empty before sending the link
+        const [usersRes, tasksRes, locsRes, catsRes, assetsRes] = await Promise.all([
+            pool.query("SELECT COUNT(*) FROM users WHERE company_id = $1 AND role IN ('COMPANY_MANAGER','MANAGER','EMPLOYEE')", [id]),
+            pool.query('SELECT COUNT(*) FROM tasks WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM locations WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM categories WHERE company_id = $1', [id]),
+            pool.query('SELECT COUNT(*) FROM assets WHERE company_id = $1', [id]),
+        ]);
+        const totals = [usersRes, tasksRes, locsRes, catsRes, assetsRes].map(r => parseInt(r.rows[0].count));
+        if (totals.some(c => c > 0)) return res.status(409).json({ error: 'Company still has associated data. Please remove all entities first.' });
+
+        // Fetch BIG_BOSS email from DB (req.user comes from JWT — email may be stale)
+        const userRes = await pool.query('SELECT email, full_name FROM users WHERE id = $1', [req.user.id]);
+        if (userRes.rows.length === 0) return res.status(404).json({ error: 'Requesting user not found' });
+        const { email, full_name } = userRes.rows[0];
+
+        // Generate a 15-minute deletion token
+        const deletionToken = jwt.sign(
+            { company_id: id, action: 'delete_company', requested_by: req.user.id },
+            SECRET_KEY,
+            { expiresIn: '15m' }
+        );
+
+        const APP_URL = process.env.APP_URL || 'https://maintenance-app-staging.onrender.com';
+        const confirmLink = `${APP_URL}/api/companies/confirm-delete?token=${deletionToken}`;
+        const companyLabel = company.name_en || company.name_he || company.name || `#${id}`;
+
+        await transporter.sendMail({
+            from: `"Maintenance App" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'Confirm Company Deletion',
+            html: `
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px;">
+                    <h2 style="color:#dc2626;margin-top:0;">Confirm Company Deletion</h2>
+                    <p>Hi <strong>${full_name}</strong>,</p>
+                    <p>You requested to permanently delete the company <strong>"${companyLabel}"</strong>.</p>
+                    <p>This action is <strong>irreversible</strong>. Click the button below within <strong>15 minutes</strong> to confirm:</p>
+                    <p style="margin:28px 0;">
+                        <a href="${confirmLink}"
+                           style="background:#dc2626;color:#fff;padding:13px 26px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">
+                            Confirm Deletion
+                        </a>
+                    </p>
+                    <p style="color:#6b7280;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
+                </div>
+            `,
+        });
+
+        res.json({ success: true, message: 'Confirmation email sent' });
+    } catch (err) {
+        console.error('POST /companies/:id/request-deletion error:', err.message);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// GET /companies/confirm-delete?token=... — Email link handler; verifies JWT and permanently deletes company
+app.get('/companies/confirm-delete', async (req, res) => {
+    const { token } = req.query;
+    if (!token) return res.status(400).send('<h2 style="font-family:sans-serif;color:#dc2626;">Invalid or missing token.</h2>');
+    const APP_URL = process.env.APP_URL || 'https://maintenance-app-staging.onrender.com';
+    try {
+        let payload;
+        try {
+            payload = jwt.verify(token, SECRET_KEY);
+        } catch (verifyErr) {
+            if (verifyErr.name === 'TokenExpiredError') {
+                return res.status(410).send('<h2 style="font-family:sans-serif;color:#dc2626;">This link has expired. Please request a new deletion confirmation from the app.</h2>');
+            }
+            return res.status(400).send('<h2 style="font-family:sans-serif;color:#dc2626;">Invalid token.</h2>');
+        }
+
+        if (payload.action !== 'delete_company') {
+            return res.status(400).send('<h2 style="font-family:sans-serif;color:#dc2626;">Invalid token action.</h2>');
+        }
+
+        const { company_id } = payload;
+        const companyRes = await pool.query('SELECT name, name_en FROM companies WHERE id = $1', [company_id]);
+        if (companyRes.rows.length === 0) {
+            return res.redirect(`${APP_URL}?deleted=already`);
+        }
+
+        // Execute the permanent deletion
+        await pool.query('UPDATE users      SET company_id = NULL WHERE company_id = $1', [company_id]);
+        await pool.query('UPDATE tasks      SET company_id = NULL WHERE company_id = $1', [company_id]);
+        await pool.query('UPDATE locations  SET company_id = NULL WHERE company_id = $1', [company_id]);
+        await pool.query('UPDATE categories SET company_id = NULL WHERE company_id = $1', [company_id]);
+        await pool.query('UPDATE assets     SET company_id = NULL WHERE company_id = $1', [company_id]);
+        await pool.query('DELETE FROM companies WHERE id = $1', [company_id]);
+
+        return res.redirect(`${APP_URL}?deleted=1`);
+    } catch (err) {
+        console.error('GET /companies/confirm-delete error:', err.message);
+        return res.status(500).send('<h2 style="font-family:sans-serif;color:#dc2626;">Server error. Please try again.</h2>');
+    }
+});
+
 app.delete('/users/:id', authenticateToken, async (req, res) => {
     if (req.user.role === 'EMPLOYEE') return res.status(403).send("Unauthorized");
     try {
