@@ -95,7 +95,7 @@ transporter.verify((error, success) => {
 const sendLineMessage = async (lineUserId, text) => {
     if (!lineUserId || !process.env.LINE_CHANNEL_ACCESS_TOKEN) return;
     const https = require('https');
-    const textWithLink = `${text}\n\nView in App: ${APP_LINK}`;
+    const textWithLink = `${text}\n\nView in App: ${APP_LINK}?openExternalBrowser=1`;
     const body = JSON.stringify({
         to: lineUserId,
         messages: [{ type: 'text', text: textWithLink }]
