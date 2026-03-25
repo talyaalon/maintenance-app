@@ -2290,6 +2290,7 @@ const deleteItem = async (table, id, res) => {
 app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) => {
     const id = req.params.id;
     const companyId = req.user.company_id;
+    console.log('Backend received delete request for location:', id, '| company_id:', companyId);
     try {
         // Nullify FK references scoped to this tenant to avoid Postgres 23503 violations
         await Promise.all([
