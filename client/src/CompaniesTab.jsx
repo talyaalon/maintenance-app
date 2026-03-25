@@ -727,7 +727,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) fetchData();
-            else alert('Error deleting item. It may be in use.');
+            else { const d = await res.json().catch(() => ({})); alert(d?.message || d?.error || 'Error deleting item. It may be in use.'); }
         } catch { alert('Server error'); }
         setDeleteConfirm(null);
     };
