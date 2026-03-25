@@ -46,6 +46,12 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, 
             <div className="px-3 py-2 border-b border-gray-100 bg-white">{excelPanel}</div>
         )}
         <div className="divide-y divide-gray-100">
+            {/* Add panel — rendered above all rows when the Add button is active */}
+            {addPanel && (
+                <div className="px-4 py-2.5 text-sm text-slate-700 bg-slate-50">
+                    {addPanel}
+                </div>
+            )}
             {(items ?? []).length === 0 && !addPanel ? (
                 <p className="px-4 py-3 text-xs text-gray-400 italic">{emptyLabel}</p>
             ) : (
@@ -56,11 +62,6 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, 
                 ))
             )}
         </div>
-        {addPanel && (
-            <div className="px-4 py-2.5 text-sm text-slate-700 border-t border-slate-200 bg-slate-50">
-                {addPanel}
-            </div>
-        )}
     </div>
 );
 
@@ -141,7 +142,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
             ].map(({ label, key, type }) => (
                 <div key={key}>
                     <label className={labelCls}>{label}</label>
-                    <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} />
+                    <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} autoComplete={key === 'password' ? 'new-password' : undefined} />
                 </div>
             ))}
             <div>

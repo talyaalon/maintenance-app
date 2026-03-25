@@ -125,6 +125,12 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, 
             <div className="px-3 py-2 border-b border-gray-100 bg-white">{excelPanel}</div>
         )}
         <div className="divide-y divide-gray-100">
+            {/* Add panel — rendered above all rows when the Add button is active */}
+            {addPanel && (
+                <div className="px-4 py-2.5 text-sm text-slate-700 bg-slate-50">
+                    {addPanel}
+                </div>
+            )}
             {(items ?? []).length === 0 && !addPanel ? (
                 <p className="px-4 py-3 text-xs text-gray-400 italic">{emptyLabel}</p>
             ) : (
@@ -135,12 +141,6 @@ const SectionCard = ({ icon: Icon, title, items, renderItem, emptyLabel, onAdd, 
                 ))
             )}
         </div>
-        {/* Add panel — rendered below all rows when the Add button is active */}
-        {addPanel && (
-            <div className="px-4 py-2.5 text-sm text-slate-700 border-t border-slate-200 bg-slate-50">
-                {addPanel}
-            </div>
-        )}
     </div>
 );
 
@@ -223,7 +223,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
             ].map(({ label, key, type }) => (
                 <div key={key}>
                     <label className={labelCls}>{label}</label>
-                    <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} />
+                    <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} className={inputCls} autoComplete={key === 'password' ? 'new-password' : undefined} />
                 </div>
             ))}
             <div>
@@ -813,6 +813,20 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                     </button>
                 </div>
                 <div className="divide-y divide-gray-100">
+                    {openPanel === 'add-user-cm' && (
+                        <div className="px-4 py-2.5 bg-slate-50">
+                            <InlineUserForm
+                                role="COMPANY_MANAGER"
+                                companyId={cid}
+                                token={token}
+                                t={t}
+                                lang={lang}
+                                onClose={() => setOpenPanel(null)}
+                                onSaved={fetchData}
+                                isAddPanel
+                            />
+                        </div>
+                    )}
                     {companyManagers.length === 0 && openPanel !== 'add-user-cm' && (
                         <p className="px-4 py-3 text-xs text-gray-400 italic">No Company Managers Assigned</p>
                     )}
@@ -868,20 +882,6 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </div>
                     ))}
                 </div>
-                {openPanel === 'add-user-cm' && (
-                    <div className="px-4 py-2.5 border-t border-slate-200 bg-slate-50">
-                        <InlineUserForm
-                            role="COMPANY_MANAGER"
-                            companyId={cid}
-                            token={token}
-                            t={t}
-                            lang={lang}
-                            onClose={() => setOpenPanel(null)}
-                            onSaved={fetchData}
-                            isAddPanel
-                        />
-                    </div>
-                )}
             </div>
 
             {/* Stats row — 'all' = show everything; string key = isolate that section */}

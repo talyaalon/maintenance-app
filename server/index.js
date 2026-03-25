@@ -767,13 +767,15 @@ app.post('/login', async (req, res) => {
 
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) return res.status(400).json({ error: "משתמש לא נמצא" });
-    
-    const user = result.rows[0];
 
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword && password !== user.password) {
-        return res.status(400).json({ error: "סיסמה שגויה" });
+    // Multiple accounts may share the same email across different companies —
+    // find the one whose password matches.
+    let user = null;
+    for (const row of result.rows) {
+        const valid = await bcrypt.compare(password, row.password).catch(() => false);
+        if (valid || password === row.password) { user = row; break; }
     }
+    if (!user) return res.status(400).json({ error: "סיסמה שגויה" });
 
     // For MANAGER (AreaManager), effective area_id = their own id
     const effectiveAreaId = user.role === 'MANAGER' ? user.id : (user.area_id || null);
@@ -1048,6 +1050,18 @@ app.post('/users', authenticateToken, async (req, res) => {
     }
     // For MANAGER with no company determined yet: company is auto-created after insert
 
+    // Email uniqueness check scoped to the same company (or globally for company-less users)
+    {
+        const emailDupQuery = newUserCompanyId
+            ? 'SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id = $2'
+            : 'SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id IS NULL';
+        const emailDupParams = newUserCompanyId ? [email, newUserCompanyId] : [email];
+        const emailDup = await pool.query(emailDupQuery, emailDupParams);
+        if (emailDup.rows.length > 0) {
+            return res.status(400).json({ error: "Email already exists" });
+        }
+    }
+
     const newUser = await pool.query(
       `INSERT INTO users (full_name, full_name_he, full_name_en, full_name_th, email, password, role, phone, parent_manager_id, preferred_language, line_user_id, area_id, company_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id, full_name, email, role, phone, preferred_language, line_user_id`,
@@ -1192,12 +1206,20 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         paramCount++;
     }
 
+    // Only hash and update if the password is genuinely new (not the existing hash sent back unchanged)
+    let isPasswordChanged = false;
     if (password && password.trim() !== '') {
         const bcrypt = require('bcrypt');
-        const hashedPassword = await bcrypt.hash(password, 10);
-        setClauses.push(`password=$${paramCount}`);
-        params.push(hashedPassword);
-        paramCount++;
+        const matchesExisting = oldUser.password
+            ? await bcrypt.compare(password, oldUser.password).catch(() => false)
+            : false;
+        if (!matchesExisting) {
+            isPasswordChanged = true;
+            const hashedPassword = await bcrypt.hash(password, 10);
+            setClauses.push(`password=$${paramCount}`);
+            params.push(hashedPassword);
+            paramCount++;
+        }
     }
 
     const query = `UPDATE users SET ${setClauses.join(', ')} WHERE id=$${paramCount} RETURNING *`;
@@ -1230,7 +1252,7 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         changeLinesHe.push(`• שפה → ${updatedUser.preferred_language}`);
         changeLinesth.push(`• ภาษา → ${updatedUser.preferred_language}`);
     }
-    if (password && password.trim() !== '') {
+    if (isPasswordChanged) {
         changeLinesEn.push(`• Password changed 🔑`);
         changeLinesHe.push(`• סיסמה שונתה 🔑`);
         changeLinesth.push(`• เปลี่ยนรหัสผ่าน 🔑`);
@@ -2260,14 +2282,15 @@ const deleteItem = async (table, id, res) => {
 
 app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) => {
     const id = req.params.id;
+    const companyId = req.user.company_id;
     try {
         await pool.query('DELETE FROM locations WHERE id = $1', [id]);
         res.json({ success: true });
     } catch (e) {
         if (e.code === '23503') {
             const [assetRes, taskRes] = await Promise.all([
-                pool.query('SELECT COUNT(*) FROM assets WHERE location_id = $1', [id]),
-                pool.query('SELECT COUNT(*) FROM tasks WHERE location_id = $1', [id]),
+                pool.query('SELECT COUNT(*) FROM assets WHERE location_id = $1 AND company_id = $2', [id, companyId]),
+                pool.query('SELECT COUNT(*) FROM tasks  WHERE location_id = $1 AND company_id = $2', [id, companyId]),
             ]);
             const assets = parseInt(assetRes.rows[0].count, 10);
             const tasks  = parseInt(taskRes.rows[0].count, 10);
@@ -2283,12 +2306,13 @@ app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) =
 
 app.delete('/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
     const id = req.params.id;
+    const companyId = req.user.company_id;
     try {
         await pool.query('DELETE FROM categories WHERE id = $1', [id]);
         res.json({ success: true });
     } catch (e) {
         if (e.code === '23503') {
-            const assetRes = await pool.query('SELECT COUNT(*) FROM assets WHERE category_id = $1', [id]);
+            const assetRes = await pool.query('SELECT COUNT(*) FROM assets WHERE category_id = $1 AND company_id = $2', [id, companyId]);
             const assets   = parseInt(assetRes.rows[0].count, 10);
             const detail   = assets > 0 ? `${assets} asset${assets !== 1 ? 's' : ''}` : 'other records';
             return res.status(400).json({ message: `Cannot delete: This category is currently assigned to ${detail}.` });
@@ -4923,9 +4947,13 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
             if (email && !EMAIL_RE.test(email))      { errors.push(`Row ${ri}: Invalid email format. Must end with .com and contain valid characters.`); continue; }
             if (rawLineId && !LINE_ID_RE.test(rawLineId)) { errors.push(`Row ${ri}: Line ID must start with uppercase 'U' followed by numbers/letters.`); continue; }
             if (profilePicUrl && !URL_RE_MGR.test(profilePicUrl)) { errors.push(`Row ${ri}: profile_picture_url must be a valid URL starting with http:// or https://`); continue; }
-            // Duplicate email check (new rows only) — must be globally unique
+            // Duplicate email check (new rows only) — scoped to the same company
             if (!rowId && email) {
-                const dupR = await client.query("SELECT id FROM users WHERE LOWER(email) = LOWER($1)", [email]);
+                const dupQ = insertCompanyId
+                    ? "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id = $2"
+                    : "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id IS NULL";
+                const dupP = insertCompanyId ? [email, insertCompanyId] : [email];
+                const dupR = await client.query(dupQ, dupP);
                 if (dupR.rows.length > 0) { errors.push(`Row ${ri}: Email '${email}' is already registered`); continue; }
             }
             validRows.push({ rowId, name_en, name_he, name_th, email, phone, password, lang, line_user_id: rawLineId, profile_picture_url: profilePicUrl });
@@ -5056,9 +5084,13 @@ app.post('/employees/bulk-import', authenticateToken, requireAdmin, async (req, 
             if (email && !EMAIL_RE_EMP.test(email))      { errors.push(`Row ${ri}: Invalid email format. Must end with .com and contain valid characters.`); continue; }
             if (rawLineId && !LINE_ID_RE_EMP.test(rawLineId)) { errors.push(`Row ${ri}: Line ID must start with uppercase 'U' followed by numbers/letters.`); continue; }
             if (profilePicUrl && !URL_RE_EMP.test(profilePicUrl)) { errors.push(`Row ${ri}: profile_picture_url must be a valid URL starting with http:// or https://`); continue; }
-            // Duplicate email check (new rows only) — must be globally unique
+            // Duplicate email check (new rows only) — scoped to the same company
             if (!rowId && email) {
-                const dupR = await client.query("SELECT id FROM users WHERE LOWER(email) = LOWER($1)", [email]);
+                const dupQ = insertCompanyId
+                    ? "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id = $2"
+                    : "SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND company_id IS NULL";
+                const dupP = insertCompanyId ? [email, insertCompanyId] : [email];
+                const dupR = await client.query(dupQ, dupP);
                 if (dupR.rows.length > 0) { errors.push(`Row ${ri}: Email '${email}' is already registered`); continue; }
             }
 
@@ -5323,6 +5355,34 @@ app.listen(port, async () => {
                     WHERE id = loc.id;
                 END LOOP;
             END $$
+        `);
+
+        // ── Email uniqueness: drop global UNIQUE(email), add per-company composite indexes ──
+        // Users in different companies may share the same email address.
+        // Users with no company (e.g. BIG_BOSS) still require a globally unique email.
+        await pool.query(`
+            DO $$
+            BEGIN
+                -- Drop the old global unique constraint if it still exists
+                IF EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'users_email_key' AND conrelid = 'users'::regclass
+                ) THEN
+                    ALTER TABLE users DROP CONSTRAINT users_email_key;
+                END IF;
+            END $$
+        `);
+        // Per-company uniqueness: email must be unique within a company
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS users_email_company_unique
+            ON users (email, company_id)
+            WHERE company_id IS NOT NULL
+        `);
+        // Global uniqueness for company-less users (BIG_BOSS, etc.)
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS users_email_no_company_unique
+            ON users (email)
+            WHERE company_id IS NULL
         `);
 
         console.log("✅ DB columns verified.");
