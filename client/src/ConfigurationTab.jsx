@@ -585,7 +585,7 @@ const ConfigurationTab = ({ token, t, user, lang }) => {
                                               )}
                                               <div>
                                                   <h4 className="font-bold text-gray-800 text-sm">{loc['name_' + lang] || loc.name_en || loc.name}</h4>
-                                                  <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase font-mono">{loc.code}</span>
+                                                  {loc.code && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase font-mono">{loc.code}</span>}
                                               </div>
                                           </div>
                                           <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition">

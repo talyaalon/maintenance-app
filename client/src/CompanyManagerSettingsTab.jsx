@@ -367,7 +367,7 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
                     className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]">
                     <option value="">Select category…</option>
                     {(categories ?? []).map(c => (
-                        <option key={c.id} value={String(c.id)}>{c.name_en || c.name}</option>
+                        <option key={c.id} value={String(c.id)}>{c['name_' + lang] || c.name_en || c.name}</option>
                     ))}
                 </select>
             </div>
@@ -377,7 +377,7 @@ const InlineAssetForm = ({ editAsset, createdBy, categories, locations, token, t
                     className="w-full p-2 border rounded-lg bg-white text-xs outline-none focus:ring-1 focus:ring-[#714B67]">
                     <option value="">None</option>
                     {(locations ?? []).map(l => (
-                        <option key={l.id} value={String(l.id)}>{l.name_en || l.name}</option>
+                        <option key={l.id} value={String(l.id)}>{l['name_' + lang] || l.name_en || l.name}</option>
                     ))}
                 </select>
             </div>

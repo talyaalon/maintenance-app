@@ -4451,6 +4451,37 @@ app.listen(port, async () => {
         // ── Retire SUPERVISOR role: migrate all SUPERVISORs to EMPLOYEE (idempotent) ──
         await pool.query("UPDATE users SET role = 'EMPLOYEE' WHERE role = 'SUPERVISOR'");
 
+        // ── Ensure locations.code column exists (idempotent) ──
+        await pool.query('ALTER TABLE locations ADD COLUMN IF NOT EXISTS code VARCHAR(50)');
+
+        // ── Backfill LOC-XXXX codes for any locations that still have code = NULL ──
+        // Groups by company_id so each company gets its own sequential LOC-0001, LOC-0002…
+        await pool.query(`
+            DO $$
+            DECLARE
+                loc     RECORD;
+                max_num INT;
+            BEGIN
+                FOR loc IN (
+                    SELECT id, company_id FROM locations WHERE code IS NULL ORDER BY id
+                )
+                LOOP
+                    SELECT COALESCE(MAX(
+                        CASE WHEN l.code ~ '^LOC-[0-9]+$'
+                             THEN CAST(SUBSTRING(l.code FROM 5) AS INT)
+                             ELSE 0 END
+                    ), 0) INTO max_num
+                    FROM locations l
+                    WHERE (loc.company_id IS NULL AND l.company_id IS NULL)
+                       OR (loc.company_id IS NOT NULL AND l.company_id = loc.company_id);
+
+                    UPDATE locations
+                    SET code = 'LOC-' || LPAD((max_num + 1)::TEXT, 4, '0')
+                    WHERE id = loc.id;
+                END LOOP;
+            END $$
+        `);
+
         console.log("✅ DB columns verified.");
     } catch (e) {
         console.error("⚠️ Startup migration warning:", e.message);
