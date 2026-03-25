@@ -126,10 +126,18 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
 
     const fetchLocations = async () => {
         try {
-            const res = await fetch(`${API}/locations`, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await fetch(`${API}/locations`, {
+                headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+                cache: 'no-store',
+            });
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
             const data = await res.json();
+            if (!Array.isArray(data)) throw new Error('Unexpected response format');
             setLocations(data);
-        } catch (err) { console.error('Error fetching locations', err); }
+        } catch (err) {
+            console.error('Error fetching locations', err);
+            alert(t?.server_error || 'Failed to refresh locations list. Please reload the page.');
+        }
     };
 
     useEffect(() => { fetchLocations(); }, []);
@@ -162,12 +170,16 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
         try {
             const res = await fetch(`${API}/locations/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
             if (res.ok) {
-                fetchLocations();
+                alert('Location deleted successfully');
+                await fetchLocations();
             } else {
                 const data = await res.json().catch(() => ({}));
-                alert(data.message || t.error_deleting_location || 'Error deleting location. It may be in use.');
+                alert(data.message || t?.error_deleting_location || 'Error deleting location. It may be in use.');
             }
-        } catch { alert(t.error_deleting_location || 'Error deleting'); }
+        } catch (err) {
+            console.error('Delete location error:', err);
+            alert(t?.error_deleting_location || 'Error deleting location. Please try again.');
+        }
     };
 
     const startEdit = (loc) => {

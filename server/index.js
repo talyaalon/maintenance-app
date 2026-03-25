@@ -2300,7 +2300,7 @@ app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) =
         res.json({ success: true });
     } catch (e) {
         console.error('Delete location error:', e);
-        res.status(500).json({ message: 'Server error while deleting location.' });
+        res.status(500).json({ message: `Server error while deleting location: ${e.message || e}` });
     }
 });
 
