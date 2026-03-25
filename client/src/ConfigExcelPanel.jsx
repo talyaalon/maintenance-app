@@ -91,7 +91,14 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
         .filter(f => !selectedFields.find(s => s.id === f.id))
         .filter(f => f.label.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const sectionLabel = SECTION_LABELS[section]?.he || section;
+    const SECTION_NAME_KEYS = {
+        categories: 'section_name_categories',
+        assets:     'section_name_assets',
+        locations:  'section_name_locations',
+        managers:   'section_name_managers',
+        employees:  'section_name_employees',
+    };
+    const sectionLabel = t?.[SECTION_NAME_KEYS[section]] || SECTION_LABELS[section]?.en || section;
 
     const authHeaders = {
         'Authorization': `Bearer ${token}`,
@@ -240,20 +247,20 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                         onClick={() => setActiveTab('import')}
                         className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'import' ? 'bg-[#714B67] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        {t?.import_update_tab || 'ייבוא / עדכון'}
+                        {t?.import_update_tab || 'Import / Update'}
                     </button>
                     <button
                         onClick={() => setActiveTab('export')}
                         className={`px-3 py-1 text-xs font-medium rounded transition ${activeTab === 'export' ? 'bg-[#714B67] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        {t?.export_data_tab || 'ייצוא נתונים'}
+                        {t?.export_data_tab || 'Export Data'}
                     </button>
                 </div>
 
                 <button
                     onClick={onClose}
                     className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition shrink-0"
-                    title={t?.close || 'סגור'}
+                    title={t?.close || 'Close'}
                 >
                     <X size={15} />
                 </button>
@@ -283,13 +290,13 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                     {/* Template download */}
                     <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
                         <span className="text-xs text-[#714B67] font-medium">
-                            ✨ {t?.template_download_hint || 'הורד תבנית Excel מותאמת אישית'}
+                            ✨ {t?.template_download_hint || 'Special 3-language template available for download, including image column and examples!'}
                         </span>
                         <button
                             onClick={handleDownloadTemplate}
                             className="bg-[#714B67] text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-[#5a3b52] shadow-sm flex items-center gap-1 transition"
                         >
-                            <Download size={12} /> {t?.download_template_btn || 'הורד תבנית'}
+                            <Download size={12} /> {t?.download_template_btn || 'Download Advanced Template'}
                         </button>
                     </div>
 
@@ -297,7 +304,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                     {validationStatus === 'valid' && importResult && (
                         <div className="bg-green-50 border border-green-200 p-2.5 rounded text-green-700 text-xs font-medium flex items-center gap-1.5">
                             <CheckCircle size={14} />
-                            {t?.file_valid_title || 'הקובץ תקין'} — {importResult.validCount} {t?.rows_ready || 'שורות מוכנות'}
+                            {t?.file_valid_title || 'File validated successfully!'} — {importResult.validCount} {t?.rows_ready || 'rows ready'}
                         </div>
                     )}
 
@@ -305,7 +312,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                     {importResult?.inserted !== undefined && (
                         <div className="bg-blue-50 border border-blue-200 p-2.5 rounded text-blue-800 text-xs font-medium flex items-center gap-1.5">
                             <CheckCircle size={14} />
-                            {t?.import_success || 'הייבוא הושלם'}: {importResult.inserted} {t?.inserted || 'נוספו'}, {importResult.updated} {t?.updated || 'עודכנו'}
+                            {t?.import_success || 'Import completed'}: {importResult.inserted} {t?.inserted || 'added'}, {importResult.updated} {t?.updated || 'updated'}
                         </div>
                     )}
 
@@ -330,7 +337,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                                 className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-blue-700 transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isLoading && validationStatus === 'idle' ? <Loader2 size={12} className="animate-spin" /> : null}
-                                {t?.validate_import || '1. בדוק תקינות'}
+                                {t?.validate_import || '1. Validate File'}
                             </button>
                             <button
                                 onClick={handleImport}
@@ -338,7 +345,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                                 className="bg-[#714B67] text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-[#5a3b52] transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                             >
                                 {isLoading && validationStatus === 'valid' ? <Loader2 size={12} className="animate-spin" /> : null}
-                                {t?.upload_approved_btn || '2. העלה נתונים'}
+                                {t?.upload_approved_btn || '2. Upload Validated Data'}
                             </button>
                         </div>
                     )}
@@ -419,7 +426,7 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                             className="bg-[#714B67] text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-[#5a3b52] transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                         >
                             {isLoading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-                            {t?.export_data || 'ייצוא נתונים'}
+                            {t?.export_data || 'Export Data'}
                         </button>
                     </div>
                 </div>
