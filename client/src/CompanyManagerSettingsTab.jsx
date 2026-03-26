@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Building2, Users, MapPin, Tag, Box, Shield, Pencil, Trash2, Loader2, Plus, Settings, UserCheck, LayoutGrid, Send, FileSpreadsheet } from 'lucide-react';
 import ScopedTasksModal from './ScopedTasksModal';
 import ConfigExcelPanel from './ConfigExcelPanel';
@@ -7,7 +8,7 @@ import MultiLangNameInput from './MultiLangNameInput';
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
 // ─── Confirm delete modal (kept as modal — just a confirmation, not an edit form) ──
-const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
+const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => createPortal(
     <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
         <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
             <p className="text-gray-800 font-medium text-center mb-6">{message}</p>
@@ -20,7 +21,8 @@ const ConfirmDeleteModal = ({ message, onConfirm, onCancel, t }) => (
                 </button>
             </div>
         </div>
-    </div>
+    </div>,
+    document.body
 );
 
 // ─── Section card with optional Add button + addPanel slot ────────────────────
