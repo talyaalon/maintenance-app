@@ -332,6 +332,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 </select>
 
                 <div className="animate-fade-in">
+                    {!['Daily', 'Weekly', 'Monthly', 'Quarterly'].includes(frequency) && (
                     <div>
                         <label className="text-xs font-bold text-gray-500 mb-1 block">
                             {frequency === 'Once' ? (t.pick_date || "Pick Date & Time") : (t.start_date || "Start Date")}
@@ -342,6 +343,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                             />
                         </div>
                     </div>
+                    )}
 
                     {(frequency === 'Daily' || frequency === 'Weekly') && (
                         <div className="mt-3">
