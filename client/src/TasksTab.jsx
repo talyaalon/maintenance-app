@@ -195,7 +195,12 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const getVisibleTasks = () => {
       if (mainTab === 'overdue') return applyFilters(applySearch(overdueTasks));
       if (mainTab === 'todo') {
-          if (viewMode === 'daily') return applyFilters(applySearch(todayTasks));
+          if (viewMode === 'daily') {
+              const searchSource = searchQuery.trim()
+                  ? tasks.filter(tk => tk.status === 'PENDING' && !isBefore(getBkkDateObj(tk.due_date), startOfDay(todayBkk)))
+                  : todayTasks;
+              return applyFilters(applySearch(searchSource));
+          }
           if (viewMode === 'weekly') {
               const next7Days = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(todayBkk), i));
               return applyFilters(tasks.filter(tk => tk.status === 'PENDING' && next7Days.some(d => isSameDay(getBkkDateObj(tk.due_date), d))));
@@ -317,17 +322,21 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
 
   const renderTodoView = () => {
       if (viewMode === 'daily') {
-          const filtered = applyFilters(applySearch(todayTasks));
+          const isSearching = !!searchQuery.trim();
+          const searchSource = isSearching
+              ? tasks.filter(task => task.status === 'PENDING' && !isBefore(getBkkDateObj(task.due_date), startOfDay(todayBkk)))
+              : todayTasks;
+          const filtered = applyFilters(applySearch(searchSource));
           return (
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
                   <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200 text-center mb-5">
                       <h3 className="text-base sm:text-lg font-bold text-slate-800">{t.tab_todo}</h3>
-                      <p className="text-[#714B67] font-semibold text-sm">{format(todayBkk, 'dd/MM/yyyy')}</p>
+                      <p className="text-[#714B67] font-semibold text-sm">{isSearching ? (t.all_upcoming || 'All Upcoming') : format(todayBkk, 'dd/MM/yyyy')}</p>
                   </div>
                   {filtered.length === 0 ? (
                       <div className="text-center py-10 opacity-70">
                           <CheckCircle size={60} className="mx-auto text-green-300 mb-3"/>
-                          <p className="text-gray-500 text-lg">{todayTasks.length === 0 ? t.no_tasks_today : (t.no_search_results || 'No matching tasks.')}</p>
+                          <p className="text-gray-500 text-lg">{searchSource.length === 0 ? t.no_tasks_today : (t.no_search_results || 'No matching tasks.')}</p>
                       </div>
                   ) : (
                       <div className="space-y-3">
@@ -721,6 +730,7 @@ const InlineAlert = ({ message, onClose }) => (
 );
 
 const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
+    const BASE = 'https://maintenance-app-staging.onrender.com';
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
     const [followUpDate, setFollowUpDate] = useState(getCurrentBkkTimeForInput);
@@ -732,6 +742,22 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS' || user.role === 'COMPANY_MANAGER') && task.status === 'WAITING_APPROVAL';
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
     const canShowStuck = task.status === 'PENDING' && !task.is_stuck && canComplete;
+    const canDelete = user.role === 'BIG_BOSS' || user.role === 'COMPANY_MANAGER';
+    const isRecurringSeries = task.title && task.title.endsWith(' (Recurring)');
+
+    const handleDeleteSeries = async () => {
+        const msg = isRecurringSeries
+            ? 'Delete this task and all future recurring instances in this series?'
+            : 'Delete this task permanently?';
+        if (!window.confirm(msg)) return;
+        try {
+            const res = await fetch(`${BASE}/tasks/${task.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) { onRefresh(); onClose(); }
+        } catch(e) { console.error('Delete task error:', e); }
+    };
 
     const handleComplete = async () => {
         if (!note && !file) {
@@ -917,6 +943,11 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                         {canApprove && (
                             <button onClick={handleApprove} className="w-full bg-[#714B67] text-white py-3 rounded-xl font-bold shadow-sm hover:bg-[#5a3b52] transition">
                                 {t.approve_close_btn}
+                            </button>
+                        )}
+                        {canDelete && (
+                            <button onClick={handleDeleteSeries} className="w-full border border-red-200 text-red-500 py-2.5 rounded-xl font-bold hover:bg-red-50 transition text-sm">
+                                {isRecurringSeries ? (t.delete_series_btn || 'Delete Entire Series') : (t.delete_task_btn || 'Delete Task')}
                             </button>
                         )}
                     </div>

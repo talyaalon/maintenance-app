@@ -2823,6 +2823,67 @@ app.delete('/tasks/bulk-delete', authenticateToken, async (req, res) => {
     }
 });
 
+// ── Delete single task (+ full recurring series) ─────────────────────────────
+// NOTE: must be declared AFTER /tasks/delete-all and /tasks/bulk-delete so
+// those literal paths are not swallowed by the :id param matcher.
+app.delete('/tasks/:id', authenticateToken, async (req, res) => {
+    const { role, company_id } = req.user;
+    if (role !== 'BIG_BOSS' && role !== 'COMPANY_MANAGER') {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    const taskId = parseInt(req.params.id);
+    if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid task id' });
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const taskRes = await client.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+        if (taskRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Task not found' });
+        }
+        const task = taskRes.rows[0];
+
+        if (role === 'COMPANY_MANAGER' && task.company_id !== company_id) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        let deleted = 0;
+        if (task.title && task.title.endsWith(' (Recurring)')) {
+            // Delete this instance + all future PENDING instances sharing title/worker
+            if (role === 'COMPANY_MANAGER') {
+                const result = await client.query(
+                    `DELETE FROM tasks WHERE title = $1 AND worker_id = $2 AND company_id = $3 AND status = 'PENDING' AND due_date >= $4`,
+                    [task.title, task.worker_id, company_id, task.due_date]
+                );
+                deleted = result.rowCount;
+            } else {
+                const result = await client.query(
+                    `DELETE FROM tasks WHERE title = $1 AND worker_id = $2 AND status = 'PENDING' AND due_date >= $3`,
+                    [task.title, task.worker_id, task.due_date]
+                );
+                deleted = result.rowCount;
+            }
+            // Ensure target is removed even if it was non-PENDING
+            await client.query('DELETE FROM tasks WHERE id = $1', [taskId]);
+        } else {
+            const result = await client.query('DELETE FROM tasks WHERE id = $1', [taskId]);
+            deleted = result.rowCount;
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, deleted });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('delete task error:', err);
+        res.status(500).json({ error: 'Error deleting task' });
+    } finally {
+        client.release();
+    }
+});
+
 // ── Bulk Update Status ────────────────────────────────────────────────────────
 app.put('/tasks/bulk-update-status', authenticateToken, async (req, res) => {
     const { role, company_id } = req.user;
