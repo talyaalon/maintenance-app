@@ -574,6 +574,10 @@ app.get('/fix-db', async (req, res) => {
             // Stuck-task permission — when TRUE, stuck tasks skip WAITING_APPROVAL and go directly to COMPLETED
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS stuck_skip_approval BOOLEAN DEFAULT FALSE');
 
+            // Notification channel preferences — controls which channels receive daily reports
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_email BOOLEAN DEFAULT TRUE');
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_line BOOLEAN DEFAULT TRUE');
+
             // Stuck-task fields on tasks
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_stuck BOOLEAN DEFAULT FALSE');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_description TEXT');
@@ -1126,7 +1130,7 @@ app.post('/users', authenticateToken, async (req, res) => {
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th, line_user_id, stuck_skip_approval } = req.body;
+    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th, line_user_id, stuck_skip_approval, notify_email, notify_line } = req.body;
 
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
@@ -1203,6 +1207,16 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     if ('stuck_skip_approval' in oldUser || stuck_skip_approval !== undefined) {
         setClauses.push(`stuck_skip_approval=$${paramCount}`);
         params.push(stuck_skip_approval !== undefined ? stuck_skip_approval : oldUser.stuck_skip_approval);
+        paramCount++;
+    }
+    if ('notify_email' in oldUser || notify_email !== undefined) {
+        setClauses.push(`notify_email=$${paramCount}`);
+        params.push(notify_email !== undefined ? notify_email : (oldUser.notify_email ?? true));
+        paramCount++;
+    }
+    if ('notify_line' in oldUser || notify_line !== undefined) {
+        setClauses.push(`notify_line=$${paramCount}`);
+        params.push(notify_line !== undefined ? notify_line : (oldUser.notify_line ?? true));
         paramCount++;
     }
 
@@ -4217,7 +4231,7 @@ const sendScopedDailyReport = async (userId) => {
 
     // Fetch target user (include company_id for COMPANY_MANAGER scoping)
     const userRes = await pool.query(
-        'SELECT id, full_name, email, role, parent_manager_id, company_id, device_token, preferred_language, line_user_id FROM users WHERE id = $1',
+        'SELECT id, full_name, email, role, parent_manager_id, company_id, device_token, preferred_language, line_user_id, notify_email, notify_line FROM users WHERE id = $1',
         [userId]
     );
     if (!userRes.rows.length) throw new Error(`User ${userId} not found`);
@@ -4291,7 +4305,12 @@ const sendScopedDailyReport = async (userId) => {
         // ── MANAGER or COMPANY_MANAGER: team report ────────────────────────────
         let empQueryText, empQueryParams;
         if (u.role === 'MANAGER') {
-            empQueryText   = "SELECT id, full_name, email, device_token, preferred_language, line_user_id FROM users WHERE parent_manager_id = $1 AND role = 'EMPLOYEE'";
+            // Use the M:M junction table so ALL structurally-assigned employees are included,
+            // even those whose parent_manager_id may point elsewhere (multi-manager setups).
+            empQueryText   = `SELECT u.id, u.full_name, u.email, u.device_token, u.preferred_language, u.line_user_id
+                              FROM users u
+                              INNER JOIN employee_managers em ON em.employee_id = u.id
+                              WHERE em.manager_id = $1 AND u.role = 'EMPLOYEE'`;
             empQueryParams = [userId];
         } else {
             // COMPANY_MANAGER — summarise ALL employees in their company
@@ -4301,6 +4320,11 @@ const sendScopedDailyReport = async (userId) => {
 
         const empsRes  = await pool.query(empQueryText, empQueryParams);
         const teamEmps = empsRes.rows;
+
+        const sendEmail = u.notify_email !== false;
+        const sendLine  = u.notify_line  !== false;
+        console.log(`Generating report for Manager ${userId}. Found ${teamEmps.length} employees. Routing: Email=${sendEmail}, LINE=${sendLine}`);
+
         if (!teamEmps.length) { console.log(`ℹ️ No employees found for user ${userId}, skipping scoped report`); return; }
 
         const empIds     = teamEmps.map(e => e.id);
@@ -4368,8 +4392,8 @@ const sendScopedDailyReport = async (userId) => {
         });
 
         await Promise.all([
-            u.email        ? transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: u.email, subject: emailSubj, html: htmlBody }).catch(e => console.error('❌ [scoped] Email error:', e.message)) : Promise.resolve(),
-            u.line_user_id ? sendLineMessage(u.line_user_id, lineReport).catch(e => console.error('❌ [scoped] LINE error:', e.message)) : Promise.resolve(),
+            (sendEmail && u.email)        ? transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: u.email, subject: emailSubj, html: htmlBody }).catch(e => console.error('❌ [scoped] Email error:', e.message)) : Promise.resolve(),
+            (sendLine  && u.line_user_id) ? sendLineMessage(u.line_user_id, lineReport).catch(e => console.error('❌ [scoped] LINE error:', e.message)) : Promise.resolve(),
             u.device_token ? admin.messaging().send({ token: u.device_token, notification: { title: pushTitle, body: pushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.error('❌ [scoped] FCM error:', e.message)) : Promise.resolve(),
         ]);
     }
