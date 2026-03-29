@@ -33,7 +33,10 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
     const [filterWorker, setFilterWorker] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [filterStatus, setFilterStatus] = useState(''); 
+    const [filterStatus, setFilterStatus] = useState('');
+    const [filterUrgency, setFilterUrgency] = useState('');
+    const [filterCategory, setFilterCategory] = useState('');
+    const [filterAsset, setFilterAsset] = useState('');
     const [isExporting, setIsExporting] = useState(false);
     const [isUpdateMode, setIsUpdateMode] = useState(false);
     const [exportFormat, setExportFormat] = useState('XLSX'); 
@@ -476,6 +479,9 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
             if (startDate) params.append('start_date', startDate);
             if (endDate) params.append('end_date', endDate);
             if (filterStatus) params.append('status', filterStatus);
+            if (filterUrgency) params.append('urgency', filterUrgency);
+            if (filterCategory) params.append('category_id', filterCategory);
+            if (filterAsset) params.append('asset_id', filterAsset);
 
             const res = await fetch(`https://maintenance-app-staging.onrender.com/tasks/export/advanced?${params.toString()}`, { headers: { 'Authorization': `Bearer ${token}` }});
             if (!res.ok) throw new Error("Export failed");
@@ -574,6 +580,30 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                                             <option value="PENDING">{t.status_pending_filter || 'Pending (Not Performed)'}</option>
                                             <option value="WAITING_APPROVAL">{t.status_waiting_filter || 'Waiting Approval'}</option>
                                             <option value="COMPLETED">{t.status_completed_filter || 'Completed'}</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="flex items-center gap-1 ml-2">
+                                        <select className="border border-gray-200 rounded p-1 text-gray-700 text-xs focus:ring-[#714B67] focus:border-[#714B67]" value={filterUrgency} onChange={e => setFilterUrgency(e.target.value)}>
+                                            <option value="">{t.all_urgencies || 'All Urgencies'}</option>
+                                            <option value="NORMAL">{t.urgency_normal || 'Normal'}</option>
+                                            <option value="HIGH">{t.urgency_high || 'Urgent'}</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="flex items-center gap-1 ml-2">
+                                        <select className="border border-gray-200 rounded p-1 text-gray-700 text-xs focus:ring-[#714B67] focus:border-[#714B67]" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setFilterAsset(''); }}>
+                                            <option value="">{t.all_categories || 'All Categories'}</option>
+                                            {categories.map(c => <option key={c.id} value={c.id}>{c.name || c.name_en || c.name_he}</option>)}
+                                        </select>
+                                    </div>
+
+                                    <div className="flex items-center gap-1 ml-2">
+                                        <select className="border border-gray-200 rounded p-1 text-gray-700 text-xs focus:ring-[#714B67] focus:border-[#714B67]" value={filterAsset} onChange={e => setFilterAsset(e.target.value)}>
+                                            <option value="">{t.all_assets || 'All Assets'}</option>
+                                            {assets
+                                                .filter(a => !filterCategory || String(a.category_id) === String(filterCategory))
+                                                .map(a => <option key={a.id} value={a.id}>{a.name || a.name_en || a.name_he} {a.code ? `(${a.code})` : ''}</option>)}
                                         </select>
                                     </div>
                                 </div>

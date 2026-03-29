@@ -162,6 +162,46 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
     const [searchTerm, setSearchTerm]             = useState('');
     const [selectedFields, setSelectedFields]     = useState([]);
 
+    // ── Export filter state ───────────────────────────────────────────────────
+    const [filterOptions, setFilterOptions]       = useState([]);  // list for dropdown/multi-select
+    const [selectedUserIds, setSelectedUserIds]   = useState([]); // managers / employees multi-select
+    const [filterCategoryId, setFilterCategoryId] = useState(''); // assets: filter by category
+    const [filterLocationId, setFilterLocationId] = useState(''); // locations: filter to one location
+    const [filterCatExportId, setFilterCatExportId] = useState(''); // categories: filter to one category
+
+    // Fetch filter option lists when the export tab becomes active
+    React.useEffect(() => {
+        if (activeTab !== 'export') return;
+        let cancelled = false;
+        const fetchOptions = async () => {
+            const headers = { 'Authorization': `Bearer ${token}` };
+            try {
+                if (section === 'managers') {
+                    const r = await fetch(`${BASE}/managers/export?fields=id,full_name`, { headers });
+                    if (r.ok && !cancelled) setFilterOptions(await r.json());
+                } else if (section === 'employees') {
+                    const r = await fetch(`${BASE}/employees/export?fields=id,full_name`, { headers });
+                    if (r.ok && !cancelled) setFilterOptions(await r.json());
+                } else if (section === 'assets') {
+                    const r = await fetch(`${BASE}/categories/export?fields=id,name_en,name_he`, { headers });
+                    if (r.ok && !cancelled) setFilterOptions(await r.json());
+                } else if (section === 'locations') {
+                    const r = await fetch(`${BASE}/locations/export?fields=id,name_en,name_he`, { headers });
+                    if (r.ok && !cancelled) setFilterOptions(await r.json());
+                } else if (section === 'categories') {
+                    const r = await fetch(`${BASE}/categories/export?fields=id,name_en,name_he`, { headers });
+                    if (r.ok && !cancelled) setFilterOptions(await r.json());
+                }
+            } catch { /* non-critical — filters simply won't populate */ }
+        };
+        fetchOptions();
+        return () => { cancelled = true; };
+    }, [activeTab, section, token]);
+
+    const toggleUserId = (id) => setSelectedUserIds(prev =>
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+
     const allFields       = SECTION_FIELDS[section] || [];
     const availableFields = allFields
         .filter(f => !selectedFields.find(s => s.id === f.id))
@@ -280,7 +320,22 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
         setIsLoading(true);
         try {
             const fields = selectedFields.map(f => f.id).join(',');
-            const res    = await fetch(`${BASE}/${section}/export?fields=${fields}`, {
+            const qp = new URLSearchParams({ fields });
+
+            if ((section === 'managers' || section === 'employees') && selectedUserIds.length > 0) {
+                qp.set('user_ids', selectedUserIds.join(','));
+            }
+            if (section === 'assets' && filterCategoryId) {
+                qp.set('category_id', filterCategoryId);
+            }
+            if (section === 'locations' && filterLocationId) {
+                qp.set('location_id', filterLocationId);
+            }
+            if (section === 'categories' && filterCatExportId) {
+                qp.set('category_id', filterCatExportId);
+            }
+
+            const res    = await fetch(`${BASE}/${section}/export?${qp}`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Export failed');
@@ -431,6 +486,83 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
             {/* ── Export Tab ── */}
             {activeTab === 'export' && (
                 <div className="p-4 space-y-3">
+
+                    {/* ── Per-section export filters ── */}
+                    {(section === 'managers' || section === 'employees') && filterOptions.length > 0 && (
+                        <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                            <p className="text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">
+                                {t?.filter_users_label || 'Filter Users'} — {selectedUserIds.length === 0 ? (t?.exporting_all || 'Exporting All') : `${selectedUserIds.length} selected`}
+                            </p>
+                            <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
+                                {filterOptions.map(u => (
+                                    <label key={u.id} className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700 bg-white border border-gray-200 rounded px-2 py-1 hover:border-[#714B67] transition select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedUserIds.includes(u.id)}
+                                            onChange={() => toggleUserId(u.id)}
+                                            className="w-3 h-3 text-[#714B67] rounded"
+                                        />
+                                        {u.full_name}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {section === 'assets' && filterOptions.length > 0 && (
+                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                {t?.filter_by_category || 'Category'}
+                            </span>
+                            <select
+                                value={filterCategoryId}
+                                onChange={e => setFilterCategoryId(e.target.value)}
+                                className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                            >
+                                <option value="">{t?.all_categories || 'All Categories'}</option>
+                                {filterOptions.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name_en || c.name_he || c.id}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {section === 'locations' && filterOptions.length > 0 && (
+                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                {t?.filter_by_location || 'Location'}
+                            </span>
+                            <select
+                                value={filterLocationId}
+                                onChange={e => setFilterLocationId(e.target.value)}
+                                className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                            >
+                                <option value="">{t?.all_locations || 'All Locations'}</option>
+                                {filterOptions.map(l => (
+                                    <option key={l.id} value={l.id}>{l.name_en || l.name_he || l.id}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {section === 'categories' && filterOptions.length > 0 && (
+                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                {t?.filter_by_category || 'Category'}
+                            </span>
+                            <select
+                                value={filterCatExportId}
+                                onChange={e => setFilterCatExportId(e.target.value)}
+                                className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                            >
+                                <option value="">{t?.all_categories || 'All Categories'}</option>
+                                {filterOptions.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name_en || c.name_he || c.id}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <div className="flex gap-3" style={{ height: '200px' }}>
                         {/* Available fields */}
                         <div className="flex-1 flex flex-col min-h-0">

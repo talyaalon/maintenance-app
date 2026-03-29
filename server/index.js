@@ -2926,7 +2926,7 @@ app.put('/tasks/bulk-update-status', authenticateToken, async (req, res) => {
 
 app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     try {
-        const { worker_id, start_date, end_date, status } = req.query;
+        const { worker_id, start_date, end_date, status, urgency, category_id, asset_id } = req.query;
         const { role, id: callerId, company_id } = req.user;
 
         let query = `
@@ -2980,6 +2980,21 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
         if (status && status !== 'all') {
             query += ` AND t.status = $${pIndex++}`;
             params.push(status);
+        }
+
+        if (urgency && urgency !== 'all') {
+            query += ` AND t.urgency = $${pIndex++}`;
+            params.push(urgency.toUpperCase());
+        }
+
+        if (category_id && category_id !== 'all') {
+            query += ` AND a.category_id = $${pIndex++}`;
+            params.push(parseInt(category_id, 10));
+        }
+
+        if (asset_id && asset_id !== 'all') {
+            query += ` AND t.asset_id = $${pIndex++}`;
+            params.push(parseInt(asset_id, 10));
         }
 
         query += ` ORDER BY t.due_date DESC`;
@@ -4577,6 +4592,7 @@ async function resolveCallerScope(reqUser, targetCompanyId = null) {
 app.get('/locations/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { role, company_id, area_id } = req.user;
+        const { location_id: filterLocationId } = req.query;
         const ALLOWED = ['id', 'name_he', 'name_en', 'name_th', 'code', 'address'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
@@ -4595,6 +4611,12 @@ app.get('/locations/export', authenticateToken, requireAdmin, async (req, res) =
             else if (area_id)  { query += ` AND locations.area_id    = $${pi++}`; params.push(area_id);    }
             else               { query += ' AND 1=0'; }
         }
+
+        if (filterLocationId && filterLocationId !== 'all') {
+            query += ` AND locations.id = $${pi++}`;
+            params.push(parseInt(filterLocationId, 10));
+        }
+
         query += ' ORDER BY locations.name ASC';
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -4708,6 +4730,7 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
 app.get('/categories/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { role, company_id, area_id } = req.user;
+        const { category_id: filterCategoryId } = req.query;
         const ALLOWED = ['id', 'name_he', 'name_en', 'name_th', 'code'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
@@ -4724,6 +4747,12 @@ app.get('/categories/export', authenticateToken, requireAdmin, async (req, res) 
             else if (area_id)  { query += ` AND categories.area_id    = $${pi++}`; params.push(area_id);    }
             else               { query += ' AND 1=0'; }
         }
+
+        if (filterCategoryId && filterCategoryId !== 'all') {
+            query += ` AND categories.id = $${pi++}`;
+            params.push(parseInt(filterCategoryId, 10));
+        }
+
         query += ' ORDER BY categories.name ASC';
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -4817,6 +4846,7 @@ app.post('/categories/bulk-import', authenticateToken, requireAdmin, async (req,
 app.get('/assets/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { role, company_id, area_id } = req.user;
+        const { category_id: filterCategoryId } = req.query;
         const ALLOWED = ['id', 'name_he', 'name_en', 'name_th', 'code', 'category_id', 'location_id'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
@@ -4833,6 +4863,12 @@ app.get('/assets/export', authenticateToken, requireAdmin, async (req, res) => {
             else if (area_id)  { query += ` AND assets.area_id    = $${pi++}`; params.push(area_id);    }
             else               { query += ' AND 1=0'; }
         }
+
+        if (filterCategoryId && filterCategoryId !== 'all') {
+            query += ` AND assets.category_id = $${pi++}`;
+            params.push(parseInt(filterCategoryId, 10));
+        }
+
         query += ' ORDER BY assets.code';
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -4975,6 +5011,7 @@ app.post('/assets/bulk-import', authenticateToken, requireAdmin, async (req, res
 app.get('/managers/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { role, company_id, area_id } = req.user;
+        const { user_ids } = req.query;
         const ALLOWED = ['id', 'full_name', 'email', 'phone'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
@@ -4991,6 +5028,15 @@ app.get('/managers/export', authenticateToken, requireAdmin, async (req, res) =>
             else if (area_id)  { query += ` AND u.area_id    = $${pi++}`; params.push(area_id);    }
             else               { query += ' AND 1=0'; }
         }
+
+        if (user_ids) {
+            const ids = user_ids.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+            if (ids.length > 0) {
+                query += ` AND u.id = ANY($${pi++}::int[])`;
+                params.push(ids);
+            }
+        }
+
         query += ' ORDER BY u.full_name';
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -5110,6 +5156,7 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
 app.get('/employees/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { role, company_id, area_id, id: callerId } = req.user;
+        const { user_ids } = req.query;
         const ALLOWED = ['id', 'full_name', 'email', 'phone'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
@@ -5130,6 +5177,15 @@ app.get('/employees/export', authenticateToken, requireAdmin, async (req, res) =
             else if (area_id)  { query += ` AND u.area_id    = $${pi++}`; params.push(area_id);    }
             else               { query += ' AND 1=0'; }
         }
+
+        if (user_ids) {
+            const ids = user_ids.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+            if (ids.length > 0) {
+                query += ` AND u.id = ANY($${pi++}::int[])`;
+                params.push(ids);
+            }
+        }
+
         query += ' ORDER BY u.full_name';
         const result = await pool.query(query, params);
         res.json(result.rows);
