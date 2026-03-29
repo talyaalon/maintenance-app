@@ -59,6 +59,7 @@ export const translations = {
     reset_password_success: "Password updated! You can now log in.",
     reset_password_invalid_token: "Invalid or expired reset code.",
     reset_back_to_login: "Back to Login",
+    back: "Back",
 
     // --- General Actions ---
     save: "Save",
@@ -513,6 +514,7 @@ export const translations = {
     reset_password_success: "הסיסמה עודכנה! כעת ניתן להתחבר.",
     reset_password_invalid_token: "קוד איפוס לא תקין או פג תוקף.",
     reset_back_to_login: "חזרה להתחברות",
+    back: "חזור",
 
     // --- General Actions ---
     save: "שמור",
@@ -967,6 +969,7 @@ export const translations = {
     reset_password_success: "อัปเดตรหัสผ่านแล้ว! ตอนนี้คุณสามารถเข้าสู่ระบบได้",
     reset_password_invalid_token: "รหัสรีเซ็ตไม่ถูกต้องหรือหมดอายุแล้ว",
     reset_back_to_login: "กลับไปเข้าสู่ระบบ",
+    back: "กลับ",
 
     // --- General Actions ---
     save: "บันทึก",

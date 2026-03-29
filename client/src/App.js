@@ -1,7 +1,7 @@
 import { requestForToken, onMessageListener } from './firebase';
 import { Toaster, toast } from 'react-hot-toast'; // אם אין לך react-hot-toast, תוכלי להשתמש ב-alert רגיל
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, UserCircle, Settings, Building2, BookOpen, X } from 'lucide-react';
+import { LayoutDashboard, Users, UserCircle, Settings, Building2, BookOpen, ArrowLeft } from 'lucide-react';
 import Login from './Login';
 import AddUserForm from './AddUserForm';
 import { translations } from './translations'; 
@@ -291,20 +291,31 @@ function App() {
       {/* כותרת עליונה - מעודכנת */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-30 relative">
           
-          {/* צד שמאל: לוגו + כפתור עזרה */}
+          {/* צד שמאל: לוגו + כפתור עזרה / חזרה */}
           <div className="flex items-center gap-2 flex-shrink-0 z-10">
               <img
                   src={logoImg}
                   alt="App Logo"
                   className="h-10 w-auto object-contain"
               />
-              <button
-                  onClick={() => setShowHelp(true)}
-                  className="p-1.5 rounded-xl text-[#714B67] hover:bg-[#714B67]/10 transition-colors"
-                  title={t.nav_help || 'Help'}
-              >
-                  <BookOpen size={20} strokeWidth={2} />
-              </button>
+              {showHelp ? (
+                  <button
+                      onClick={() => setShowHelp(false)}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-xl text-[#714B67] hover:bg-[#714B67]/10 transition-colors text-sm font-medium"
+                      title={t.back || 'Back'}
+                  >
+                      <ArrowLeft size={18} strokeWidth={2} />
+                      <span>{t.back || 'Back'}</span>
+                  </button>
+              ) : (
+                  <button
+                      onClick={() => setShowHelp(true)}
+                      className="p-1.5 rounded-xl text-[#714B67] hover:bg-[#714B67]/10 transition-colors"
+                      title={t.nav_help || 'Help'}
+                  >
+                      <BookOpen size={20} strokeWidth={2} />
+                  </button>
+              )}
           </div>
 
           {/* מרכז: כותרת האפליקציה */}
@@ -352,68 +363,48 @@ function App() {
           </div>
       </header>
 
-      <main className="max-w-3xl mx-auto min-h-[80vh] pb-24">
-        {renderContent()}
-      </main>
+      {/* ─── Help Center (full-page) ─────────────────────────────────────── */}
+      {showHelp ? (
+          <main className="max-w-3xl mx-auto pb-8">
+              <HelpCenter user={user} t={t} lang={lang} />
+          </main>
+      ) : (
+          <>
+              <main className="max-w-3xl mx-auto min-h-[80vh] pb-24">
+                {renderContent()}
+              </main>
 
 {/* ─── Footer ────────────────────────────────────────────────────────────── */}
-      <footer className="pb-16 pt-4 flex justify-center">
-        <img src={logoImg} alt="Air Manage" className="h-6 w-auto object-contain opacity-30" />
-      </footer>
+              <footer className="pb-16 pt-4 flex justify-center">
+                <img src={logoImg} alt="Air Manage" className="h-6 w-auto object-contain opacity-30" />
+              </footer>
 
 {/* ─── Bottom navigation ─────────────────────────────────────────────────── */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
-        <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
-            {tabsConfig.map(({ key, label, Icon }) => (
-                <button
-                    key={key}
-                    onClick={() => setActiveTab(key)}
-                    className={`flex flex-col items-center w-full ${activeTab === key ? 'text-[#714B67]' : 'text-gray-400'}`}
-                >
-                    <Icon size={24} strokeWidth={activeTab === key ? 2.5 : 2} />
-                    <span className="text-[10px] mt-1 font-medium">{label}</span>
-                </button>
-            ))}
-        </div>
-      </nav>
+              <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
+                <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
+                    {tabsConfig.map(({ key, label, Icon }) => (
+                        <button
+                            key={key}
+                            onClick={() => setActiveTab(key)}
+                            className={`flex flex-col items-center w-full ${activeTab === key ? 'text-[#714B67]' : 'text-gray-400'}`}
+                        >
+                            <Icon size={24} strokeWidth={activeTab === key ? 2.5 : 2} />
+                            <span className="text-[10px] mt-1 font-medium">{label}</span>
+                        </button>
+                    ))}
+                </div>
+              </nav>
 
-      {/* --- החלונות הקופצים --- */}
-      
-{isUserFormOpen && <AddUserForm
-          currentUser={user}
-          onClose={() => {
-              setIsUserFormOpen(false);
-              setRefreshTrigger(prev => prev + 1);
-          }}
-          t={t}
-      />}
-
-      {/* ─── Help Center Modal ───────────────────────────────────────────── */}
-      {showHelp && (
-          <div
-              className="fixed inset-0 z-[200] bg-black/40 flex items-start justify-center overflow-y-auto py-6 px-4"
-              onClick={(e) => { if (e.target === e.currentTarget) setShowHelp(false); }}
-          >
-              <div className="bg-slate-50 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
-                  {/* Modal header */}
-                  <div className="sticky top-0 bg-white rounded-t-2xl px-5 py-4 flex items-center justify-between border-b border-gray-100 z-10">
-                      <div className="flex items-center gap-2">
-                          <BookOpen size={18} className="text-[#714B67]" />
-                          <span className="font-semibold text-gray-800">{t.nav_help || 'Help Center'}</span>
-                      </div>
-                      <button
-                          onClick={() => setShowHelp(false)}
-                          className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-                      >
-                          <X size={18} />
-                      </button>
-                  </div>
-                  {/* Scrollable content */}
-                  <div className="overflow-y-auto flex-1">
-                      <HelpCenter user={user} t={t} lang={lang} />
-                  </div>
-              </div>
-          </div>
+              {/* --- החלונות הקופצים --- */}
+              {isUserFormOpen && <AddUserForm
+                  currentUser={user}
+                  onClose={() => {
+                      setIsUserFormOpen(false);
+                      setRefreshTrigger(prev => prev + 1);
+                  }}
+                  t={t}
+              />}
+          </>
       )}
 
     </div>
