@@ -1,7 +1,7 @@
 import { requestForToken, onMessageListener } from './firebase';
 import { Toaster, toast } from 'react-hot-toast'; // אם אין לך react-hot-toast, תוכלי להשתמש ב-alert רגיל
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, UserCircle, Settings, Building2 } from 'lucide-react';
+import { LayoutDashboard, Users, UserCircle, Settings, Building2, BookOpen } from 'lucide-react';
 import Login from './Login';
 import AddUserForm from './AddUserForm';
 import { translations } from './translations'; 
@@ -14,6 +14,7 @@ import ProfileTab from './ProfileTab';
 import ConfigurationTab from './ConfigurationTab';
 import CompaniesTab from './CompaniesTab';
 import CompanyManagerSettingsTab from './CompanyManagerSettingsTab';
+import HelpCenter from './HelpCenter';
 
 // Legacy role mapping: DB may still contain "Admin" from before the Phase 1 rename.
 // Normalise it to "BIG_BOSS" so all tab routing and permission checks work correctly.
@@ -220,23 +221,27 @@ function App() {
                   { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
                   { key: 'companies', label: t.nav_companies,            Icon: Building2 },
                   { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+                  { key: 'help',      label: t.nav_help,                 Icon: BookOpen },
               ];
           case 'COMPANY_MANAGER':
               return [
                   { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
                   { key: 'settings',  label: t.nav_config,               Icon: Settings },
                   { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+                  { key: 'help',      label: t.nav_help,                 Icon: BookOpen },
               ];
           case 'MANAGER':
               return [
                   { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
                   { key: 'team',      label: t.nav_team,                 Icon: Users },
                   { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+                  { key: 'help',      label: t.nav_help,                 Icon: BookOpen },
               ];
           default: // EMPLOYEE (or null user — won't be rendered)
               return [
                   { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
                   { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+                  { key: 'help',      label: t.nav_help,                 Icon: BookOpen },
               ];
       }
   }, [user?.role, t]);
@@ -265,6 +270,8 @@ function App() {
               if (isBigBoss)        return <ConfigurationTab token={token} t={t} user={user} lang={lang} />;
               if (isCompanyManager) return <CompanyManagerSettingsTab token={token} t={t} user={user} lang={lang} />;
               return null;
+          case 'help':
+              return <HelpCenter user={user} t={t} />;
           case 'profile':
               return <ProfileTab
                           t={t}
