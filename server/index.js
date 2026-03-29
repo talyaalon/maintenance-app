@@ -846,9 +846,12 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         const id = req.user.id;
         const { full_name, full_name_he, full_name_en, full_name_th, email, phone, password, preferred_language, line_user_id } = req.body;
 
-        // Capture old lineUserId BEFORE the update to detect first-time connection
-        const oldProfileRes = await pool.query('SELECT line_user_id FROM users WHERE id = $1', [id]);
+        // Capture old values BEFORE the update to detect first-time connection and provide fallbacks
+        const oldProfileRes = await pool.query('SELECT line_user_id, email FROM users WHERE id = $1', [id]);
         const oldLineUserId = oldProfileRes.rows[0]?.line_user_id || null;
+        const oldEmail = oldProfileRes.rows[0]?.email || null;
+        // Always normalize email — login always lowercases, so the DB must match
+        const normalizedEmail = email ? email.toLowerCase().trim() : oldEmail;
 
         let profile_picture_url = req.body.existing_picture || null;
         if (req.file) {
@@ -858,7 +861,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
 
         const lang = preferred_language || 'en';
 
-        const firebaseUpdateData = { displayName: full_name, email: email };
+        const firebaseUpdateData = { displayName: full_name, email: normalizedEmail };
         if (password && password.trim() !== '') {
             if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
             firebaseUpdateData.password = password;
@@ -874,7 +877,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         }
 
         let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, profile_picture_url=$4, preferred_language=$5, full_name_he=$6, full_name_en=$7, full_name_th=$8, line_user_id=$9';
-        let params = [full_name, email, phone, profile_picture_url, lang, full_name_he || null, full_name_en || null, full_name_th || null, line_user_id || null];
+        let params = [full_name, normalizedEmail, phone, profile_picture_url, lang, full_name_he || null, full_name_en || null, full_name_th || null, line_user_id || null];
         let paramCount = 10;
 
         if (password && password.trim() !== '') {
@@ -1143,7 +1146,7 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
 
     // Compute effective values BEFORE the Firebase call so displayName/email are never undefined
     const effectiveName  = full_name || full_name_en || oldUser.full_name;
-    const effectiveEmail = email !== undefined ? email : oldUser.email;
+    const effectiveEmail = email ? email.toLowerCase().trim() : oldUser.email;
     const effectivePhone = phone !== undefined ? phone : (oldUser.phone || null);
     const lang           = preferred_language !== undefined ? preferred_language : (oldUser.preferred_language || 'he');
 
