@@ -744,7 +744,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         {user?.company_name || t?.nav_config || 'Settings'}
                     </h2>
                     <p className="text-xs text-gray-400">
-                        {user?.name ? `Welcome, ${user.name}` : (t?.company_detail_subtitle || 'Company Dashboard')}
+                        {user?.name ? `Welcome, ${user.name}` : (t?.company_detail_subtitle || 'Department Dashboard')}
                     </p>
                 </div>
             </div>
@@ -767,7 +767,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-800 truncate">{userName(selfUser)}</p>
                             <span className="inline-block text-[10px] font-bold text-[#714B67] bg-[#714B67]/10 px-1.5 py-0.5 rounded mt-0.5">
-                                Company Manager
+                                Department Manager
                             </span>
                         </div>
                         <RowActions

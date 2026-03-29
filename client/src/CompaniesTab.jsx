@@ -205,7 +205,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
         finally { setSaving(false); }
     };
 
-    const roleLabel = (role === 'SUPERVISOR' || role === 'MANAGER') ? 'Manager' : role === 'COMPANY_MANAGER' ? 'Company Manager' : 'Employee';
+    const roleLabel = (role === 'SUPERVISOR' || role === 'MANAGER') ? 'Manager' : role === 'COMPANY_MANAGER' ? 'Department Manager' : 'Employee';
     return (
         <div className={isAddPanel ? addPanelCls : rowPanelCls}>
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
@@ -814,7 +814,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                     )}
                     <div>
                         <h2 className="text-lg font-bold text-slate-800">{company?.name}</h2>
-                        <p className="text-xs text-gray-400">{t?.company_detail_subtitle || 'Company Dashboard'}</p>
+                        <p className="text-xs text-gray-400">{t?.company_detail_subtitle || 'Department Dashboard'}</p>
                     </div>
                 </div>
             </div>
@@ -823,7 +823,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
             <div className="bg-white rounded-2xl border border-[#714B67]/20 overflow-hidden mb-5">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-[#714B67]/5">
                     <Shield size={16} className="text-[#714B67]" />
-                    <h3 className="text-sm font-bold text-slate-700">Company Managers</h3>
+                    <h3 className="text-sm font-bold text-slate-700">Department Managers</h3>
                     <span className="ml-auto text-xs font-semibold text-[#714B67] bg-[#714B67]/10 px-2 py-0.5 rounded-full">
                         {companyManagers.length}
                     </span>
@@ -850,7 +850,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </div>
                     )}
                     {companyManagers.length === 0 && openPanel !== 'add-user-cm' && (
-                        <p className="px-4 py-3 text-xs text-gray-400 italic">No Company Managers Assigned</p>
+                        <p className="px-4 py-3 text-xs text-gray-400 italic">No Department Managers Assigned</p>
                     )}
                     {companyManagers.map(cm => (
                         <div key={cm.id} className="px-4 py-2.5">
@@ -867,7 +867,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                                         {userName(cm)}
                                     </p>
                                     <span className="inline-block text-[10px] font-bold text-[#714B67] bg-[#714B67]/10 px-1.5 py-0.5 rounded mt-0.5">
-                                        Company Manager
+                                        Department Manager
                                     </span>
                                 </div>
                                 <RowActions
@@ -1442,7 +1442,7 @@ const InlineCompanyForm = ({ company, token, t, lang, onClose, onSaved }) => {
                 <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#714B67]/10 text-[#714B67] transition"><X size={14} /></button>
             </div>
 
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Company Info</p>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Department Info</p>
             <MultiLangNameInput
                 value={{ name_en: form.name_en, name_he: form.name_he, name_th: form.name_th }}
                 onChange={updated => setForm(p => ({ ...p, ...updated }))}
@@ -1471,7 +1471,7 @@ const InlineCompanyForm = ({ company, token, t, lang, onClose, onSaved }) => {
 
             <div className="pt-1">
                 <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1.5">
-                    Company Manager{' '}
+                    Department Manager{' '}
                     {!isEdit && <span className="text-gray-400 font-normal normal-case">(optional — can be added later)</span>}
                 </p>
                 {isEdit && mgrLoading && (
