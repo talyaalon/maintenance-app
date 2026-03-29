@@ -169,6 +169,16 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
     const [filterLocationId, setFilterLocationId] = useState(''); // locations: filter to one location
     const [filterCatExportId, setFilterCatExportId] = useState(''); // categories: filter to one category
 
+    // ── Task export filters ───────────────────────────────────────────────────
+    const [taskWorkerOptions,   setTaskWorkerOptions]   = useState([]);
+    const [taskLocationOptions, setTaskLocationOptions] = useState([]);
+    const [taskCategoryOptions, setTaskCategoryOptions] = useState([]);
+    const [taskFilterWorkerId,   setTaskFilterWorkerId]   = useState('');
+    const [taskFilterStatus,     setTaskFilterStatus]     = useState('');
+    const [taskFilterUrgency,    setTaskFilterUrgency]    = useState('');
+    const [taskFilterLocationId, setTaskFilterLocationId] = useState('');
+    const [taskFilterCategoryId, setTaskFilterCategoryId] = useState('');
+
     // Fetch filter option lists when the export tab becomes active
     React.useEffect(() => {
         if (activeTab !== 'export') return;
@@ -191,6 +201,17 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                 } else if (section === 'categories') {
                     const r = await fetch(`${BASE}/categories/export?fields=id,name_en,name_he`, { headers });
                     if (r.ok && !cancelled) setFilterOptions(await r.json());
+                } else if (section === 'tasks') {
+                    const [wRes, lRes, cRes] = await Promise.all([
+                        fetch(`${BASE}/employees/export?fields=id,full_name`, { headers }),
+                        fetch(`${BASE}/locations/export?fields=id,name_en,name_he`, { headers }),
+                        fetch(`${BASE}/categories/export?fields=id,name_en,name_he`, { headers }),
+                    ]);
+                    if (!cancelled) {
+                        if (wRes.ok) setTaskWorkerOptions(await wRes.json());
+                        if (lRes.ok) setTaskLocationOptions(await lRes.json());
+                        if (cRes.ok) setTaskCategoryOptions(await cRes.json());
+                    }
                 }
             } catch { /* non-critical — filters simply won't populate */ }
         };
@@ -329,6 +350,13 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
             }
             if (section === 'categories' && filterCatExportId) {
                 qp.set('category_id', filterCatExportId);
+            }
+            if (section === 'tasks') {
+                if (taskFilterWorkerId)   qp.set('worker_id',   taskFilterWorkerId);
+                if (taskFilterStatus)     qp.set('status',      taskFilterStatus);
+                if (taskFilterUrgency)    qp.set('urgency',     taskFilterUrgency);
+                if (taskFilterLocationId) qp.set('location_id', taskFilterLocationId);
+                if (taskFilterCategoryId) qp.set('category_id', taskFilterCategoryId);
             }
 
             const res    = await fetch(`${BASE}/${section}/export?${qp}`, {
@@ -553,6 +581,96 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                                     <option key={c.id} value={c.id}>{c.name_en || c.name_he || c.id}</option>
                                 ))}
                             </select>
+                        </div>
+                    )}
+
+                    {/* ── Task export filters (5 filters) ── */}
+                    {section === 'tasks' && (
+                        <div className="grid grid-cols-2 gap-2">
+                            {/* 1. Worker */}
+                            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                                <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                    {t?.filter_worker || 'Worker'}
+                                </span>
+                                <select
+                                    value={taskFilterWorkerId}
+                                    onChange={e => setTaskFilterWorkerId(e.target.value)}
+                                    className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                                >
+                                    <option value="">{t?.all_workers || 'All Workers'}</option>
+                                    {taskWorkerOptions.map(w => (
+                                        <option key={w.id} value={w.id}>{w.full_name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* 2. Status */}
+                            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                                <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                    {t?.filter_status || 'Status'}
+                                </span>
+                                <select
+                                    value={taskFilterStatus}
+                                    onChange={e => setTaskFilterStatus(e.target.value)}
+                                    className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                                >
+                                    <option value="">{t?.all_statuses || 'All Statuses'}</option>
+                                    <option value="OPEN">{t?.status_open || 'Open'}</option>
+                                    <option value="IN_PROGRESS">{t?.status_in_progress || 'In Progress'}</option>
+                                    <option value="WAITING_APPROVAL">{t?.status_waiting || 'Waiting Approval'}</option>
+                                    <option value="COMPLETED">{t?.status_completed || 'Completed'}</option>
+                                </select>
+                            </div>
+
+                            {/* 3. Urgency */}
+                            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                                <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                    {t?.filter_urgency || 'Urgency'}
+                                </span>
+                                <select
+                                    value={taskFilterUrgency}
+                                    onChange={e => setTaskFilterUrgency(e.target.value)}
+                                    className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                                >
+                                    <option value="">{t?.all_urgencies || 'All'}</option>
+                                    <option value="NORMAL">{t?.urgency_normal || 'Normal'}</option>
+                                    <option value="URGENT">{t?.urgency_urgent || 'Urgent'}</option>
+                                </select>
+                            </div>
+
+                            {/* 4. Location */}
+                            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                                <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                    {t?.filter_by_location || 'Location'}
+                                </span>
+                                <select
+                                    value={taskFilterLocationId}
+                                    onChange={e => setTaskFilterLocationId(e.target.value)}
+                                    className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                                >
+                                    <option value="">{t?.all_locations || 'All Locations'}</option>
+                                    {taskLocationOptions.map(l => (
+                                        <option key={l.id} value={l.id}>{l.name_en || l.name_he || l.id}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* 5. Category */}
+                            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 col-span-2">
+                                <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                    {t?.filter_by_category || 'Category'}
+                                </span>
+                                <select
+                                    value={taskFilterCategoryId}
+                                    onChange={e => setTaskFilterCategoryId(e.target.value)}
+                                    className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                                >
+                                    <option value="">{t?.all_categories || 'All Categories'}</option>
+                                    {taskCategoryOptions.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name_en || c.name_he || c.id}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     )}
 

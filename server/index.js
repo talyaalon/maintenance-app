@@ -708,12 +708,14 @@ app.get('/fix-db', async (req, res) => {
             }
 
             // ── Migrate existing parent_manager_id → M:M junction table (idempotent) ──
+            // Defensive: only insert when BOTH employee (selected row) and manager exist in users.
             await client.query(`
                 INSERT INTO employee_managers (employee_id, manager_id)
                 SELECT id, parent_manager_id
                 FROM users
                 WHERE parent_manager_id IS NOT NULL
                   AND role IN ('EMPLOYEE', 'SUPERVISOR')
+                  AND EXISTS (SELECT 1 FROM users u2 WHERE u2.id = users.parent_manager_id)
                 ON CONFLICT DO NOTHING
             `);
 
@@ -2935,6 +2937,69 @@ app.put('/tasks/bulk-update-status', authenticateToken, async (req, res) => {
         res.status(500).json({ error: 'Error updating tasks' });
     } finally {
         client.release();
+    }
+});
+
+app.get('/tasks/export', authenticateToken, async (req, res) => {
+    try {
+        const { role, id: callerId, company_id } = req.user;
+        const { worker_id, status, urgency, location_id, category_id } = req.query;
+
+        const ALLOWED = ['id', 'title', 'location', 'worker', 'urgency', 'due_date', 'status'];
+        const requested = req.query.fields
+            ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
+            : ALLOWED;
+        if (!requested.length) return res.status(400).json({ error: 'No valid fields requested' });
+
+        const colMap = {
+            id:       't.id',
+            title:    't.title',
+            location: "COALESCE(l.name_en, l.name, '') AS location",
+            worker:   "COALESCE(u.full_name_en, u.full_name, '') AS worker",
+            urgency:  't.urgency',
+            due_date: 't.due_date',
+            status:   't.status',
+        };
+        const cols = requested.map(f => colMap[f]).join(', ');
+
+        let query = `
+            SELECT ${cols}
+            FROM tasks t
+            LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN locations l ON t.location_id = l.id
+            LEFT JOIN assets a ON t.asset_id = a.id
+            WHERE 1=1
+        `;
+        const params = [];
+        let pi = 1;
+
+        if (role === 'EMPLOYEE') {
+            query += ` AND t.worker_id = $${pi++}`;
+            params.push(callerId);
+        } else if (role === 'MANAGER') {
+            query += ` AND t.worker_id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $${pi++})`;
+            params.push(callerId);
+        } else if (role === 'COMPANY_MANAGER' && company_id) {
+            query += ` AND t.worker_id IN (SELECT id FROM users WHERE company_id = $${pi++})`;
+            params.push(company_id);
+        } else if (role !== 'BIG_BOSS') {
+            if (company_id) { query += ` AND t.company_id = $${pi++}`; params.push(company_id); }
+            else { query += ' AND 1=0'; }
+        }
+
+        if (worker_id)   { query += ` AND t.worker_id    = $${pi++}`; params.push(parseInt(worker_id,   10)); }
+        if (status)      { query += ` AND t.status       = $${pi++}`; params.push(status); }
+        if (urgency)     { query += ` AND t.urgency      = $${pi++}`; params.push(urgency.toUpperCase()); }
+        if (location_id) { query += ` AND t.location_id  = $${pi++}`; params.push(parseInt(location_id, 10)); }
+        if (category_id) { query += ` AND a.category_id  = $${pi++}`; params.push(parseInt(category_id, 10)); }
+
+        query += ' ORDER BY t.due_date DESC';
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('GET /tasks/export error:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
