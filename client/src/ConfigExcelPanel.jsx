@@ -163,8 +163,8 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
     const [selectedFields, setSelectedFields]     = useState([]);
 
     // ── Export filter state ───────────────────────────────────────────────────
-    const [filterOptions, setFilterOptions]       = useState([]);  // list for dropdown/multi-select
-    const [selectedUserIds, setSelectedUserIds]   = useState([]); // managers / employees multi-select
+    const [filterOptions, setFilterOptions]       = useState([]);  // list for dropdown
+    const [selectedUserId, setSelectedUserId]     = useState(''); // managers / employees single-select
     const [filterCategoryId, setFilterCategoryId] = useState(''); // assets: filter by category
     const [filterLocationId, setFilterLocationId] = useState(''); // locations: filter to one location
     const [filterCatExportId, setFilterCatExportId] = useState(''); // categories: filter to one category
@@ -197,10 +197,6 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
         fetchOptions();
         return () => { cancelled = true; };
     }, [activeTab, section, token]);
-
-    const toggleUserId = (id) => setSelectedUserIds(prev =>
-        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
 
     const allFields       = SECTION_FIELDS[section] || [];
     const availableFields = allFields
@@ -322,8 +318,8 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
             const fields = selectedFields.map(f => f.id).join(',');
             const qp = new URLSearchParams({ fields });
 
-            if ((section === 'managers' || section === 'employees') && selectedUserIds.length > 0) {
-                qp.set('user_ids', selectedUserIds.join(','));
+            if ((section === 'managers' || section === 'employees') && selectedUserId) {
+                qp.set('user_ids', selectedUserId);
             }
             if (section === 'assets' && filterCategoryId) {
                 qp.set('category_id', filterCategoryId);
@@ -489,23 +485,20 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
 
                     {/* ── Per-section export filters ── */}
                     {(section === 'managers' || section === 'employees') && filterOptions.length > 0 && (
-                        <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                            <p className="text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">
-                                {t?.filter_users_label || 'Filter Users'} — {selectedUserIds.length === 0 ? (t?.exporting_all || 'Exporting All') : `${selectedUserIds.length} selected`}
-                            </p>
-                            <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
+                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                {t?.filter_users_label || 'Filter'}
+                            </span>
+                            <select
+                                value={selectedUserId}
+                                onChange={e => setSelectedUserId(e.target.value)}
+                                className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                            >
+                                <option value="">{t?.all_users || 'All'}</option>
                                 {filterOptions.map(u => (
-                                    <label key={u.id} className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700 bg-white border border-gray-200 rounded px-2 py-1 hover:border-[#714B67] transition select-none">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedUserIds.includes(u.id)}
-                                            onChange={() => toggleUserId(u.id)}
-                                            className="w-3 h-3 text-[#714B67] rounded"
-                                        />
-                                        {u.full_name}
-                                    </label>
+                                    <option key={u.id} value={u.id}>{u.full_name}</option>
                                 ))}
-                            </div>
+                            </select>
                         </div>
                     )}
 
