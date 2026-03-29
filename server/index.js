@@ -4412,18 +4412,36 @@ app.post('/webhook/line', (req, res) => {
     // We must respond 200 OK immediately — for both verification pings and real events.
     res.sendStatus(200);
 
+    console.log('📲 LINE webhook received. Body:', JSON.stringify(req.body));
+
     const events = req.body?.events || [];
+    if (events.length === 0) {
+        console.log('📲 LINE webhook: no events in payload (likely a verification ping).');
+    }
+
     events.forEach(event => {
         console.log('📲 LINE webhook event:', JSON.stringify(event));
 
-        if (event.type === 'message' && event.message?.type === 'text') {
-            const replyToken = event.replyToken;
-            const userId = event.source?.userId;
+        if (event.type !== 'message' || event.message?.type !== 'text') {
+            console.log(`📲 LINE webhook: skipping event type="${event.type}", messageType="${event.message?.type}"`);
+            return;
+        }
 
-            console.log('Attempting to reply to:', userId);
+        const replyToken = event.replyToken;
+        const userId = event.source?.userId;
 
-            if (!replyToken || !process.env.LINE_CHANNEL_ACCESS_TOKEN) return;
+        console.log(`📲 LINE text message from userId="${userId}", replyToken="${replyToken}"`);
 
+        if (!replyToken) {
+            console.error('⚠️ LINE webhook: replyToken is missing — cannot reply.');
+            return;
+        }
+        if (!process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+            console.error('⚠️ LINE webhook: LINE_CHANNEL_ACCESS_TOKEN env var is not set — aborting reply.');
+            return;
+        }
+
+        try {
             const https = require('https');
             const body = JSON.stringify({
                 replyToken,
@@ -4444,15 +4462,17 @@ app.post('/webhook/line', (req, res) => {
                 lineRes.on('data', chunk => data += chunk);
                 lineRes.on('end', () => {
                     if (lineRes.statusCode >= 200 && lineRes.statusCode < 300) {
-                        console.log(`✅ LINE reply sent to ${userId}`);
+                        console.log(`✅ LINE reply sent to userId="${userId}"`);
                     } else {
-                        console.error(`⚠️ LINE reply API error (${lineRes.statusCode}):`, data);
+                        console.error(`⚠️ LINE reply API error (${lineRes.statusCode}) for userId="${userId}":`, data);
                     }
                 });
             });
-            reqLine.on('error', err => console.error('⚠️ LINE reply request failed:', err.message));
+            reqLine.on('error', err => console.error('⚠️ LINE reply request network error:', err.message));
             reqLine.write(body);
             reqLine.end();
+        } catch (err) {
+            console.error('⚠️ LINE webhook: unexpected error while sending reply:', err.message);
         }
     });
 });
