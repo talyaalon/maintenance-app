@@ -522,8 +522,8 @@ const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t
             <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Notification Channels</p>
             <div className="flex gap-2">
                 {[
-                    { key: 'notify_email', label: '✉️ Email' },
-                    { key: 'notify_line',  label: '💬 LINE'  },
+                    { key: 'notify_email', label: 'Email' },
+                    { key: 'notify_line',  label: 'LINE'  },
                 ].map(({ key, label }) => (
                     <button
                         key={key}

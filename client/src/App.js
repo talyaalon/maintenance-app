@@ -71,7 +71,7 @@ function App() {
   // הגדרת שפה: ברירת מחדל אנגלית
   // שואב את השפה מהזיכרון כדי שלא תתאפס ברענון
   const [lang, setLang] = useState(() => {
-      return localStorage.getItem('appLang') || 'he'; // ברירת מחדל לעברית
+      return localStorage.getItem('appLang') || 'en'; // default to English
   });
 
   // ברגע שהשפה משתנה, נשמור אותה לזיכרון
