@@ -1,7 +1,7 @@
 import { requestForToken, onMessageListener } from './firebase';
 import { Toaster, toast } from 'react-hot-toast'; // אם אין לך react-hot-toast, תוכלי להשתמש ב-alert רגיל
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, UserCircle, Settings, Building2, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Users, UserCircle, Settings, Building2, BookOpen, X } from 'lucide-react';
 import Login from './Login';
 import AddUserForm from './AddUserForm';
 import { translations } from './translations'; 
@@ -140,6 +140,7 @@ function App() {
 
   // מודאלים
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -218,30 +219,26 @@ function App() {
       switch (user?.role) {
           case 'BIG_BOSS':
               return [
-                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
-                  { key: 'companies', label: t.nav_companies,            Icon: Building2 },
-                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
-                  { key: 'help',      label: t.nav_help,                 Icon: BookOpen },
+                  { key: 'tasks',     label: t.nav_tasks,    Icon: LayoutDashboard },
+                  { key: 'companies', label: t.nav_companies, Icon: Building2 },
+                  { key: 'profile',   label: t.nav_profile,   Icon: UserCircle },
               ];
           case 'COMPANY_MANAGER':
               return [
-                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
-                  { key: 'settings',  label: t.nav_config,               Icon: Settings },
-                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
-                  { key: 'help',      label: t.nav_help,                 Icon: BookOpen },
+                  { key: 'tasks',    label: t.nav_tasks,   Icon: LayoutDashboard },
+                  { key: 'settings', label: t.nav_config,  Icon: Settings },
+                  { key: 'profile',  label: t.nav_profile, Icon: UserCircle },
               ];
           case 'MANAGER':
               return [
-                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
-                  { key: 'team',      label: t.nav_team,                 Icon: Users },
-                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
-                  { key: 'help',      label: t.nav_help,                 Icon: BookOpen },
+                  { key: 'tasks',   label: t.nav_tasks,   Icon: LayoutDashboard },
+                  { key: 'team',    label: t.nav_team,    Icon: Users },
+                  { key: 'profile', label: t.nav_profile, Icon: UserCircle },
               ];
           default: // EMPLOYEE (or null user — won't be rendered)
               return [
-                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
-                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
-                  { key: 'help',      label: t.nav_help,                 Icon: BookOpen },
+                  { key: 'tasks',   label: t.nav_tasks,   Icon: LayoutDashboard },
+                  { key: 'profile', label: t.nav_profile, Icon: UserCircle },
               ];
       }
   }, [user?.role, t]);
@@ -270,8 +267,6 @@ function App() {
               if (isBigBoss)        return <ConfigurationTab token={token} t={t} user={user} lang={lang} />;
               if (isCompanyManager) return <CompanyManagerSettingsTab token={token} t={t} user={user} lang={lang} />;
               return null;
-          case 'help':
-              return <HelpCenter user={user} t={t} />;
           case 'profile':
               return <ProfileTab
                           t={t}
@@ -296,13 +291,20 @@ function App() {
       {/* כותרת עליונה - מעודכנת */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-30 relative">
           
-          {/* צד שמאל: לוגו בלבד */}
-          <div className="flex-shrink-0 z-10">
-              <img 
-                  src={logoImg} 
-                  alt="App Logo" 
-                  className="h-10 w-auto object-contain" 
+          {/* צד שמאל: לוגו + כפתור עזרה */}
+          <div className="flex items-center gap-2 flex-shrink-0 z-10">
+              <img
+                  src={logoImg}
+                  alt="App Logo"
+                  className="h-10 w-auto object-contain"
               />
+              <button
+                  onClick={() => setShowHelp(true)}
+                  className="p-1.5 rounded-xl text-[#714B67] hover:bg-[#714B67]/10 transition-colors"
+                  title={t.nav_help || 'Help'}
+              >
+                  <BookOpen size={20} strokeWidth={2} />
+              </button>
           </div>
 
           {/* מרכז: כותרת האפליקציה */}
@@ -377,15 +379,43 @@ function App() {
 
       {/* --- החלונות הקופצים --- */}
       
-{isUserFormOpen && <AddUserForm 
-          currentUser={user} 
-          onClose={() => { 
-              setIsUserFormOpen(false); 
-              setRefreshTrigger(prev => prev + 1); 
-          }} 
+{isUserFormOpen && <AddUserForm
+          currentUser={user}
+          onClose={() => {
+              setIsUserFormOpen(false);
+              setRefreshTrigger(prev => prev + 1);
+          }}
           t={t}
       />}
-      
+
+      {/* ─── Help Center Modal ───────────────────────────────────────────── */}
+      {showHelp && (
+          <div
+              className="fixed inset-0 z-[200] bg-black/40 flex items-start justify-center overflow-y-auto py-6 px-4"
+              onClick={(e) => { if (e.target === e.currentTarget) setShowHelp(false); }}
+          >
+              <div className="bg-slate-50 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
+                  {/* Modal header */}
+                  <div className="sticky top-0 bg-white rounded-t-2xl px-5 py-4 flex items-center justify-between border-b border-gray-100 z-10">
+                      <div className="flex items-center gap-2">
+                          <BookOpen size={18} className="text-[#714B67]" />
+                          <span className="font-semibold text-gray-800">{t.nav_help || 'Help Center'}</span>
+                      </div>
+                      <button
+                          onClick={() => setShowHelp(false)}
+                          className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                      >
+                          <X size={18} />
+                      </button>
+                  </div>
+                  {/* Scrollable content */}
+                  <div className="overflow-y-auto flex-1">
+                      <HelpCenter user={user} t={t} lang={lang} />
+                  </div>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 }

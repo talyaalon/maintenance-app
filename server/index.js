@@ -1226,14 +1226,12 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     }
 
     // Only hash and update if the password is genuinely new (not the existing hash sent back unchanged)
-    let isPasswordChanged = false;
     if (password && password.trim() !== '') {
         const bcrypt = require('bcrypt');
         const matchesExisting = oldUser.password
             ? await bcrypt.compare(password, oldUser.password).catch(() => false)
             : false;
         if (!matchesExisting) {
-            isPasswordChanged = true;
             const hashedPassword = await bcrypt.hash(password, 10);
             setClauses.push(`password=$${paramCount}`);
             params.push(hashedPassword);
@@ -1247,45 +1245,6 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     const result = await pool.query(query, params);
     const updatedUser = result.rows[0];
 
-    // Build plain-text change list for notifications
-    const changeLinesEn = [];
-    const changeLinesHe = [];
-    const changeLinesth = [];
-    if (oldUser.full_name !== updatedUser.full_name) {
-        changeLinesEn.push(`• Name → ${updatedUser.full_name}`);
-        changeLinesHe.push(`• שם → ${updatedUser.full_name}`);
-        changeLinesth.push(`• ชื่อ → ${updatedUser.full_name}`);
-    }
-    if (oldUser.email !== updatedUser.email) {
-        changeLinesEn.push(`• Email → ${updatedUser.email}`);
-        changeLinesHe.push(`• אימייל → ${updatedUser.email}`);
-        changeLinesth.push(`• อีเมล → ${updatedUser.email}`);
-    }
-    if (oldUser.phone !== updatedUser.phone) {
-        changeLinesEn.push(`• Phone updated`);
-        changeLinesHe.push(`• טלפון עודכן`);
-        changeLinesth.push(`• อัปเดตเบอร์โทร`);
-    }
-    if (oldUser.preferred_language !== updatedUser.preferred_language) {
-        changeLinesEn.push(`• Language → ${updatedUser.preferred_language}`);
-        changeLinesHe.push(`• שפה → ${updatedUser.preferred_language}`);
-        changeLinesth.push(`• ภาษา → ${updatedUser.preferred_language}`);
-    }
-    if (isPasswordChanged) {
-        changeLinesEn.push(`• Password changed 🔑`);
-        changeLinesHe.push(`• סיסמה שונתה 🔑`);
-        changeLinesth.push(`• เปลี่ยนรหัสผ่าน 🔑`);
-    }
-    if (oldUser.role !== updatedUser.role) {
-        changeLinesEn.push(`• Role → ${updatedUser.role}`);
-        changeLinesHe.push(`• תפקיד → ${updatedUser.role}`);
-        changeLinesth.push(`• บทบาท → ${updatedUser.role}`);
-    }
-
-    const changeLangMap = { he: changeLinesHe, en: changeLinesEn, th: changeLinesth };
-    const userLang = updatedUser.preferred_language || 'en';
-    const changeText = (changeLangMap[userLang] || changeLinesEn).join('\n');
-
     // Welcome LINE message when LINE ID is set for the first time
     const oldLineId = oldUser.line_user_id;
     const newLineId = updatedUser.line_user_id;
@@ -1298,11 +1257,8 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         sendLineMessage(newLineId, welcomeMsg[userLang] || welcomeMsg.en).catch(err => console.error("❌ LINE welcome error:", err));
     }
 
-    // Notify user via all 3 channels if any material change occurred
-    if (changeText) {
-        sendNotification(updatedUser.id, ['email', 'line', 'push'], 'user_updated', { changes: changeText })
-            .catch(err => console.error("❌ user_updated notification error:", err));
-    }
+    // Notifications are intentionally suppressed for profile/language changes.
+    // They fire only for task-related events.
 
     res.json({ message: "User updated successfully", user: updatedUser });
 
