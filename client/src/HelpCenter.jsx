@@ -475,7 +475,7 @@ const COMPANY_MANAGER_MANUAL = {
     {
       title: '1. Login & Navigation',
       items: [
-        { type: 'p', html: true, text: 'Log in with the email and password provided by your Big Boss.' },
+        { type: 'p', html: true, text: 'Log in with the your email and password.' },
         { type: 'image', filename: 'dm_login_screen.png', alt: 'Department Manager Login Screen' },
         { type: 'p', html: true, text: '<strong>Forgot your password?</strong> Follow these steps to reset it:' },
         { type: 'step', n: 1, text: 'On the login screen, tap "Forgot Password?" beneath the login button.' },
@@ -636,7 +636,7 @@ const COMPANY_MANAGER_MANUAL = {
     {
       title: '1. כניסה וניווט',
       items: [
-        { type: 'p', html: true, text: 'התחבר עם האימייל והסיסמה שסיפק לך ה-Big Boss.' },
+        { type: 'p', html: true, text: 'התחבר באמצעות האימייל והסיסמה שסופקו לך.' },
         { type: 'image', filename: 'dm_login_screen.png', alt: 'מסך כניסה של מנהל מחלקה' },
         { type: 'p', html: true, text: '<strong>שכחת את הסיסמה?</strong> עקוב אחר השלבים הבאים לאיפוסה:' },
         { type: 'step', n: 1, text: 'במסך הכניסה, לחץ על "שכחתי סיסמה" מתחת לכפתור הכניסה.' },
@@ -797,7 +797,7 @@ const COMPANY_MANAGER_MANUAL = {
     {
       title: '1. การเข้าสู่ระบบและการนำทาง',
       items: [
-        { type: 'p', html: true, text: 'เข้าสู่ระบบด้วยอีเมลและรหัสผ่านที่ได้รับจาก Big Boss ของคุณ' },
+        { type: 'p', html: true, text: 'เข้าสู่ระบบด้วยอีเมลและรหัสผ่านของคุณ' },
         { type: 'image', filename: 'dm_login_screen.png', alt: 'หน้าจอเข้าสู่ระบบผู้จัดการแผนก' },
         { type: 'p', html: true, text: '<strong>ลืมรหัสผ่าน?</strong> ทำตามขั้นตอนเหล่านี้เพื่อรีเซ็ต:' },
         { type: 'step', n: 1, text: 'บนหน้าเข้าสู่ระบบ แตะ "ลืมรหัสผ่าน?" ใต้ปุ่มเข้าสู่ระบบ' },
