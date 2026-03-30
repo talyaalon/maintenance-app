@@ -523,7 +523,7 @@ const COMPANY_MANAGER_MANUAL = {
         { type: 'step', n: 2, text: 'Tap the "Assign Employees" button on a manager\'s card.' },
         { type: 'step', n: 3, text: 'Select the employees you want to link to that manager and confirm.' },
         { type: 'image', filename: 'dm_assign_employees_to_manager.png', alt: 'Assign Employees to Manager' },
-        { type: 'note', text: 'An employee can only be assigned to one manager at a time. Re-assigning them automatically removes the previous link.' },
+        { type: 'note', text: 'An employee can be associated with more than one managerAn employee can be associated with more than one manager..' },
       ],
     },
     {
@@ -532,7 +532,7 @@ const COMPANY_MANAGER_MANUAL = {
         { type: 'p', html: true, text: 'Each manager card in the Config tab has a set of permission toggles that control what that manager can do.' },
         { type: 'image', filename: 'dm_manager_permission_toggles.png', alt: 'Manager Permission Toggles' },
         { type: 'ul', items: [
-          '<strong>Can Manage Fields</strong> — Allows the manager to add/edit task categories, locations, and assets.',
+          '<strong>Notification Management</strong> — Allows the administrator to define which platform the user will receive notifications on email or LINE.',
           '<strong>Language Permissions</strong> — Choose which display languages are available to this manager\'s team.',
         ]},
         { type: 'p', html: true, text: '<strong>Auto-Approve:</strong> This toggle controls how an employee\'s "Mark as Done" action is handled.' },
@@ -684,7 +684,7 @@ const COMPANY_MANAGER_MANUAL = {
         { type: 'step', n: 2, text: 'לחץ על כפתור "הקצה עובדים" בכרטיס המנהל.' },
         { type: 'step', n: 3, text: 'בחר את העובדים שברצונך לשייך למנהל זה ואשר.' },
         { type: 'image', filename: 'dm_assign_employees_to_manager.png', alt: 'הקצאת עובדים למנהל' },
-        { type: 'note', text: 'עובד יכול להיות משויך למנהל אחד בלבד. שיוך מחדש מסיר אוטומטית את הקישור הקודם.' },
+        { type: 'note', text: 'עובד יכול להיות משויך ליותר ממנהל אחד .' },
       ],
     },
     {
@@ -693,7 +693,7 @@ const COMPANY_MANAGER_MANUAL = {
         { type: 'p', html: true, text: 'לכל כרטיס מנהל בלשונית ההגדרות יש סדרת מתגי הרשאות השולטים במה שהמנהל יכול לעשות.' },
         { type: 'image', filename: 'dm_manager_permission_toggles.png', alt: 'מתגי הרשאות מנהל' },
         { type: 'ul', items: [
-          '<strong>ניהול שדות</strong> — מאפשר למנהל להוסיף/לערוך קטגוריות משימה, מיקומים ונכסים.',
+          '<strong>ניהול התראות </strong> — מאפשר למנהל להגדיר באיזו פלטפורמה המשתמש יקבל את ההתראות מייל או LINE.',
           '<strong>הרשאות שפה</strong> — בחר אילו שפות תצוגה זמינות לצוות של מנהל זה.',
         ]},
         { type: 'p', html: true, text: '<strong>אישור אוטומטי:</strong> מתג זה קובע כיצד מטופלת פעולת "סמן כהושלם" של עובד.' },
@@ -845,7 +845,7 @@ const COMPANY_MANAGER_MANUAL = {
         { type: 'step', n: 2, text: 'แตะปุ่ม "มอบหมายพนักงาน" บนการ์ดผู้จัดการ' },
         { type: 'step', n: 3, text: 'เลือกพนักงานที่ต้องการเชื่อมโยงกับผู้จัดการนั้นและยืนยัน' },
         { type: 'image', filename: 'dm_assign_employees_to_manager.png', alt: 'มอบหมายพนักงานให้ผู้จัดการ' },
-        { type: 'note', text: 'พนักงานหนึ่งคนสามารถมอบหมายให้ผู้จัดการได้เพียงคนเดียวในคราวเดียว การมอบหมายใหม่จะลบลิงก์เดิมโดยอัตโนมัติ' },
+        { type: 'note', text: 'พนักงานหนึ่งคนอาจสังกัดผู้จัดการมากกว่าหนึ่งคนได้' },
       ],
     },
     {
@@ -854,7 +854,7 @@ const COMPANY_MANAGER_MANUAL = {
         { type: 'p', html: true, text: 'การ์ดผู้จัดการแต่ละใบในแท็บการตั้งค่ามีสวิตช์สิทธิ์ที่ควบคุมสิ่งที่ผู้จัดการคนนั้นสามารถทำได้' },
         { type: 'image', filename: 'dm_manager_permission_toggles.png', alt: 'สวิตช์สิทธิ์ผู้จัดการ' },
         { type: 'ul', items: [
-          '<strong>จัดการฟิลด์</strong> — อนุญาตให้ผู้จัดการเพิ่ม/แก้ไขหมวดหมู่งาน สถานที่ และสินทรัพย์',
+          '<strong>การจัดการการแจ้งเตือน</strong> — อนุญาตให้ผู้ดูแลระบบกำหนดว่าผู้ใช้จะได้รับการแจ้งเตือนบนแพลตฟอร์มใด: อีเมลหรือ LINE',
           '<strong>สิทธิ์ภาษา</strong> — เลือกภาษาที่แสดงที่มีให้กับทีมของผู้จัดการคนนี้',
         ]},
         { type: 'p', html: true, text: '<strong>อนุมัติอัตโนมัติ:</strong> สวิตช์นี้ควบคุมวิธีจัดการการกระทำ "ทำเครื่องหมายว่าเสร็จ" ของพนักงาน' },
