@@ -1557,9 +1557,13 @@ app.post('/companies', authenticateToken, upload.single('profile_image'), async 
     }
 });
 
-// PUT /companies/:id — BIG_BOSS only; update name and/or profile image
+// PUT /companies/:id — BIG_BOSS (any company) or COMPANY_MANAGER (own company only)
 app.put('/companies/:id', authenticateToken, upload.single('profile_image'), async (req, res) => {
-    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'BIG_BOSS only' });
+    if (req.user.role !== 'BIG_BOSS') {
+        if (req.user.role !== 'COMPANY_MANAGER' || String(req.user.company_id) !== String(req.params.id)) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+    }
     try {
         const { id } = req.params;
         const { name, name_en, name_he, name_th, default_notification_lang } = req.body;
@@ -4509,9 +4513,13 @@ app.post('/companies', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT /companies/:id — update an existing company (BIG_BOSS only)
+// PUT /companies/:id — BIG_BOSS (any company) or COMPANY_MANAGER (own company only)
 app.put('/companies/:id', authenticateToken, async (req, res) => {
-    if (req.user.role !== 'BIG_BOSS') return res.status(403).json({ error: 'Access denied' });
+    if (req.user.role !== 'BIG_BOSS') {
+        if (req.user.role !== 'COMPANY_MANAGER' || String(req.user.company_id) !== String(req.params.id)) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+    }
     if (!db) return res.status(503).json({ error: 'Firestore not available' });
     try {
         const updates = {};

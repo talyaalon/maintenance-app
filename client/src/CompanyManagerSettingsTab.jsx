@@ -529,6 +529,107 @@ const TeamAssignAccordion = ({ employees, assignedIds, setAssignedIds, onSave, o
     </div>
 );
 
+// ─── Edit Department Modal (for COMPANY_MANAGER to edit their own dept) ───────
+const EditDeptModal = ({ companyId, token, t, lang, onClose, onSaved }) => {
+    const [form, setForm] = useState({ name_en: '', name_he: '', name_th: '' });
+    const [imageFile, setImageFile] = useState(null);
+    const [existingImage, setExistingImage] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetch(`${BASE}/companies`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json())
+            .then(data => {
+                const company = Array.isArray(data) ? data.find(c => String(c.id) === String(companyId)) || data[0] : data;
+                if (company) {
+                    setForm({ name_en: company.name_en || '', name_he: company.name_he || '', name_th: company.name_th || '' });
+                    setExistingImage(company.profile_image_url || null);
+                }
+            })
+            .catch(() => {})
+            .finally(() => setLoading(false));
+    }, [companyId, token]);
+
+    const handleSave = async () => {
+        if (!form.name_en.trim() && !form.name_he.trim()) {
+            alert(t?.company_name_required || 'Department name is required');
+            return;
+        }
+        setSaving(true);
+        try {
+            const fd = new FormData();
+            fd.append('name_en', form.name_en.trim());
+            fd.append('name_he', form.name_he.trim());
+            fd.append('name_th', form.name_th.trim());
+            fd.append('name', form.name_en.trim() || form.name_he.trim());
+            if (imageFile) fd.append('profile_image', imageFile);
+            else if (existingImage) fd.append('existing_image', existingImage);
+            const res = await fetch(`${BASE}/companies/${companyId}`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}` },
+                body: fd,
+            });
+            if (res.ok) {
+                const updated = await res.json();
+                onSaved(updated);
+            } else {
+                const d = await res.json().catch(() => ({}));
+                alert(d?.error || 'Error saving department');
+            }
+        } catch { alert('Server error'); }
+        setSaving(false);
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl border border-gray-200 animate-scale-in">
+                <h3 className="text-base font-bold text-slate-800 mb-4">{t?.edit_company || 'Edit Department'}</h3>
+                {loading ? (
+                    <div className="flex justify-center py-6"><Loader2 size={24} className="animate-spin text-[#714B67]" /></div>
+                ) : (
+                    <>
+                        <div className="mb-3">
+                            <label className={labelCls}>{t?.company_name_label || 'Department Name'}</label>
+                            <MultiLangNameInput
+                                value={form}
+                                onChange={setForm}
+                                lang={lang}
+                                prefix="name"
+                                label={t?.company_name_label || 'Department Name'}
+                            />
+                        </div>
+                        <div className="mb-5">
+                            <label className={labelCls}>{t?.company_logo_label || 'Logo (optional)'}</label>
+                            {(imageFile ? URL.createObjectURL(imageFile) : existingImage) && (
+                                <img
+                                    src={imageFile ? URL.createObjectURL(imageFile) : existingImage}
+                                    className="w-16 h-16 rounded-xl object-cover mb-2 border border-gray-200"
+                                    alt="logo"
+                                />
+                            )}
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={e => setImageFile(e.target.files[0] || null)}
+                                className="text-xs w-full"
+                            />
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={onClose} className={cancelBtnCls}>{t?.cancel || 'Cancel'}</button>
+                            <button onClick={handleSave} disabled={saving} className={saveBtnCls}>
+                                {saving && <Loader2 size={10} className="animate-spin" />}
+                                {t?.save_btn || 'Save'}
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 // ─── Main COMPANY_MANAGER Settings Tab ────────────────────────────────────────
 export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
     const [users, setUsers] = useState([]);
@@ -551,6 +652,8 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
     const [activeListView, setActiveListView] = useState('all');
 
     const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [editDeptOpen, setEditDeptOpen] = useState(false);
+    const [localCompanyName, setLocalCompanyName] = useState(user?.company_name || '');
 
     // Permission form state
     const [permForm, setPermForm] = useState({});
@@ -721,10 +824,19 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                 <div className="w-10 h-10 rounded-xl bg-[#714B67]/10 flex items-center justify-center shrink-0">
                     <Building2 size={20} className="text-[#714B67]" />
                 </div>
-                <div>
-                    <h2 className="text-lg font-bold text-slate-800">
-                        {user?.company_name || t?.nav_config || 'Settings'}
-                    </h2>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-bold text-slate-800 truncate">
+                            {localCompanyName || t?.nav_config || 'Settings'}
+                        </h2>
+                        <button
+                            onClick={() => setEditDeptOpen(true)}
+                            title={t?.edit_company || 'Edit Department'}
+                            className="shrink-0 p-1 rounded-lg text-[#714B67] hover:bg-[#714B67]/10 transition"
+                        >
+                            <Pencil size={15} />
+                        </button>
+                    </div>
                     <p className="text-xs text-gray-400">
                         {user?.name ? `Welcome, ${user.name}` : (t?.company_detail_subtitle || 'Company Dashboard')}
                     </p>
@@ -1211,6 +1323,22 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     onConfirm={handleDelete}
                     onCancel={() => setDeleteConfirm(null)}
                     t={t}
+                />
+            )}
+
+            {/* Edit Department modal */}
+            {editDeptOpen && user?.company_id && (
+                <EditDeptModal
+                    companyId={user.company_id}
+                    token={token}
+                    t={t}
+                    lang={lang}
+                    onClose={() => setEditDeptOpen(false)}
+                    onSaved={(updated) => {
+                        const newName = updated?.['name_' + lang] || updated?.name_en || updated?.name_he || updated?.name || localCompanyName;
+                        setLocalCompanyName(newName);
+                        setEditDeptOpen(false);
+                    }}
                 />
             )}
         </div>
