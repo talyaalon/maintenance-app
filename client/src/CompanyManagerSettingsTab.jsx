@@ -671,6 +671,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
     const [deleteConfirm, setDeleteConfirm] = useState(null);
     const [editDeptOpen, setEditDeptOpen] = useState(false);
     const [localCompanyName, setLocalCompanyName] = useState(user?.company_name || '');
+    const [localCompanyLogo, setLocalCompanyLogo] = useState(null);
 
     // Permission form state
     const [permForm, setPermForm] = useState({});
@@ -772,11 +773,14 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
         const headers = { Authorization: `Bearer ${token}` };
         const cid = user?.company_id ? `?company_id=${user.company_id}` : '';
         try {
-            const [rawUsers, rawLocs, rawCats, rawAssets] = await Promise.all([
+            const [rawUsers, rawLocs, rawCats, rawAssets, rawCompanies] = await Promise.all([
                 fetch(`${BASE}/users`, { headers }).then(r => r.json()).catch(() => []),
                 fetch(`${BASE}/locations${cid}`, { headers }).then(r => r.json()).catch(() => []),
                 fetch(`${BASE}/categories${cid}`, { headers }).then(r => r.json()).catch(() => []),
                 fetch(`${BASE}/assets${cid}`, { headers }).then(r => r.json()).catch(() => []),
+                user?.company_id
+                    ? fetch(`${BASE}/companies`, { headers }).then(r => r.json()).catch(() => null)
+                    : Promise.resolve(null),
             ]);
             const companyUsers = Array.isArray(rawUsers) ? rawUsers : [];
             setUsers(user?.company_id
@@ -786,6 +790,16 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
             setLocations(Array.isArray(rawLocs) ? rawLocs : []);
             setCategories(Array.isArray(rawCats) ? rawCats : []);
             setAssets(Array.isArray(rawAssets) ? rawAssets : []);
+            if (rawCompanies) {
+                const company = Array.isArray(rawCompanies)
+                    ? rawCompanies.find(c => String(c.id) === String(user.company_id)) || rawCompanies[0]
+                    : rawCompanies;
+                if (company?.profile_image_url) setLocalCompanyLogo(company.profile_image_url);
+                if (company && !localCompanyName) {
+                    const n = company?.['name_' + lang] || company?.name_en || company?.name_he || company?.name || '';
+                    if (n) setLocalCompanyName(n);
+                }
+            }
         } catch (e) {
             console.error('CompanyManagerSettingsTab fetchData error:', e);
         }
@@ -839,8 +853,12 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
 
             {/* Header */}
             <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded-xl bg-[#714B67]/10 flex items-center justify-center shrink-0">
-                    <Building2 size={20} className="text-[#714B67]" />
+                <div className="w-10 h-10 rounded-xl bg-[#714B67]/10 flex items-center justify-center shrink-0 overflow-hidden">
+                    {localCompanyLogo ? (
+                        <img src={localCompanyLogo} className="w-full h-full object-cover" alt="" />
+                    ) : (
+                        <Building2 size={20} className="text-[#714B67]" />
+                    )}
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -1355,6 +1373,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                     onSaved={(updated) => {
                         const newName = updated?.['name_' + lang] || updated?.name_en || updated?.name_he || updated?.name || localCompanyName;
                         setLocalCompanyName(newName);
+                        if (updated?.profile_image_url !== undefined) setLocalCompanyLogo(updated.profile_image_url || null);
                         setEditDeptOpen(false);
                     }}
                 />
