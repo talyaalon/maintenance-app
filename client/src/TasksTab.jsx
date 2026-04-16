@@ -757,7 +757,14 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) { onRefresh(); onClose(); }
+            if (res.ok) { onRefresh(); onClose(); return; }
+            if (res.status === 403) {
+                const body = await res.json().catch(() => ({}));
+                if (body.error === 'ERR_NOT_CREATOR') {
+                    alert(t.err_not_creator || 'You cannot delete this task because it was created by another user or higher management.');
+                    return;
+                }
+            }
         } catch(e) { console.error('Delete task error:', e); }
     };
 

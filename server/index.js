@@ -2861,6 +2861,13 @@ app.delete('/tasks/:id', authenticateToken, async (req, res) => {
             }
         }
 
+        // Non-BIG_BOSS users may only delete tasks they personally created.
+        // (If created_by is NULL the task pre-dates creator tracking; allow deletion.)
+        if (role !== 'BIG_BOSS' && task.created_by !== null && task.created_by !== req.user.id) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'ERR_NOT_CREATOR' });
+        }
+
         let deleted = 0;
         if (task.title && task.title.endsWith(' (Recurring)')) {
             // Delete this instance + all future PENDING instances sharing title/worker

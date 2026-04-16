@@ -463,6 +463,7 @@ export const translations = {
     recurring_task_suffix: "Recurring",
     delete_series_confirm: "Delete this task and all future recurring instances in this series?",
     delete_task_confirm: "Delete this task permanently?",
+    err_not_creator: "You cannot delete this task because it was created by another user or higher management.",
     error_completing_task: "Error completing task.",
   },
 
@@ -930,6 +931,7 @@ export const translations = {
     recurring_task_suffix: "חוזר",
     delete_series_confirm: "למחוק משימה זו וכל המופעים העתידיים בסדרה?",
     delete_task_confirm: "למחוק משימה זו לצמיתות?",
+    err_not_creator: "אינך יכול למחוק משימה זו מכיוון שהיא נוצרה על ידי משתמש אחר או הנהלה בכירה.",
     error_completing_task: "שגיאה בהשלמת המשימה.",
   },
 
@@ -1435,6 +1437,7 @@ export const translations = {
     recurring_task_suffix: "ประจำ",
     delete_series_confirm: "ลบงานนี้และงานที่เกิดซ้ำในอนาคตทั้งหมดในชุดนี้?",
     delete_task_confirm: "ลบงานนี้ถาวร?",
+    err_not_creator: "คุณไม่สามารถลบงานนี้ได้เนื่องจากถูกสร้างโดยผู้ใช้อื่นหรือฝ่ายบริหารระดับสูง",
     error_completing_task: "เกิดข้อผิดพลาดในการทำงาน",
   }
 };
