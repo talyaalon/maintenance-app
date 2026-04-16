@@ -2946,6 +2946,95 @@ app.put('/tasks/bulk-update-status', authenticateToken, async (req, res) => {
     }
 });
 
+// ── Edit task (single instance or full pending recurring set) ─────────────────
+// Auth: BIG_BOSS or the task creator may edit. Others receive 403.
+// Body fields (all optional, at least one required):
+//   title_en, title_he, title_th, description, urgency
+//   update_mode: 'single' (default) | 'set'
+// 'set' only applies to recurring tasks; it updates all PENDING siblings
+// sharing the same title + worker_id with due_date >= this task's due_date.
+// NOTE: declared after /tasks/bulk-update-status so the literal path wins over :id.
+app.put('/tasks/:id', authenticateToken, async (req, res) => {
+    const taskId = parseInt(req.params.id);
+    if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid task id' });
+
+    const { role, id: userId } = req.user;
+    const { title_en, title_he, title_th, description, urgency, update_mode } = req.body;
+    const mode = update_mode === 'set' ? 'set' : 'single';
+
+    // Build SET clause from whichever fields were provided.
+    // title mirrors title_en (both columns kept in sync).
+    const sets = [];
+    const vals = [];
+    let p = 1;
+
+    if (title_en !== undefined) {
+        sets.push(`title = $${p}`, `title_en = $${p}`);
+        vals.push(title_en);
+        p++;
+    }
+    if (title_he !== undefined) { sets.push(`title_he = $${p++}`); vals.push(title_he); }
+    if (title_th !== undefined) { sets.push(`title_th = $${p++}`); vals.push(title_th); }
+    if (description !== undefined) { sets.push(`description = $${p++}`); vals.push(description); }
+    if (urgency !== undefined) { sets.push(`urgency = $${p++}`); vals.push(urgency); }
+
+    if (sets.length === 0) {
+        return res.status(400).json({ error: 'No updatable fields provided' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const taskRes = await client.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+        if (taskRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Task not found' });
+        }
+        const task = taskRes.rows[0];
+
+        // Auth: only BIG_BOSS or the original creator may edit
+        if (role !== 'BIG_BOSS') {
+            if (task.created_by === null || task.created_by !== userId) {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: 'ERR_NOT_CREATOR' });
+            }
+        }
+
+        let updated = 0;
+        const isRecurring = task.title && task.title.endsWith(' (Recurring)');
+
+        if (mode === 'set' && isRecurring) {
+            // Update this task + all future PENDING siblings (same title + worker).
+            // Match on OLD title before rename so siblings are found correctly.
+            const result = await client.query(
+                `UPDATE tasks
+                 SET ${sets.join(', ')}
+                 WHERE title = $${p} AND worker_id = $${p + 1}
+                   AND status = 'PENDING' AND due_date >= $${p + 2}`,
+                [...vals, task.title, task.worker_id, task.due_date]
+            );
+            updated = result.rowCount;
+        } else {
+            // Single-instance update
+            const result = await client.query(
+                `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${p}`,
+                [...vals, taskId]
+            );
+            updated = result.rowCount;
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, updated, mode });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('edit task error:', err);
+        res.status(500).json({ error: 'Error updating task' });
+    } finally {
+        client.release();
+    }
+});
+
 app.get('/tasks/export', authenticateToken, async (req, res) => {
     try {
         const { role, id: callerId, company_id } = req.user;
