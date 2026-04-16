@@ -465,6 +465,12 @@ export const translations = {
     delete_task_confirm: "Delete this task permanently?",
     err_not_creator: "You cannot delete this task because it was created by another user or higher management.",
     error_completing_task: "Error completing task.",
+    edit_task_btn: "Edit Task",
+    edit_task_title: "Edit Task",
+    save_changes_btn: "Save Changes",
+    recurring_update_prompt: "This is a recurring task. Apply changes to:",
+    update_this_task_only: "This Task Only",
+    update_entire_set: "Entire Recurring Set",
   },
 
   // --- Hebrew ---
@@ -933,6 +939,12 @@ export const translations = {
     delete_task_confirm: "למחוק משימה זו לצמיתות?",
     err_not_creator: "אינך יכול למחוק משימה זו מכיוון שהיא נוצרה על ידי משתמש אחר או הנהלה בכירה.",
     error_completing_task: "שגיאה בהשלמת המשימה.",
+    edit_task_btn: "ערוך משימה",
+    edit_task_title: "עריכת משימה",
+    save_changes_btn: "שמור שינויים",
+    recurring_update_prompt: "זוהי משימה חוזרת. להחיל שינויים על:",
+    update_this_task_only: "משימה זו בלבד",
+    update_entire_set: "כל הסדרה",
   },
 
   // --- Thai ---
@@ -1439,5 +1451,11 @@ export const translations = {
     delete_task_confirm: "ลบงานนี้ถาวร?",
     err_not_creator: "คุณไม่สามารถลบงานนี้ได้เนื่องจากถูกสร้างโดยผู้ใช้อื่นหรือฝ่ายบริหารระดับสูง",
     error_completing_task: "เกิดข้อผิดพลาดในการทำงาน",
+    edit_task_btn: "แก้ไขงาน",
+    edit_task_title: "แก้ไขงาน",
+    save_changes_btn: "บันทึกการเปลี่ยนแปลง",
+    recurring_update_prompt: "งานนี้เป็นงานประจำ ต้องการใช้การเปลี่ยนแปลงกับ:",
+    update_this_task_only: "เฉพาะงานนี้",
+    update_entire_set: "ทั้งชุดงาน",
   }
 };

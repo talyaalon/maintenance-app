@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2, ListChecks } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2, ListChecks, Pencil } from 'lucide-react';
 import ConfigExcelPanel from './ConfigExcelPanel';
 import CreateTaskForm from './CreateTaskForm';
+import EditTaskModal from './EditTaskModal';
 import TaskCard from './TaskCard';
 
 const getLocale = (lang) => {
@@ -745,7 +746,9 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
     const canShowStuck = task.status === 'PENDING' && !task.is_stuck && canComplete;
     const canDelete = user.role === 'BIG_BOSS' || user.role === 'COMPANY_MANAGER';
+    const canEdit = user.role === 'BIG_BOSS' || user.id === task.created_by;
     const isRecurringSeries = task.title && task.title.endsWith(' (Recurring)');
+    const [showEdit, setShowEdit] = useState(false);
 
     const handleDeleteSeries = async () => {
         const msg = isRecurringSeries
@@ -960,6 +963,11 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                                 {t.approve_close_btn}
                             </button>
                         )}
+                        {canEdit && mode === 'view' && (
+                            <button onClick={() => setShowEdit(true)} className="w-full flex items-center justify-center gap-2 border border-[#714B67]/30 text-[#714B67] py-2.5 rounded-xl font-bold hover:bg-purple-50 transition text-sm">
+                                <Pencil size={14}/> {t.edit_task_btn || 'Edit Task'}
+                            </button>
+                        )}
                         {canDelete && (
                             <button onClick={handleDeleteSeries} className="w-full border border-red-200 text-red-500 py-2.5 rounded-xl font-bold hover:bg-red-50 transition text-sm">
                                 {isRecurringSeries ? (t.delete_series_btn || 'Delete Entire Series') : (t.delete_task_btn || 'Delete Task')}
@@ -978,6 +986,15 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                 onRefresh={onRefresh}
                 t={t}
                 lang={lang}
+            />
+        )}
+        {showEdit && (
+            <EditTaskModal
+                task={task}
+                onClose={() => setShowEdit(false)}
+                token={token}
+                t={t}
+                onRefresh={() => { onRefresh(); onClose(); }}
             />
         )}
         </>,
