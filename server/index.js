@@ -2959,7 +2959,7 @@ app.put('/tasks/:id', authenticateToken, async (req, res) => {
     if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid task id' });
 
     const { role, id: userId } = req.user;
-    const { title_en, title_he, title_th, description, urgency, update_mode } = req.body;
+    const { title_en, title_he, title_th, description, urgency, worker_id, category_id, location_id, asset_id, update_mode } = req.body;
     const mode = update_mode === 'set' ? 'set' : 'single';
 
     // Build SET clause from whichever fields were provided.
@@ -2973,10 +2973,14 @@ app.put('/tasks/:id', authenticateToken, async (req, res) => {
         vals.push(title_en);
         p++;
     }
-    if (title_he !== undefined) { sets.push(`title_he = $${p++}`); vals.push(title_he); }
-    if (title_th !== undefined) { sets.push(`title_th = $${p++}`); vals.push(title_th); }
+    if (title_he !== undefined)    { sets.push(`title_he = $${p++}`);    vals.push(title_he); }
+    if (title_th !== undefined)    { sets.push(`title_th = $${p++}`);    vals.push(title_th); }
     if (description !== undefined) { sets.push(`description = $${p++}`); vals.push(description); }
-    if (urgency !== undefined) { sets.push(`urgency = $${p++}`); vals.push(urgency); }
+    if (urgency !== undefined)     { sets.push(`urgency = $${p++}`);     vals.push(urgency); }
+    if (worker_id !== undefined)   { sets.push(`worker_id = $${p++}`);   vals.push(worker_id || null); }
+    if (category_id !== undefined) { sets.push(`category_id = $${p++}`); vals.push(category_id || null); }
+    if (location_id !== undefined) { sets.push(`location_id = $${p++}`); vals.push(location_id || null); }
+    if (asset_id !== undefined)    { sets.push(`asset_id = $${p++}`);    vals.push(asset_id || null); }
 
     if (sets.length === 0) {
         return res.status(400).json({ error: 'No updatable fields provided' });
