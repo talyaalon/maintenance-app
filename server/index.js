@@ -5732,6 +5732,13 @@ app.listen(port, async () => {
             WHERE company_id IS NULL
         `);
 
+        // ── Multilingual task title columns — required by Excel import & task creation ──
+        await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_en TEXT');
+        await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_he TEXT');
+        await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_th TEXT');
+        // Backfill existing title data into the English column
+        await pool.query("UPDATE tasks SET title_en = title WHERE title_en IS NULL AND title IS NOT NULL");
+
         console.log("✅ DB columns verified.");
     } catch (e) {
         console.error("⚠️ Startup migration warning:", e.message);
