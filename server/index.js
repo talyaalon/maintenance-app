@@ -3388,7 +3388,9 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
             const empNameEn    = get(row, ['employee_name_en *', 'employee_name_en']);
             const empNameHe    = get(row, ['employee_name_he (Optional)', 'employee_name_he']);
             const empNameTh    = get(row, ['employee_name_th (Optional)', 'employee_name_th']);
-            const taskNameEn   = get(row, ['task_name_en *', 'task_name_en', 'Title', 'title']);
+            const taskNameEn   = get(row, ['Title (EN) *', 'task_name_en *', 'task_name_en', 'Title', 'title']);
+            const taskNameHe   = get(row, ['Title (HE) (Optional)', 'task_name_he (Optional)', 'task_name_he']);
+            const taskNameTh   = get(row, ['Title (TH) (Optional)', 'task_name_th (Optional)', 'task_name_th']);
             const locationRaw  = get(row, ['location *', 'location', 'Location']);
             const frequencyRaw = get(row, ['frequency *', 'frequency', 'Frequency']);
             const dateOrDays   = get(row, ['date_or_days *', 'date_or_days', 'Date or Days']);
@@ -3576,6 +3578,9 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
             } else {
                 validRows.push({
                     title:       taskNameEn,
+                    title_en:    taskNameEn,
+                    title_he:    taskNameHe || null,
+                    title_th:    taskNameTh || null,
                     description: notesRaw || '',
                     urgency,
                     worker_id,
@@ -3617,9 +3622,9 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
         for (const t of validRows) {
             if (t.frequency === 'one-time') {
                 await client.query(
-                    `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
-                     VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10)`,
-                    [t.title, t.description, t.urgency, t.parsedDate, t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
+                    `INSERT INTO tasks (title, title_en, title_he, title_th, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
+                     VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, $11, $12, $13)`,
+                    [t.title, t.title_en, t.title_he, t.title_th, t.description, t.urgency, t.parsedDate, t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
                 );
                 insertedCount++;
             } else {
@@ -3639,9 +3644,9 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
                     }
                     if (match) {
                         await client.query(
-                            `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
-                             VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10)`,
-                            [t.title, t.description, t.urgency, new Date(d), t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
+                            `INSERT INTO tasks (title, title_en, title_he, title_th, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
+                             VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, $11, $12, $13)`,
+                            [t.title, t.title_en, t.title_he, t.title_th, t.description, t.urgency, new Date(d), t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
                         );
                         insertedCount++;
                     }
