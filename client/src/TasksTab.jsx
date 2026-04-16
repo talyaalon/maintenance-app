@@ -611,6 +611,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
               user={user}
               onRefresh={onRefresh}
               t={t}
+              lang={lang}
           />
       )}
 
@@ -729,7 +730,7 @@ const InlineAlert = ({ message, onClose }) => (
     </div>
 );
 
-const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
+const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en' }) => {
     const BASE = 'https://maintenance-app-staging.onrender.com';
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
@@ -823,9 +824,12 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                 <div className="p-4 border-b border-gray-200 flex justify-between items-start sticky top-0 bg-white z-10">
                     <div>
                         <h2 className="text-lg sm:text-xl font-bold text-slate-900">
-                            {isRecurringSeries
-                                ? task.title.replace(' (Recurring)', '') + ` (${t.recurring_task_suffix || 'Recurring'})`
-                                : task.title}
+                            {(() => {
+                                const localTitle = task['title_' + lang] || task.title_en || task.title || '';
+                                return isRecurringSeries
+                                    ? localTitle.replace(' (Recurring)', '') + ` (${t.recurring_task_suffix || 'Recurring'})`
+                                    : localTitle;
+                            })()}
                             {task.asset_code && <span className="text-gray-400 font-normal ml-2 text-base"> - {task.asset_code}</span>}
                         </h2>
                     </div>
@@ -1024,7 +1028,7 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
                 </div>
                 <div className="p-5 space-y-4">
                     <div>
-                        <p className="text-sm font-semibold text-gray-700 mb-1">{task.title}</p>
+                        <p className="text-sm font-semibold text-gray-700 mb-1">{task['title_' + lang] || task.title_en || task.title}</p>
                     </div>
                     {error && <InlineAlert message={error} onClose={() => setError('')} />}
                     <textarea

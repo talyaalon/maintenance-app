@@ -727,6 +727,13 @@ app.get('/fix-db', async (req, res) => {
             // Backfill existing single-name into the English column
             await client.query("UPDATE companies SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
 
+            // ── Multilingual task titles ──
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_en TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_he TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_th TEXT');
+            // Migrate existing title data into the English column
+            await client.query("UPDATE tasks SET title_en = title WHERE title_en IS NULL AND title IS NOT NULL");
+
             console.log("✅ DB Fix Completed!");
             res.send(`
                 <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
@@ -2389,11 +2396,16 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
     
     console.log("📝 Creating Task:", { body: req.body, images: imageUrls });
 
-    let { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id, quarterly_dates } = req.body;
+    let { title, title_en, title_he, title_th, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id, quarterly_dates } = req.body;
 
     if (!location_id || location_id === 'undefined') return res.status(400).json({ error: "Location is required" });
     if (!asset_id || asset_id === 'undefined' || asset_id === 'null') asset_id = null;
     if (!due_date) due_date = new Date();
+
+    // Normalize: title_en falls back to title for backwards compatibility
+    const resolvedTitleEn = title_en || title || '';
+    const resolvedTitleHe = title_he || null;
+    const resolvedTitleTh = title_th || null;
 
     const worker_id = (assigned_worker_id && assigned_worker_id !== 'undefined') ? assigned_worker_id : req.user.id;
     const isRecurring = is_recurring === 'true';
@@ -2402,9 +2414,9 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
     if (!isRecurring) {
         await pool.query(
-            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8, $9)`,
-            [title, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id, req.user.id]
+            `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12)`,
+            [resolvedTitleEn, resolvedTitleEn, resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id, req.user.id]
         );
     } else {
         const tasksToInsert = [];
@@ -2443,9 +2455,9 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
         for (const date of tasksToInsert) {
             await pool.query(
-                `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8, $9)`,
-                [title + ' (Recurring)', location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id]
+                `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12)`,
+                [resolvedTitleEn + ' (Recurring)', resolvedTitleEn + ' (Recurring)', resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id]
             );
         }
         createdCount = tasksToInsert.length;

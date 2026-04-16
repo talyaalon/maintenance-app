@@ -43,9 +43,13 @@ const TaskCard = ({ task, onClick, t, lang = 'en' }) => {
 
             <div className="flex justify-between items-start gap-2">
                 <h4 className="font-semibold text-slate-800 text-sm sm:text-base leading-tight mb-1.5 flex-1">
-                    {task.title && task.title.endsWith(' (Recurring)')
-                        ? task.title.replace(' (Recurring)', '') + ` (${t.recurring_task_suffix || 'Recurring'})`
-                        : task.title}
+                    {(() => {
+                        const localTitle = task['title_' + lang] || task.title_en || task.title || '';
+                        const isRecurring = task.title && task.title.endsWith(' (Recurring)');
+                        return isRecurring
+                            ? localTitle.replace(' (Recurring)', '') + ` (${t.recurring_task_suffix || 'Recurring'})`
+                            : localTitle;
+                    })()}
                     {displayCode && <span className="text-gray-400 font-normal ml-1.5 text-xs sm:text-sm">- {displayCode}</span>}
                 </h4>
                 {hasMedia && <div className="text-gray-400">{isVideo ? <Video size={14}/> : <ImageIcon size={14}/>}</div>}

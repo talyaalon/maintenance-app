@@ -21,6 +21,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
   const [formData, setFormData] = useState({
     title: '',
+    title_he: '',
+    title_th: '',
     urgency: 'Normal',
     due_date: getCurrentBkkTimeForInput(),
     location_id: '',
@@ -177,7 +179,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     e.preventDefault();
 
     if (!formData.title || !formData.due_date || !formData.location_id || (isManager && !formData.assigned_worker_id)) {
-        alert(t.alert_required_fields || "עליך למלא את כל שדות החובה: תאריך, שם המשימה, מיקום, ובחירת עובד לביצוע.");
+        alert(t.alert_required_fields || "Please fill in all required fields: date, task title (English), location, and assigned worker.");
         return;
     }
 
@@ -198,6 +200,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
     const data = new FormData();
     data.append('title', formData.title);
+    data.append('title_en', formData.title);
+    data.append('title_he', formData.title_he || '');
+    data.append('title_th', formData.title_th || '');
     data.append('urgency', formData.urgency);
     data.append('location_id', formData.location_id);
     data.append('asset_id', formData.asset_id);
@@ -409,14 +414,40 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 </div>
             </div>
 
-            <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
-                    {t.task_title_label} <span className="text-red-400 ml-1">*</span>
+            <div className="space-y-2.5">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block">
+                    {t.task_title_label || "Task Title"}
                 </label>
-                <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
-                    value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
-                    placeholder={t.task_title_placeholder}
-                />
+                <div>
+                    <label className="text-xs font-medium text-slate-500 flex items-center gap-1 mb-1">
+                        🇬🇧 {t.title_en_label || "English"} <span className="text-red-400 ml-1">*</span>
+                    </label>
+                    <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
+                        value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
+                        placeholder={t.task_title_placeholder || "Task title in English..."}
+                        dir="ltr"
+                    />
+                </div>
+                <div>
+                    <label className="text-xs font-medium text-slate-500 flex items-center gap-1 mb-1">
+                        🇮🇱 {t.title_he_label || "Hebrew (עברית)"}
+                    </label>
+                    <input className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
+                        value={formData.title_he} onChange={e => setFormData({...formData, title_he: e.target.value})}
+                        placeholder={t.task_title_he_placeholder || "שם המשימה בעברית..."}
+                        dir="rtl"
+                    />
+                </div>
+                <div>
+                    <label className="text-xs font-medium text-slate-500 flex items-center gap-1 mb-1">
+                        🇹🇭 {t.title_th_label || "Thai (ภาษาไทย)"}
+                    </label>
+                    <input className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
+                        value={formData.title_th} onChange={e => setFormData({...formData, title_th: e.target.value})}
+                        placeholder={t.task_title_th_placeholder || "ชื่องานภาษาไทย..."}
+                        dir="ltr"
+                    />
+                </div>
             </div>
 
             <div className="flex gap-3">
