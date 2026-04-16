@@ -753,6 +753,24 @@ app.get('/fix-db', async (req, res) => {
     }
 });
 
+app.get('/force-db-update', async (req, res) => {
+    try {
+        const client = await pool.connect();
+        try {
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_en TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_he TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_th TEXT');
+            res.send("DB Columns Updated Successfully!");
+        } catch (dbError) {
+            res.status(500).send("DB Error: " + dbError.message);
+        } finally {
+            client.release();
+        }
+    } catch (e) {
+        res.status(500).send("Connection Error: " + e.message);
+    }
+});
+
 app.post('/users/device-token', authenticateToken, async (req, res) => {
     try {
         const { device_token } = req.body;
