@@ -451,7 +451,19 @@ export const translations = {
     // --- Profile multilingual name labels ---
     name_he_placeholder: "Name in Hebrew",
     name_en_placeholder: "Name in English",
-    name_th_placeholder: "ชื่อภาษาไทย"
+    name_th_placeholder: "ชื่อภาษาไทย",
+
+    // --- Task i18n fixes ---
+    assets_title: "Asset Info",
+    urgency_high: "High",
+    urgency_normal: "Normal",
+    urgency_low: "Low",
+    delete_series_btn: "Delete Entire Series",
+    delete_task_btn: "Delete Task",
+    recurring_task_suffix: "Recurring",
+    delete_series_confirm: "Delete this task and all future recurring instances in this series?",
+    delete_task_confirm: "Delete this task permanently?",
+    error_completing_task: "Error completing task.",
   },
 
   // --- Hebrew ---
@@ -906,7 +918,19 @@ export const translations = {
     // --- Profile multilingual name labels ---
     name_he_placeholder: "שם בעברית",
     name_en_placeholder: "Name in English",
-    name_th_placeholder: "ชื่อภาษาไทย"
+    name_th_placeholder: "ชื่อภาษาไทย",
+
+    // --- Task i18n fixes ---
+    assets_title: "פרטי ציוד",
+    urgency_high: "גבוה",
+    urgency_normal: "רגיל",
+    urgency_low: "נמוך",
+    delete_series_btn: "מחק את כל הסדרה",
+    delete_task_btn: "מחק משימה",
+    recurring_task_suffix: "חוזר",
+    delete_series_confirm: "למחוק משימה זו וכל המופעים העתידיים בסדרה?",
+    delete_task_confirm: "למחוק משימה זו לצמיתות?",
+    error_completing_task: "שגיאה בהשלמת המשימה.",
   },
 
   // --- Thai ---
@@ -1399,6 +1423,18 @@ export const translations = {
     // --- Profile multilingual name labels ---
     name_he_placeholder: "ชื่อภาษาฮีบรู",
     name_en_placeholder: "Name in English",
-    name_th_placeholder: "ชื่อภาษาไทย"
+    name_th_placeholder: "ชื่อภาษาไทย",
+
+    // --- Task i18n fixes ---
+    assets_title: "ข้อมูลทรัพย์สิน",
+    urgency_high: "สูง",
+    urgency_normal: "ปกติ",
+    urgency_low: "ต่ำ",
+    delete_series_btn: "ลบทั้งชุดงาน",
+    delete_task_btn: "ลบงาน",
+    recurring_task_suffix: "ประจำ",
+    delete_series_confirm: "ลบงานนี้และงานที่เกิดซ้ำในอนาคตทั้งหมดในชุดนี้?",
+    delete_task_confirm: "ลบงานนี้ถาวร?",
+    error_completing_task: "เกิดข้อผิดพลาดในการทำงาน",
   }
 };
