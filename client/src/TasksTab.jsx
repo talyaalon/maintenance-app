@@ -995,6 +995,8 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                 token={token}
                 t={t}
                 onRefresh={() => { onRefresh(); onClose(); }}
+                user={user}
+                lang={lang}
             />
         )}
         </>,
