@@ -2410,13 +2410,21 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
     const worker_id = (assigned_worker_id && assigned_worker_id !== 'undefined') ? assigned_worker_id : req.user.id;
     const isRecurring = is_recurring === 'true';
 
+    // Resolve company_id: prefer creator's company, fall back to the worker's company.
+    // BIG_BOSS has no company_id, so we look up the worker to keep tasks scoped correctly.
+    let taskCompanyId = req.user.company_id ?? null;
+    if (!taskCompanyId) {
+        const wkCoRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [worker_id]);
+        taskCompanyId = wkCoRes.rows[0]?.company_id ?? null;
+    }
+
     let createdCount = 1;
 
     if (!isRecurring) {
         await pool.query(
-            `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12)`,
-            [resolvedTitleEn, resolvedTitleEn, resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id, req.user.id]
+            `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by, company_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13)`,
+            [resolvedTitleEn, resolvedTitleEn, resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id, req.user.id, taskCompanyId]
         );
     } else {
         const tasksToInsert = [];
@@ -2455,9 +2463,9 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
         for (const date of tasksToInsert) {
             await pool.query(
-                `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12)`,
-                [resolvedTitleEn + ' (Recurring)', resolvedTitleEn + ' (Recurring)', resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id]
+                `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by, company_id)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13)`,
+                [resolvedTitleEn + ' (Recurring)', resolvedTitleEn + ' (Recurring)', resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id, taskCompanyId]
             );
         }
         createdCount = tasksToInsert.length;
@@ -2836,18 +2844,34 @@ app.delete('/tasks/:id', authenticateToken, async (req, res) => {
         }
         const task = taskRes.rows[0];
 
-        if (role === 'COMPANY_MANAGER' && task.company_id !== company_id) {
-            await client.query('ROLLBACK');
-            return res.status(403).json({ error: 'Access denied' });
+        if (role === 'COMPANY_MANAGER') {
+            // If the task carries an explicit company_id, it must match the manager's company.
+            // If it is NULL (tasks created via the UI form before company_id was required),
+            // fall back to verifying that the assigned worker belongs to this company.
+            let authorized = task.company_id !== null && task.company_id === company_id;
+            if (!authorized && task.company_id === null) {
+                const wkRes = await client.query(
+                    'SELECT company_id FROM users WHERE id = $1', [task.worker_id]
+                );
+                authorized = wkRes.rows[0]?.company_id === company_id;
+            }
+            if (!authorized) {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: 'Access denied' });
+            }
         }
 
         let deleted = 0;
         if (task.title && task.title.endsWith(' (Recurring)')) {
             // Delete this instance + all future PENDING instances sharing title/worker
             if (role === 'COMPANY_MANAGER') {
+                // Match sibling recurring tasks scoped to this company.
+                // Some older tasks have company_id = NULL; handle both cases.
                 const result = await client.query(
-                    `DELETE FROM tasks WHERE title = $1 AND worker_id = $2 AND company_id = $3 AND status = 'PENDING' AND due_date >= $4`,
-                    [task.title, task.worker_id, company_id, task.due_date]
+                    `DELETE FROM tasks
+                     WHERE title = $1 AND worker_id = $2 AND status = 'PENDING' AND due_date >= $3
+                       AND (company_id = $4 OR company_id IS NULL)`,
+                    [task.title, task.worker_id, task.due_date, company_id]
                 );
                 deleted = result.rowCount;
             } else {
