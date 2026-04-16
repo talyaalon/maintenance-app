@@ -970,6 +970,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                 user={user}
                 onRefresh={onRefresh}
                 t={t}
+                lang={lang}
             />
         )}
         </>,
@@ -977,7 +978,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
     );
 };
 
-const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
+const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t, lang = 'en' }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(false);
