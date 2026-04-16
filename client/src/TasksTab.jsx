@@ -818,7 +818,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
 
     return (
         <>
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-[100] backdrop-blur-sm p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[100] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden shadow-xl border border-gray-200 animate-slide-up max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b border-gray-200 flex justify-between items-start sticky top-0 bg-white z-10">
                     <div>

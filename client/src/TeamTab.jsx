@@ -534,7 +534,7 @@ const TeamTab = ({ token, t, user, lang }) => {
             {/* Employee task view modal */}
             {selectedMember && (
                 <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 backdrop-blur-sm p-4">
-                    <div className="bg-white w-full h-full max-w-6xl max-h-[95vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-scale-in">
+                    <div className="bg-white w-full h-full max-w-6xl max-h-[95vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-modal-in">
                         <div className="bg-[#714B67] text-white p-4 flex justify-between items-center shadow-md z-10 shrink-0">
                             <div>
                                 <h3 className="text-lg font-bold flex items-center gap-2">
