@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx'; 
-import { Download, Upload, FileSpreadsheet, Filter, Trash2, AlertTriangle, X, CheckCircle, Search, Plus, Calendar, ListFilter } from 'lucide-react';
+import { Download, Upload, FileSpreadsheet, Filter, Trash2, AlertTriangle, X, CheckCircle, Search, Plus, Calendar } from 'lucide-react';
 
 const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
     const [activeTab, setActiveTab] = useState('import'); 
@@ -33,7 +33,10 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
     const [filterWorker, setFilterWorker] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [filterStatus, setFilterStatus] = useState(''); 
+    const [filterStatus, setFilterStatus] = useState('');
+    const [filterUrgency, setFilterUrgency] = useState('');
+    const [filterCategory, setFilterCategory] = useState('');
+    const [filterAsset, setFilterAsset] = useState('');
     const [isExporting, setIsExporting] = useState(false);
     const [isUpdateMode, setIsUpdateMode] = useState(false);
     const [exportFormat, setExportFormat] = useState('XLSX'); 
@@ -476,6 +479,9 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
             if (startDate) params.append('start_date', startDate);
             if (endDate) params.append('end_date', endDate);
             if (filterStatus) params.append('status', filterStatus);
+            if (filterUrgency) params.append('urgency', filterUrgency);
+            if (filterCategory) params.append('category_id', filterCategory);
+            if (filterAsset) params.append('asset_id', filterAsset);
 
             const res = await fetch(`https://maintenance-app-staging.onrender.com/tasks/export/advanced?${params.toString()}`, { headers: { 'Authorization': `Bearer ${token}` }});
             if (!res.ok) throw new Error("Export failed");
@@ -530,52 +536,92 @@ const AdvancedExcel = ({ token, t, onRefresh, onClose, user, lang }) => {
                     
                     {/* --- EXPORT VIEW --- */}
                     {activeTab === 'export' && (
-                        <div className="flex flex-col h-full gap-4">
-                            <div className="flex flex-wrap gap-4 items-center text-sm p-3 bg-white rounded-lg border shadow-sm">
-                                <div className="flex items-center gap-4 border-r pr-4">
-                                    <div className="flex items-center gap-2">
-                                        <input type="checkbox" id="update_data" checked={isUpdateMode} onChange={handleUpdateModeChange} className="w-4 h-4 text-[#714B67] focus:ring-[#714B67] border-gray-300 rounded cursor-pointer"/>
-                                        <label htmlFor="update_data" className="text-gray-700 font-medium cursor-pointer">{t.export_for_update || "Update Mode"}</label>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <label className="flex items-center gap-1 cursor-pointer">
-                                            <input type="radio" name="format" checked={exportFormat === 'XLSX'} onChange={() => setExportFormat('XLSX')} className="text-[#714B67] focus:ring-[#714B67]"/>
-                                            <span className="text-gray-600">XLSX</span>
-                                        </label>
-                                        <label className="flex items-center gap-1 cursor-pointer">
-                                            <input type="radio" name="format" checked={exportFormat === 'CSV'} onChange={() => setExportFormat('CSV')} className="text-[#714B67] focus:ring-[#714B67]"/>
-                                            <span className="text-gray-600">CSV</span>
-                                        </label>
-                                    </div>
+                        <div className="flex flex-col h-full gap-3">
+                            {/* Format / Mode row */}
+                            <div className="flex items-center gap-4 px-3 py-2 bg-white rounded-lg border shadow-sm text-sm">
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" id="update_data" checked={isUpdateMode} onChange={handleUpdateModeChange} className="w-4 h-4 text-[#714B67] focus:ring-[#714B67] border-gray-300 rounded cursor-pointer"/>
+                                    <label htmlFor="update_data" className="text-gray-700 font-medium cursor-pointer">{t.export_for_update || "Update Mode"}</label>
                                 </div>
+                                <div className="flex items-center gap-2 border-l pl-4">
+                                    <label className="flex items-center gap-1 cursor-pointer">
+                                        <input type="radio" name="format" checked={exportFormat === 'XLSX'} onChange={() => setExportFormat('XLSX')} className="text-[#714B67] focus:ring-[#714B67]"/>
+                                        <span className="text-gray-600">XLSX</span>
+                                    </label>
+                                    <label className="flex items-center gap-1 cursor-pointer">
+                                        <input type="radio" name="format" checked={exportFormat === 'CSV'} onChange={() => setExportFormat('CSV')} className="text-[#714B67] focus:ring-[#714B67]"/>
+                                        <span className="text-gray-600">CSV</span>
+                                    </label>
+                                </div>
+                            </div>
 
-                                {user.role !== 'EMPLOYEE' && (
-                                    <div className="flex items-center gap-2">
-                                        <Filter size={14} className="text-gray-500"/>
-                                        <select className="border border-gray-200 rounded p-1 text-gray-700 text-xs focus:ring-[#714B67] focus:border-[#714B67]" value={filterWorker} onChange={e => setFilterWorker(e.target.value)}>
-                                            <option value="">{user.role === 'BIG_BOSS' ? (t.all_employees || 'All Employees') : (t.my_team_filter || 'My Team')}</option>
-                                            {relevantUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                            {/* Filters grid */}
+                            <div className="bg-white rounded-lg border shadow-sm p-3">
+                                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1"><Filter size={12}/> {t.filters_label || 'Filters'}</p>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+
+                                    {/* Assignee */}
+                                    {user.role !== 'EMPLOYEE' && (
+                                        <div className="flex flex-col gap-0.5">
+                                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.assigned_to || 'Assignee'}</label>
+                                            <select className="border border-gray-200 rounded px-2 py-1.5 text-gray-700 text-xs focus:outline-none focus:border-[#714B67]" value={filterWorker} onChange={e => setFilterWorker(e.target.value)}>
+                                                <option value="">{t.all_employees || 'All'}</option>
+                                                {relevantUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {/* Urgency */}
+                                    <div className="flex flex-col gap-0.5">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.urgency_label || 'Urgency'}</label>
+                                        <select className="border border-gray-200 rounded px-2 py-1.5 text-gray-700 text-xs focus:outline-none focus:border-[#714B67]" value={filterUrgency} onChange={e => setFilterUrgency(e.target.value)}>
+                                            <option value="">{t.all_urgencies || 'All'}</option>
+                                            <option value="NORMAL">{t.urgency_normal || 'Normal'}</option>
+                                            <option value="HIGH">{t.urgency_high || 'Urgent'}</option>
                                         </select>
                                     </div>
-                                )}
 
-                                <div className="flex items-center gap-2 border-l pl-4">
-                                    <div className="flex items-center gap-1">
-                                        <Calendar size={14} className="text-gray-500"/>
-                                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border border-gray-200 rounded p-1 text-xs text-gray-700 outline-none focus:border-[#714B67] w-28" title="Start Date"/>
-                                        <span className="text-gray-400">-</span>
-                                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border border-gray-200 rounded p-1 text-xs text-gray-700 outline-none focus:border-[#714B67] w-28" title="End Date"/>
-                                    </div>
-
-                                    <div className="flex items-center gap-1 ml-2">
-                                        <ListFilter size={14} className="text-gray-500"/>
-                                        <select className="border border-gray-200 rounded p-1 text-gray-700 text-xs focus:ring-[#714B67] focus:border-[#714B67]" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-                                            <option value="">{t.all_statuses || 'All Statuses'}</option>
-                                            <option value="PENDING">{t.status_pending_filter || 'Pending (Not Performed)'}</option>
+                                    {/* Status */}
+                                    <div className="flex flex-col gap-0.5">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.status_label || 'Status'}</label>
+                                        <select className="border border-gray-200 rounded px-2 py-1.5 text-gray-700 text-xs focus:outline-none focus:border-[#714B67]" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                                            <option value="">{t.all_statuses || 'All'}</option>
+                                            <option value="PENDING">{t.status_pending_filter || 'Pending'}</option>
                                             <option value="WAITING_APPROVAL">{t.status_waiting_filter || 'Waiting Approval'}</option>
                                             <option value="COMPLETED">{t.status_completed_filter || 'Completed'}</option>
                                         </select>
                                     </div>
+
+                                    {/* Category */}
+                                    <div className="flex flex-col gap-0.5">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.category_label || 'Category'}</label>
+                                        <select className="border border-gray-200 rounded px-2 py-1.5 text-gray-700 text-xs focus:outline-none focus:border-[#714B67]" value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setFilterAsset(''); }}>
+                                            <option value="">{t.all_categories || 'All'}</option>
+                                            {categories.map(c => <option key={c.id} value={c.id}>{c.name || c.name_en || c.name_he}</option>)}
+                                        </select>
+                                    </div>
+
+                                    {/* Asset */}
+                                    <div className="flex flex-col gap-0.5">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.asset_name_label || 'Asset'}</label>
+                                        <select className="border border-gray-200 rounded px-2 py-1.5 text-gray-700 text-xs focus:outline-none focus:border-[#714B67]" value={filterAsset} onChange={e => setFilterAsset(e.target.value)}>
+                                            <option value="">{t.all_assets || 'All'}</option>
+                                            {assets
+                                                .filter(a => !filterCategory || String(a.category_id) === String(filterCategory))
+                                                .map(a => <option key={a.id} value={a.id}>{a.name || a.name_en || a.name_he} {a.code ? `(${a.code})` : ''}</option>)}
+                                        </select>
+                                    </div>
+
+                                    {/* Date Range — spans full width */}
+                                    <div className="col-span-2 flex flex-col gap-0.5">
+                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1"><Calendar size={11}/> {t.date_range_label || 'Date Range'}</label>
+                                        <div className="flex items-center gap-2">
+                                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="flex-1 border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-[#714B67]" placeholder="From"/>
+                                            <span className="text-gray-400 text-xs">—</span>
+                                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="flex-1 border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-[#714B67]" placeholder="To"/>
+                                        </div>
+                                    </div>
+
                                 </div>
                             </div>
 

@@ -1,7 +1,7 @@
 import { requestForToken, onMessageListener } from './firebase';
 import { Toaster, toast } from 'react-hot-toast'; // אם אין לך react-hot-toast, תוכלי להשתמש ב-alert רגיל
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, UserCircle, Settings, Building2 } from 'lucide-react';
+import { LayoutDashboard, Users, UserCircle, Settings, Building2, BookOpen, ArrowLeft } from 'lucide-react';
 import Login from './Login';
 import AddUserForm from './AddUserForm';
 import { translations } from './translations'; 
@@ -14,6 +14,7 @@ import ProfileTab from './ProfileTab';
 import ConfigurationTab from './ConfigurationTab';
 import CompaniesTab from './CompaniesTab';
 import CompanyManagerSettingsTab from './CompanyManagerSettingsTab';
+import HelpCenter from './HelpCenter';
 
 // Legacy role mapping: DB may still contain "Admin" from before the Phase 1 rename.
 // Normalise it to "BIG_BOSS" so all tab routing and permission checks work correctly.
@@ -71,7 +72,7 @@ function App() {
   // הגדרת שפה: ברירת מחדל אנגלית
   // שואב את השפה מהזיכרון כדי שלא תתאפס ברענון
   const [lang, setLang] = useState(() => {
-      return localStorage.getItem('appLang') || 'he'; // ברירת מחדל לעברית
+      return localStorage.getItem('appLang') || 'en'; // default to English
   });
 
   // ברגע שהשפה משתנה, נשמור אותה לזיכרון
@@ -139,6 +140,7 @@ function App() {
 
   // מודאלים
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -217,26 +219,26 @@ function App() {
       switch (user?.role) {
           case 'BIG_BOSS':
               return [
-                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
-                  { key: 'companies', label: t.nav_companies,            Icon: Building2 },
-                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+                  { key: 'tasks',     label: t.nav_tasks,    Icon: LayoutDashboard },
+                  { key: 'companies', label: t.nav_companies, Icon: Building2 },
+                  { key: 'profile',   label: t.nav_profile,   Icon: UserCircle },
               ];
           case 'COMPANY_MANAGER':
               return [
-                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
-                  { key: 'settings',  label: t.nav_config,               Icon: Settings },
-                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+                  { key: 'tasks',    label: t.nav_tasks,   Icon: LayoutDashboard },
+                  { key: 'settings', label: t.nav_config,  Icon: Settings },
+                  { key: 'profile',  label: t.nav_profile, Icon: UserCircle },
               ];
           case 'MANAGER':
               return [
-                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
-                  { key: 'team',      label: t.nav_team,                 Icon: Users },
-                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+                  { key: 'tasks',   label: t.nav_tasks,   Icon: LayoutDashboard },
+                  { key: 'team',    label: t.nav_team,    Icon: Users },
+                  { key: 'profile', label: t.nav_profile, Icon: UserCircle },
               ];
           default: // EMPLOYEE (or null user — won't be rendered)
               return [
-                  { key: 'tasks',     label: t.nav_tasks,               Icon: LayoutDashboard },
-                  { key: 'profile',   label: t.nav_profile,              Icon: UserCircle },
+                  { key: 'tasks',   label: t.nav_tasks,   Icon: LayoutDashboard },
+                  { key: 'profile', label: t.nav_profile, Icon: UserCircle },
               ];
       }
   }, [user?.role, t]);
@@ -289,13 +291,31 @@ function App() {
       {/* כותרת עליונה - מעודכנת */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-30 relative">
           
-          {/* צד שמאל: לוגו בלבד */}
-          <div className="flex-shrink-0 z-10">
-              <img 
-                  src={logoImg} 
-                  alt="App Logo" 
-                  className="h-10 w-auto object-contain" 
+          {/* צד שמאל: לוגו + כפתור עזרה / חזרה */}
+          <div className="flex items-center gap-2 flex-shrink-0 z-10">
+              <img
+                  src={logoImg}
+                  alt="App Logo"
+                  className="h-10 w-auto object-contain"
               />
+              {showHelp ? (
+                  <button
+                      onClick={() => setShowHelp(false)}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-xl text-[#714B67] hover:bg-[#714B67]/10 transition-colors text-sm font-medium"
+                      title={t.back || 'Back'}
+                  >
+                      <ArrowLeft size={18} strokeWidth={2} />
+                      <span>{t.back || 'Back'}</span>
+                  </button>
+              ) : (
+                  <button
+                      onClick={() => setShowHelp(true)}
+                      className="p-1.5 rounded-xl text-[#714B67] hover:bg-[#714B67]/10 transition-colors"
+                      title={t.nav_help || 'Help'}
+                  >
+                      <BookOpen size={20} strokeWidth={2} />
+                  </button>
+              )}
           </div>
 
           {/* מרכז: כותרת האפליקציה */}
@@ -343,42 +363,50 @@ function App() {
           </div>
       </header>
 
-      <main className="max-w-3xl mx-auto min-h-[80vh] pb-24">
-        {renderContent()}
-      </main>
+      {/* ─── Help Center (full-page) ─────────────────────────────────────── */}
+      {showHelp ? (
+          <main className="max-w-3xl mx-auto pb-8">
+              <HelpCenter user={user} t={t} lang={lang} />
+          </main>
+      ) : (
+          <>
+              <main className="max-w-3xl mx-auto min-h-[80vh] pb-24">
+                {renderContent()}
+              </main>
 
 {/* ─── Footer ────────────────────────────────────────────────────────────── */}
-      <footer className="pb-16 pt-4 flex justify-center">
-        <img src={logoImg} alt="Air Manage" className="h-6 w-auto object-contain opacity-30" />
-      </footer>
+              <footer className="pb-16 pt-4 flex justify-center">
+                <img src={logoImg} alt="Air Manage" className="h-6 w-auto object-contain opacity-30" />
+              </footer>
 
 {/* ─── Bottom navigation ─────────────────────────────────────────────────── */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
-        <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
-            {tabsConfig.map(({ key, label, Icon }) => (
-                <button
-                    key={key}
-                    onClick={() => setActiveTab(key)}
-                    className={`flex flex-col items-center w-full ${activeTab === key ? 'text-[#714B67]' : 'text-gray-400'}`}
-                >
-                    <Icon size={24} strokeWidth={activeTab === key ? 2.5 : 2} />
-                    <span className="text-[10px] mt-1 font-medium">{label}</span>
-                </button>
-            ))}
-        </div>
-      </nav>
+              <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
+                <div className="flex justify-around items-center h-16 max-w-3xl mx-auto">
+                    {tabsConfig.map(({ key, label, Icon }) => (
+                        <button
+                            key={key}
+                            onClick={() => setActiveTab(key)}
+                            className={`flex flex-col items-center w-full ${activeTab === key ? 'text-[#714B67]' : 'text-gray-400'}`}
+                        >
+                            <Icon size={24} strokeWidth={activeTab === key ? 2.5 : 2} />
+                            <span className="text-[10px] mt-1 font-medium">{label}</span>
+                        </button>
+                    ))}
+                </div>
+              </nav>
 
-      {/* --- החלונות הקופצים --- */}
-      
-{isUserFormOpen && <AddUserForm 
-          currentUser={user} 
-          onClose={() => { 
-              setIsUserFormOpen(false); 
-              setRefreshTrigger(prev => prev + 1); 
-          }} 
-          t={t}
-      />}
-      
+              {/* --- החלונות הקופצים --- */}
+              {isUserFormOpen && <AddUserForm
+                  currentUser={user}
+                  onClose={() => {
+                      setIsUserFormOpen(false);
+                      setRefreshTrigger(prev => prev + 1);
+                  }}
+                  t={t}
+              />}
+          </>
+      )}
+
     </div>
   );
 }

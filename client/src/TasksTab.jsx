@@ -747,8 +747,8 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
 
     const handleDeleteSeries = async () => {
         const msg = isRecurringSeries
-            ? 'Delete this task and all future recurring instances in this series?'
-            : 'Delete this task permanently?';
+            ? (t.delete_series_confirm || 'Delete this task and all future recurring instances in this series?')
+            : (t.delete_task_confirm || 'Delete this task permanently?');
         if (!window.confirm(msg)) return;
         try {
             const res = await fetch(`${BASE}/tasks/${task.id}`, {
@@ -775,7 +775,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                 body: formData
             });
             if (res.ok) { setShowSuccess(true); setTimeout(() => { setShowSuccess(false); onRefresh(); onClose(); }, 1500); }
-        } catch(e) { setModalError("Error completing task."); }
+        } catch(e) { setModalError(t.error_completing_task || "Error completing task."); }
     };
 
     const handleApprove = async () => {
@@ -818,12 +818,14 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
 
     return (
         <>
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-end sm:items-center z-[100] backdrop-blur-sm p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[100] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden shadow-xl border border-gray-200 animate-slide-up max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b border-gray-200 flex justify-between items-start sticky top-0 bg-white z-10">
                     <div>
                         <h2 className="text-lg sm:text-xl font-bold text-slate-900">
-                            {task.title}
+                            {isRecurringSeries
+                                ? task.title.replace(' (Recurring)', '') + ` (${t.recurring_task_suffix || 'Recurring'})`
+                                : task.title}
                             {task.asset_code && <span className="text-gray-400 font-normal ml-2 text-base"> - {task.asset_code}</span>}
                         </h2>
                     </div>
@@ -852,7 +854,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
 
                     <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm">
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.date_label}</span><span className="font-medium">{formatBkkDate(task.due_date)}</span></div>
-                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.urgency_label || "Urgency"}</span><span className={`px-2 py-0.5 rounded text-xs font-bold ${task.urgency === 'High' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}`}>{task.urgency}</span></div>
+                        <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.urgency_label || "Urgency"}</span><span className={`px-2 py-0.5 rounded text-xs font-bold ${task.urgency === 'High' ? 'bg-orange-100 text-orange-700' : task.urgency === 'Low' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{task.urgency === 'High' ? t.urgency_high : task.urgency === 'Low' ? t.urgency_low : t.urgency_normal}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.location}</span><span className="font-medium">{task.location_name || '-'}</span></div>
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.category_label || "Category"}</span><span className="font-medium">{task.category_name || '-'}</span></div>
                         <div className="col-span-2 border-t pt-2 mt-2"></div>

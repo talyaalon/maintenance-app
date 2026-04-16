@@ -455,9 +455,8 @@ const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t
         </div>
         <div className="space-y-2">
             {[
-                { key: 'auto_approve_tasks',  label: t?.perm_auto_approve  || 'Auto-approve tasks' },
-                { key: 'stuck_skip_approval', label: t?.perm_stuck_skip    || 'Stuck task skip approval' },
-                { key: 'can_manage_fields',   label: t?.perm_manage_fields || 'Can manage fields' },
+                { key: 'auto_approve_tasks',  label: t?.perm_auto_approve || 'Auto-approve tasks' },
+                { key: 'stuck_skip_approval', label: t?.perm_stuck_skip   || 'Stuck task skip approval' },
             ].map(({ key, label }) => (
                 <label key={key} className="flex items-center justify-between cursor-pointer gap-2">
                     <span className="text-xs text-gray-600">{label}</span>
@@ -470,6 +469,24 @@ const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t
                     </button>
                 </label>
             ))}
+        </div>
+        <div>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Notification Channels</p>
+            <div className="flex gap-2">
+                {[
+                    { key: 'notify_email', label: 'Email' },
+                    { key: 'notify_line',  label: 'LINE'  },
+                ].map(({ key, label }) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => setPermForm(p => ({ ...p, [key]: !p[key] }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${permForm[key] ? 'bg-[#714B67] text-white shadow-sm' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
         </div>
         {onSendReport && (
             <div className="pt-1 border-t border-slate-200">
@@ -680,7 +697,8 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
             allowed_lang_he:     u.allowed_lang_he     !== false,
             allowed_lang_en:     u.allowed_lang_en     !== false,
             allowed_lang_th:     u.allowed_lang_th     !== false,
-            can_manage_fields:   u.can_manage_fields    !== false,
+            notify_email:        u.notify_email        !== false,
+            notify_line:         u.notify_line         !== false,
         });
     };
 
@@ -856,7 +874,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         </button>
                     </div>
                     <p className="text-xs text-gray-400">
-                        {user?.name ? `Welcome, ${user.name}` : (t?.company_detail_subtitle || 'Company Dashboard')}
+                        {user?.name ? `Welcome, ${user.name}` : (t?.company_detail_subtitle || 'Department Dashboard')}
                     </p>
                 </div>
             </div>
@@ -879,7 +897,7 @@ export default function CompanyManagerSettingsTab({ t, user, token, lang }) {
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-800 truncate">{userName(selfUser)}</p>
                             <span className="inline-block text-[10px] font-bold text-[#714B67] bg-[#714B67]/10 px-1.5 py-0.5 rounded mt-0.5">
-                                Company Manager
+                                Department Manager
                             </span>
                         </div>
                         <RowActions

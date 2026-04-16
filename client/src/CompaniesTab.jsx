@@ -205,7 +205,7 @@ const InlineUserForm = ({ editUser, role, parentManagerId, companyId = null, tok
         finally { setSaving(false); }
     };
 
-    const roleLabel = (role === 'SUPERVISOR' || role === 'MANAGER') ? 'Manager' : role === 'COMPANY_MANAGER' ? 'Company Manager' : 'Employee';
+    const roleLabel = (role === 'SUPERVISOR' || role === 'MANAGER') ? 'Manager' : role === 'COMPANY_MANAGER' ? 'Department Manager' : 'Employee';
     return (
         <div className={isAddPanel ? addPanelCls : rowPanelCls}>
             <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1">
@@ -503,9 +503,8 @@ const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t
         </div>
         <div className="space-y-2">
             {[
-                { key: 'auto_approve_tasks',  label: t?.perm_auto_approve  || 'Auto-approve tasks' },
-                { key: 'stuck_skip_approval', label: t?.perm_stuck_skip    || 'Stuck task skip approval' },
-                { key: 'can_manage_fields',   label: t?.perm_manage_fields || 'Can manage fields' },
+                { key: 'auto_approve_tasks',  label: t?.perm_auto_approve || 'Auto-approve tasks' },
+                { key: 'stuck_skip_approval', label: t?.perm_stuck_skip   || 'Stuck task skip approval' },
             ].map(({ key, label }) => (
                 <label key={key} className="flex items-center justify-between cursor-pointer gap-2">
                     <span className="text-xs text-gray-600">{label}</span>
@@ -518,6 +517,24 @@ const PermissionAccordion = ({ permForm, setPermForm, onSave, onClose, saving, t
                     </button>
                 </label>
             ))}
+        </div>
+        <div>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Notification Channels</p>
+            <div className="flex gap-2">
+                {[
+                    { key: 'notify_email', label: 'Email' },
+                    { key: 'notify_line',  label: 'LINE'  },
+                ].map(({ key, label }) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => setPermForm(p => ({ ...p, [key]: !p[key] }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${permForm[key] ? 'bg-[#714B67] text-white shadow-sm' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
         </div>
         {onSendReport && (
             <div className="pt-1 border-t border-slate-200">
@@ -656,7 +673,8 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
             allowed_lang_he:     u.allowed_lang_he     !== false,
             allowed_lang_en:     u.allowed_lang_en     !== false,
             allowed_lang_th:     u.allowed_lang_th     !== false,
-            can_manage_fields:   u.can_manage_fields    !== false,
+            notify_email:        u.notify_email        !== false,
+            notify_line:         u.notify_line         !== false,
         });
     };
 
@@ -796,7 +814,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                     )}
                     <div>
                         <h2 className="text-lg font-bold text-slate-800">{company?.name}</h2>
-                        <p className="text-xs text-gray-400">{t?.company_detail_subtitle || 'Company Dashboard'}</p>
+                        <p className="text-xs text-gray-400">{t?.company_detail_subtitle || 'Department Dashboard'}</p>
                     </div>
                 </div>
             </div>
@@ -805,7 +823,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
             <div className="bg-white rounded-2xl border border-[#714B67]/20 overflow-hidden mb-5">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-[#714B67]/5">
                     <Shield size={16} className="text-[#714B67]" />
-                    <h3 className="text-sm font-bold text-slate-700">Company Managers</h3>
+                    <h3 className="text-sm font-bold text-slate-700">Department Managers</h3>
                     <span className="ml-auto text-xs font-semibold text-[#714B67] bg-[#714B67]/10 px-2 py-0.5 rounded-full">
                         {companyManagers.length}
                     </span>
@@ -832,7 +850,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                         </div>
                     )}
                     {companyManagers.length === 0 && openPanel !== 'add-user-cm' && (
-                        <p className="px-4 py-3 text-xs text-gray-400 italic">No Company Managers Assigned</p>
+                        <p className="px-4 py-3 text-xs text-gray-400 italic">No Department Managers Assigned</p>
                     )}
                     {companyManagers.map(cm => (
                         <div key={cm.id} className="px-4 py-2.5">
@@ -849,7 +867,7 @@ const CompanyDetail = ({ company, token, t, lang, user, onBack }) => {
                                         {userName(cm)}
                                     </p>
                                     <span className="inline-block text-[10px] font-bold text-[#714B67] bg-[#714B67]/10 px-1.5 py-0.5 rounded mt-0.5">
-                                        Company Manager
+                                        Department Manager
                                     </span>
                                 </div>
                                 <RowActions
@@ -1424,7 +1442,7 @@ const InlineCompanyForm = ({ company, token, t, lang, onClose, onSaved }) => {
                 <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#714B67]/10 text-[#714B67] transition"><X size={14} /></button>
             </div>
 
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Company Info</p>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Department Info</p>
             <MultiLangNameInput
                 value={{ name_en: form.name_en, name_he: form.name_he, name_th: form.name_th }}
                 onChange={updated => setForm(p => ({ ...p, ...updated }))}
@@ -1453,7 +1471,7 @@ const InlineCompanyForm = ({ company, token, t, lang, onClose, onSaved }) => {
 
             <div className="pt-1">
                 <p className="text-[10px] font-bold text-[#714B67] uppercase tracking-wider mb-1.5">
-                    Company Manager{' '}
+                    Department Manager{' '}
                     {!isEdit && <span className="text-gray-400 font-normal normal-case">(optional — can be added later)</span>}
                 </p>
                 {isEdit && mgrLoading && (

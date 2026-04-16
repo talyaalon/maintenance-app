@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { Camera, Save, X, LogOut, Eye, EyeOff, Globe } from 'lucide-react';
 import MultiLangNameInput from './MultiLangNameInput';
 
+const ROLE_LABELS = {
+  BIG_BOSS:        { en: 'Big Boss',          he: 'בוס גדול' },
+  COMPANY_MANAGER: { en: 'Department Manager', he: 'מנהל מחלקה' },
+  MANAGER:         { en: 'Manager',            he: 'מנהל' },
+  EMPLOYEE:        { en: 'Employee',           he: 'עובד' },
+};
+const formatRole = (role, lang) => {
+  const entry = ROLE_LABELS[role];
+  if (!entry) return role || 'User';
+  return (lang === 'he' ? entry.he : entry.en);
+};
+
 const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -158,7 +170,7 @@ const ProfileTab = ({ user, token, t, onLogout, onUpdateUser, lang }) => {
         </div>
         <h2 className="text-xl font-bold text-slate-900 mb-1">{formData.full_name || user.name}</h2>
         <span className="bg-[#ede8f0] text-[#4d2d5a] text-xs font-semibold px-3 py-1 rounded-md uppercase tracking-widest">
-          {user?.role || 'User'}
+          {formatRole(user?.role, lang)}
         </span>
       </div>
 

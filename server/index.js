@@ -574,6 +574,10 @@ app.get('/fix-db', async (req, res) => {
             // Stuck-task permission — when TRUE, stuck tasks skip WAITING_APPROVAL and go directly to COMPLETED
             await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS stuck_skip_approval BOOLEAN DEFAULT FALSE');
 
+            // Notification channel preferences — controls which channels receive daily reports
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_email BOOLEAN DEFAULT TRUE');
+            await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_line BOOLEAN DEFAULT TRUE');
+
             // Stuck-task fields on tasks
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_stuck BOOLEAN DEFAULT FALSE');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS stuck_description TEXT');
@@ -704,12 +708,14 @@ app.get('/fix-db', async (req, res) => {
             }
 
             // ── Migrate existing parent_manager_id → M:M junction table (idempotent) ──
+            // Defensive: only insert when BOTH employee (selected row) and manager exist in users.
             await client.query(`
                 INSERT INTO employee_managers (employee_id, manager_id)
                 SELECT id, parent_manager_id
                 FROM users
                 WHERE parent_manager_id IS NOT NULL
                   AND role IN ('EMPLOYEE', 'SUPERVISOR')
+                  AND EXISTS (SELECT 1 FROM users u2 WHERE u2.id = users.parent_manager_id)
                 ON CONFLICT DO NOTHING
             `);
 
@@ -840,9 +846,12 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         const id = req.user.id;
         const { full_name, full_name_he, full_name_en, full_name_th, email, phone, password, preferred_language, line_user_id } = req.body;
 
-        // Capture old lineUserId BEFORE the update to detect first-time connection
-        const oldProfileRes = await pool.query('SELECT line_user_id FROM users WHERE id = $1', [id]);
+        // Capture old values BEFORE the update to detect first-time connection and provide fallbacks
+        const oldProfileRes = await pool.query('SELECT line_user_id, email FROM users WHERE id = $1', [id]);
         const oldLineUserId = oldProfileRes.rows[0]?.line_user_id || null;
+        const oldEmail = oldProfileRes.rows[0]?.email || null;
+        // Always normalize email — login always lowercases, so the DB must match
+        const normalizedEmail = email ? email.toLowerCase().trim() : oldEmail;
 
         let profile_picture_url = req.body.existing_picture || null;
         if (req.file) {
@@ -852,7 +861,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
 
         const lang = preferred_language || 'en';
 
-        const firebaseUpdateData = { displayName: full_name, email: email };
+        const firebaseUpdateData = { displayName: full_name, email: normalizedEmail };
         if (password && password.trim() !== '') {
             if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
             firebaseUpdateData.password = password;
@@ -868,7 +877,7 @@ app.put('/users/profile', authenticateToken, upload.single('profile_picture'), a
         }
 
         let query = 'UPDATE users SET full_name=$1, email=$2, phone=$3, profile_picture_url=$4, preferred_language=$5, full_name_he=$6, full_name_en=$7, full_name_th=$8, line_user_id=$9';
-        let params = [full_name, email, phone, profile_picture_url, lang, full_name_he || null, full_name_en || null, full_name_th || null, line_user_id || null];
+        let params = [full_name, normalizedEmail, phone, profile_picture_url, lang, full_name_he || null, full_name_en || null, full_name_th || null, line_user_id || null];
         let paramCount = 10;
 
         if (password && password.trim() !== '') {
@@ -1126,7 +1135,7 @@ app.post('/users', authenticateToken, async (req, res) => {
 app.put('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th, line_user_id, stuck_skip_approval } = req.body;
+    const { full_name, full_name_he, full_name_en, full_name_th, email, phone, role, password, preferred_language, can_manage_fields, auto_approve_tasks, allowed_lang_he, allowed_lang_en, allowed_lang_th, line_user_id, stuck_skip_approval, notify_email, notify_line } = req.body;
 
     const oldUserRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (oldUserRes.rows.length === 0) return res.status(404).json({ error: "User not found" });
@@ -1137,7 +1146,7 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
 
     // Compute effective values BEFORE the Firebase call so displayName/email are never undefined
     const effectiveName  = full_name || full_name_en || oldUser.full_name;
-    const effectiveEmail = email !== undefined ? email : oldUser.email;
+    const effectiveEmail = email ? email.toLowerCase().trim() : oldUser.email;
     const effectivePhone = phone !== undefined ? phone : (oldUser.phone || null);
     const lang           = preferred_language !== undefined ? preferred_language : (oldUser.preferred_language || 'he');
 
@@ -1205,16 +1214,24 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         params.push(stuck_skip_approval !== undefined ? stuck_skip_approval : oldUser.stuck_skip_approval);
         paramCount++;
     }
+    if ('notify_email' in oldUser || notify_email !== undefined) {
+        setClauses.push(`notify_email=$${paramCount}`);
+        params.push(notify_email !== undefined ? notify_email : (oldUser.notify_email ?? true));
+        paramCount++;
+    }
+    if ('notify_line' in oldUser || notify_line !== undefined) {
+        setClauses.push(`notify_line=$${paramCount}`);
+        params.push(notify_line !== undefined ? notify_line : (oldUser.notify_line ?? true));
+        paramCount++;
+    }
 
     // Only hash and update if the password is genuinely new (not the existing hash sent back unchanged)
-    let isPasswordChanged = false;
     if (password && password.trim() !== '') {
         const bcrypt = require('bcrypt');
         const matchesExisting = oldUser.password
             ? await bcrypt.compare(password, oldUser.password).catch(() => false)
             : false;
         if (!matchesExisting) {
-            isPasswordChanged = true;
             const hashedPassword = await bcrypt.hash(password, 10);
             setClauses.push(`password=$${paramCount}`);
             params.push(hashedPassword);
@@ -1228,45 +1245,6 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
     const result = await pool.query(query, params);
     const updatedUser = result.rows[0];
 
-    // Build plain-text change list for notifications
-    const changeLinesEn = [];
-    const changeLinesHe = [];
-    const changeLinesth = [];
-    if (oldUser.full_name !== updatedUser.full_name) {
-        changeLinesEn.push(`• Name → ${updatedUser.full_name}`);
-        changeLinesHe.push(`• שם → ${updatedUser.full_name}`);
-        changeLinesth.push(`• ชื่อ → ${updatedUser.full_name}`);
-    }
-    if (oldUser.email !== updatedUser.email) {
-        changeLinesEn.push(`• Email → ${updatedUser.email}`);
-        changeLinesHe.push(`• אימייל → ${updatedUser.email}`);
-        changeLinesth.push(`• อีเมล → ${updatedUser.email}`);
-    }
-    if (oldUser.phone !== updatedUser.phone) {
-        changeLinesEn.push(`• Phone updated`);
-        changeLinesHe.push(`• טלפון עודכן`);
-        changeLinesth.push(`• อัปเดตเบอร์โทร`);
-    }
-    if (oldUser.preferred_language !== updatedUser.preferred_language) {
-        changeLinesEn.push(`• Language → ${updatedUser.preferred_language}`);
-        changeLinesHe.push(`• שפה → ${updatedUser.preferred_language}`);
-        changeLinesth.push(`• ภาษา → ${updatedUser.preferred_language}`);
-    }
-    if (isPasswordChanged) {
-        changeLinesEn.push(`• Password changed 🔑`);
-        changeLinesHe.push(`• סיסמה שונתה 🔑`);
-        changeLinesth.push(`• เปลี่ยนรหัสผ่าน 🔑`);
-    }
-    if (oldUser.role !== updatedUser.role) {
-        changeLinesEn.push(`• Role → ${updatedUser.role}`);
-        changeLinesHe.push(`• תפקיד → ${updatedUser.role}`);
-        changeLinesth.push(`• บทบาท → ${updatedUser.role}`);
-    }
-
-    const changeLangMap = { he: changeLinesHe, en: changeLinesEn, th: changeLinesth };
-    const userLang = updatedUser.preferred_language || 'en';
-    const changeText = (changeLangMap[userLang] || changeLinesEn).join('\n');
-
     // Welcome LINE message when LINE ID is set for the first time
     const oldLineId = oldUser.line_user_id;
     const newLineId = updatedUser.line_user_id;
@@ -1279,11 +1257,8 @@ app.put('/users/:id', authenticateToken, async (req, res) => {
         sendLineMessage(newLineId, welcomeMsg[userLang] || welcomeMsg.en).catch(err => console.error("❌ LINE welcome error:", err));
     }
 
-    // Notify user via all 3 channels if any material change occurred
-    if (changeText) {
-        sendNotification(updatedUser.id, ['email', 'line', 'push'], 'user_updated', { changes: changeText })
-            .catch(err => console.error("❌ user_updated notification error:", err));
-    }
+    // Notifications are intentionally suppressed for profile/language changes.
+    // They fire only for task-related events.
 
     res.json({ message: "User updated successfully", user: updatedUser });
 
@@ -2928,9 +2903,72 @@ app.put('/tasks/bulk-update-status', authenticateToken, async (req, res) => {
     }
 });
 
+app.get('/tasks/export', authenticateToken, async (req, res) => {
+    try {
+        const { role, id: callerId, company_id } = req.user;
+        const { worker_id, status, urgency, location_id, category_id } = req.query;
+
+        const ALLOWED = ['id', 'title', 'location', 'worker', 'urgency', 'due_date', 'status'];
+        const requested = req.query.fields
+            ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
+            : ALLOWED;
+        if (!requested.length) return res.status(400).json({ error: 'No valid fields requested' });
+
+        const colMap = {
+            id:       't.id',
+            title:    't.title',
+            location: "COALESCE(l.name_en, l.name, '') AS location",
+            worker:   "COALESCE(u.full_name_en, u.full_name, '') AS worker",
+            urgency:  't.urgency',
+            due_date: 't.due_date',
+            status:   't.status',
+        };
+        const cols = requested.map(f => colMap[f]).join(', ');
+
+        let query = `
+            SELECT ${cols}
+            FROM tasks t
+            LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN locations l ON t.location_id = l.id
+            LEFT JOIN assets a ON t.asset_id = a.id
+            WHERE 1=1
+        `;
+        const params = [];
+        let pi = 1;
+
+        if (role === 'EMPLOYEE') {
+            query += ` AND t.worker_id = $${pi++}`;
+            params.push(callerId);
+        } else if (role === 'MANAGER') {
+            query += ` AND t.worker_id IN (SELECT employee_id FROM employee_managers WHERE manager_id = $${pi++})`;
+            params.push(callerId);
+        } else if (role === 'COMPANY_MANAGER' && company_id) {
+            query += ` AND t.worker_id IN (SELECT id FROM users WHERE company_id = $${pi++})`;
+            params.push(company_id);
+        } else if (role !== 'BIG_BOSS') {
+            if (company_id) { query += ` AND t.company_id = $${pi++}`; params.push(company_id); }
+            else { query += ' AND 1=0'; }
+        }
+
+        if (worker_id)   { query += ` AND t.worker_id    = $${pi++}`; params.push(parseInt(worker_id,   10)); }
+        if (status)      { query += ` AND t.status       = $${pi++}`; params.push(status); }
+        if (urgency)     { query += ` AND t.urgency      = $${pi++}`; params.push(urgency.toUpperCase()); }
+        if (location_id) { query += ` AND t.location_id  = $${pi++}`; params.push(parseInt(location_id, 10)); }
+        if (category_id) { query += ` AND a.category_id  = $${pi++}`; params.push(parseInt(category_id, 10)); }
+
+        query += ' ORDER BY t.due_date DESC';
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('GET /tasks/export error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
     try {
-        const { worker_id, start_date, end_date, status } = req.query;
+        const { worker_id, start_date, end_date, status, urgency, category_id, asset_id } = req.query;
         const { role, id: callerId, company_id } = req.user;
 
         let query = `
@@ -2984,6 +3022,21 @@ app.get('/tasks/export/advanced', authenticateToken, async (req, res) => {
         if (status && status !== 'all') {
             query += ` AND t.status = $${pIndex++}`;
             params.push(status);
+        }
+
+        if (urgency && urgency !== 'all') {
+            query += ` AND t.urgency = $${pIndex++}`;
+            params.push(urgency.toUpperCase());
+        }
+
+        if (category_id && category_id !== 'all') {
+            query += ` AND a.category_id = $${pIndex++}`;
+            params.push(parseInt(category_id, 10));
+        }
+
+        if (asset_id && asset_id !== 'all') {
+            query += ` AND t.asset_id = $${pIndex++}`;
+            params.push(parseInt(asset_id, 10));
         }
 
         query += ` ORDER BY t.due_date DESC`;
@@ -4206,7 +4259,7 @@ const sendScopedDailyReport = async (userId) => {
 
     // Fetch target user (include company_id for COMPANY_MANAGER scoping)
     const userRes = await pool.query(
-        'SELECT id, full_name, email, role, parent_manager_id, company_id, device_token, preferred_language, line_user_id FROM users WHERE id = $1',
+        'SELECT id, full_name, email, role, parent_manager_id, company_id, device_token, preferred_language, line_user_id, notify_email, notify_line FROM users WHERE id = $1',
         [userId]
     );
     if (!userRes.rows.length) throw new Error(`User ${userId} not found`);
@@ -4280,7 +4333,12 @@ const sendScopedDailyReport = async (userId) => {
         // ── MANAGER or COMPANY_MANAGER: team report ────────────────────────────
         let empQueryText, empQueryParams;
         if (u.role === 'MANAGER') {
-            empQueryText   = "SELECT id, full_name, email, device_token, preferred_language, line_user_id FROM users WHERE parent_manager_id = $1 AND role = 'EMPLOYEE'";
+            // Use the M:M junction table so ALL structurally-assigned employees are included,
+            // even those whose parent_manager_id may point elsewhere (multi-manager setups).
+            empQueryText   = `SELECT u.id, u.full_name, u.email, u.device_token, u.preferred_language, u.line_user_id
+                              FROM users u
+                              INNER JOIN employee_managers em ON em.employee_id = u.id
+                              WHERE em.manager_id = $1 AND u.role = 'EMPLOYEE'`;
             empQueryParams = [userId];
         } else {
             // COMPANY_MANAGER — summarise ALL employees in their company
@@ -4290,6 +4348,11 @@ const sendScopedDailyReport = async (userId) => {
 
         const empsRes  = await pool.query(empQueryText, empQueryParams);
         const teamEmps = empsRes.rows;
+
+        const sendEmail = u.notify_email !== false;
+        const sendLine  = u.notify_line  !== false;
+        console.log(`Generating report for Manager ${userId}. Found ${teamEmps.length} employees. Routing: Email=${sendEmail}, LINE=${sendLine}`);
+
         if (!teamEmps.length) { console.log(`ℹ️ No employees found for user ${userId}, skipping scoped report`); return; }
 
         const empIds     = teamEmps.map(e => e.id);
@@ -4357,8 +4420,8 @@ const sendScopedDailyReport = async (userId) => {
         });
 
         await Promise.all([
-            u.email        ? transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: u.email, subject: emailSubj, html: htmlBody }).catch(e => console.error('❌ [scoped] Email error:', e.message)) : Promise.resolve(),
-            u.line_user_id ? sendLineMessage(u.line_user_id, lineReport).catch(e => console.error('❌ [scoped] LINE error:', e.message)) : Promise.resolve(),
+            (sendEmail && u.email)        ? transporter.sendMail({ from: '"OpsManager App" <maintenance.app.tkp@gmail.com>', to: u.email, subject: emailSubj, html: htmlBody }).catch(e => console.error('❌ [scoped] Email error:', e.message)) : Promise.resolve(),
+            (sendLine  && u.line_user_id) ? sendLineMessage(u.line_user_id, lineReport).catch(e => console.error('❌ [scoped] LINE error:', e.message)) : Promise.resolve(),
             u.device_token ? admin.messaging().send({ token: u.device_token, notification: { title: pushTitle, body: pushBody }, webpush: { fcmOptions: { link: '/' } } }).catch(e => console.error('❌ [scoped] FCM error:', e.message)) : Promise.resolve(),
         ]);
     }
@@ -4416,18 +4479,36 @@ app.post('/webhook/line', (req, res) => {
     // We must respond 200 OK immediately — for both verification pings and real events.
     res.sendStatus(200);
 
+    console.log('📲 LINE webhook received. Body:', JSON.stringify(req.body));
+
     const events = req.body?.events || [];
+    if (events.length === 0) {
+        console.log('📲 LINE webhook: no events in payload (likely a verification ping).');
+    }
+
     events.forEach(event => {
         console.log('📲 LINE webhook event:', JSON.stringify(event));
 
-        if (event.type === 'message' && event.message?.type === 'text') {
-            const replyToken = event.replyToken;
-            const userId = event.source?.userId;
+        if (event.type !== 'message' || event.message?.type !== 'text') {
+            console.log(`📲 LINE webhook: skipping event type="${event.type}", messageType="${event.message?.type}"`);
+            return;
+        }
 
-            console.log('Attempting to reply to:', userId);
+        const replyToken = event.replyToken;
+        const userId = event.source?.userId;
 
-            if (!replyToken || !process.env.LINE_CHANNEL_ACCESS_TOKEN) return;
+        console.log(`📲 LINE text message from userId="${userId}", replyToken="${replyToken}"`);
 
+        if (!replyToken) {
+            console.error('⚠️ LINE webhook: replyToken is missing — cannot reply.');
+            return;
+        }
+        if (!process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+            console.error('⚠️ LINE webhook: LINE_CHANNEL_ACCESS_TOKEN env var is not set — aborting reply.');
+            return;
+        }
+
+        try {
             const https = require('https');
             const body = JSON.stringify({
                 replyToken,
@@ -4448,15 +4529,17 @@ app.post('/webhook/line', (req, res) => {
                 lineRes.on('data', chunk => data += chunk);
                 lineRes.on('end', () => {
                     if (lineRes.statusCode >= 200 && lineRes.statusCode < 300) {
-                        console.log(`✅ LINE reply sent to ${userId}`);
+                        console.log(`✅ LINE reply sent to userId="${userId}"`);
                     } else {
-                        console.error(`⚠️ LINE reply API error (${lineRes.statusCode}):`, data);
+                        console.error(`⚠️ LINE reply API error (${lineRes.statusCode}) for userId="${userId}":`, data);
                     }
                 });
             });
-            reqLine.on('error', err => console.error('⚠️ LINE reply request failed:', err.message));
+            reqLine.on('error', err => console.error('⚠️ LINE reply request network error:', err.message));
             reqLine.write(body);
             reqLine.end();
+        } catch (err) {
+            console.error('⚠️ LINE webhook: unexpected error while sending reply:', err.message);
         }
     });
 });
@@ -4565,6 +4648,7 @@ async function resolveCallerScope(reqUser, targetCompanyId = null) {
 app.get('/locations/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { role, company_id, area_id } = req.user;
+        const { location_id: filterLocationId } = req.query;
         const ALLOWED = ['id', 'name_he', 'name_en', 'name_th', 'code', 'address'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
@@ -4583,6 +4667,12 @@ app.get('/locations/export', authenticateToken, requireAdmin, async (req, res) =
             else if (area_id)  { query += ` AND locations.area_id    = $${pi++}`; params.push(area_id);    }
             else               { query += ' AND 1=0'; }
         }
+
+        if (filterLocationId && filterLocationId !== 'all') {
+            query += ` AND locations.id = $${pi++}`;
+            params.push(parseInt(filterLocationId, 10));
+        }
+
         query += ' ORDER BY locations.name ASC';
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -4696,6 +4786,7 @@ app.post('/locations/bulk-import', authenticateToken, requireAdmin, async (req, 
 app.get('/categories/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { role, company_id, area_id } = req.user;
+        const { category_id: filterCategoryId } = req.query;
         const ALLOWED = ['id', 'name_he', 'name_en', 'name_th', 'code'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
@@ -4712,6 +4803,12 @@ app.get('/categories/export', authenticateToken, requireAdmin, async (req, res) 
             else if (area_id)  { query += ` AND categories.area_id    = $${pi++}`; params.push(area_id);    }
             else               { query += ' AND 1=0'; }
         }
+
+        if (filterCategoryId && filterCategoryId !== 'all') {
+            query += ` AND categories.id = $${pi++}`;
+            params.push(parseInt(filterCategoryId, 10));
+        }
+
         query += ' ORDER BY categories.name ASC';
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -4805,6 +4902,7 @@ app.post('/categories/bulk-import', authenticateToken, requireAdmin, async (req,
 app.get('/assets/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { role, company_id, area_id } = req.user;
+        const { category_id: filterCategoryId } = req.query;
         const ALLOWED = ['id', 'name_he', 'name_en', 'name_th', 'code', 'category_id', 'location_id'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
@@ -4821,6 +4919,12 @@ app.get('/assets/export', authenticateToken, requireAdmin, async (req, res) => {
             else if (area_id)  { query += ` AND assets.area_id    = $${pi++}`; params.push(area_id);    }
             else               { query += ' AND 1=0'; }
         }
+
+        if (filterCategoryId && filterCategoryId !== 'all') {
+            query += ` AND assets.category_id = $${pi++}`;
+            params.push(parseInt(filterCategoryId, 10));
+        }
+
         query += ' ORDER BY assets.code';
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -4963,6 +5067,7 @@ app.post('/assets/bulk-import', authenticateToken, requireAdmin, async (req, res
 app.get('/managers/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { role, company_id, area_id } = req.user;
+        const { user_ids } = req.query;
         const ALLOWED = ['id', 'full_name', 'email', 'phone'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
@@ -4979,6 +5084,15 @@ app.get('/managers/export', authenticateToken, requireAdmin, async (req, res) =>
             else if (area_id)  { query += ` AND u.area_id    = $${pi++}`; params.push(area_id);    }
             else               { query += ' AND 1=0'; }
         }
+
+        if (user_ids) {
+            const ids = user_ids.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+            if (ids.length > 0) {
+                query += ` AND u.id = ANY($${pi++}::int[])`;
+                params.push(ids);
+            }
+        }
+
         query += ' ORDER BY u.full_name';
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -5098,6 +5212,7 @@ app.post('/managers/bulk-import', authenticateToken, requireAdmin, async (req, r
 app.get('/employees/export', authenticateToken, requireAdmin, async (req, res) => {
     try {
         const { role, company_id, area_id, id: callerId } = req.user;
+        const { user_ids } = req.query;
         const ALLOWED = ['id', 'full_name', 'email', 'phone'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
@@ -5118,6 +5233,15 @@ app.get('/employees/export', authenticateToken, requireAdmin, async (req, res) =
             else if (area_id)  { query += ` AND u.area_id    = $${pi++}`; params.push(area_id);    }
             else               { query += ' AND 1=0'; }
         }
+
+        if (user_ids) {
+            const ids = user_ids.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+            if (ids.length > 0) {
+                query += ` AND u.id = ANY($${pi++}::int[])`;
+                params.push(ids);
+            }
+        }
+
         query += ' ORDER BY u.full_name';
         const result = await pool.query(query, params);
         res.json(result.rows);

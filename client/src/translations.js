@@ -7,21 +7,22 @@ export const translations = {
     nav_team: "Team",
     nav_config: "Config",
     nav_profile: "Profile",
-    nav_companies: "Companies",
-    companies_tab: "Companies",
-    companies_subtitle: "Manage all your tenant companies",
-    create_company_btn: "New Company",
-    create_company: "Create Company",
-    edit_company: "Edit Company",
-    company_name_label: "Company Name",
+    nav_companies: "Departments",
+    nav_help: "Help",
+    companies_tab: "Departments",
+    companies_subtitle: "Manage all your tenant departments",
+    create_company_btn: "Add Department",
+    create_company: "Add Department",
+    edit_company: "Edit Department",
+    company_name_label: "Department Name",
     company_name_placeholder: "e.g. Acme Corp",
-    company_name_required: "Company name is required",
+    company_name_required: "Department name is required",
     company_logo_label: "Logo (optional)",
     company_id_label: "ID",
-    company_detail_subtitle: "Company Dashboard",
-    no_companies: "No companies yet",
-    create_first_company: "Create your first company to get started",
-    confirm_delete_company: "Delete company",
+    company_detail_subtitle: "Department Dashboard",
+    no_companies: "No departments yet",
+    create_first_company: "Create your first department to get started",
+    confirm_delete_company: "Delete department",
     managers_label: "Managers",
     employees_label: "Employees",
     no_managers: "No managers assigned",
@@ -58,6 +59,7 @@ export const translations = {
     reset_password_success: "Password updated! You can now log in.",
     reset_password_invalid_token: "Invalid or expired reset code.",
     reset_back_to_login: "Back to Login",
+    back: "Back",
 
     // --- General Actions ---
     save: "Save",
@@ -449,7 +451,19 @@ export const translations = {
     // --- Profile multilingual name labels ---
     name_he_placeholder: "Name in Hebrew",
     name_en_placeholder: "Name in English",
-    name_th_placeholder: "ชื่อภาษาไทย"
+    name_th_placeholder: "ชื่อภาษาไทย",
+
+    // --- Task i18n fixes ---
+    assets_title: "Asset Info",
+    urgency_high: "High",
+    urgency_normal: "Normal",
+    urgency_low: "Low",
+    delete_series_btn: "Delete Entire Series",
+    delete_task_btn: "Delete Task",
+    recurring_task_suffix: "Recurring",
+    delete_series_confirm: "Delete this task and all future recurring instances in this series?",
+    delete_task_confirm: "Delete this task permanently?",
+    error_completing_task: "Error completing task.",
   },
 
   // --- Hebrew ---
@@ -460,21 +474,22 @@ export const translations = {
     nav_team: "הצוות שלי",
     nav_config: "הגדרות",
     nav_profile: "פרופיל",
-    nav_companies: "חברות",
-    companies_tab: "חברות",
-    companies_subtitle: "ניהול כל חברות הדיירים שלך",
-    create_company_btn: "חברה חדשה",
-    create_company: "יצירת חברה",
-    edit_company: "עריכת חברה",
-    company_name_label: "שם החברה",
+    nav_companies: "מחלקות",
+    nav_help: "עזרה",
+    companies_tab: "מחלקות",
+    companies_subtitle: "ניהול כל מחלקות הדיירים שלך",
+    create_company_btn: "הוספת מחלקה",
+    create_company: "הוספת מחלקה",
+    edit_company: "עריכת מחלקה",
+    company_name_label: "שם מחלקה",
     company_name_placeholder: "לדוגמה: אקמה בע״מ",
-    company_name_required: "שם החברה הוא שדה חובה",
+    company_name_required: "שם המחלקה הוא שדה חובה",
     company_logo_label: "לוגו (אופציונלי)",
     company_id_label: "מזהה",
-    company_detail_subtitle: "לוח בקרה של החברה",
-    no_companies: "אין חברות עדיין",
-    create_first_company: "צור את החברה הראשונה שלך כדי להתחיל",
-    confirm_delete_company: "מחיקת חברה",
+    company_detail_subtitle: "לוח בקרה של המחלקה",
+    no_companies: "אין מחלקות עדיין",
+    create_first_company: "צור את המחלקה הראשונה שלך כדי להתחיל",
+    confirm_delete_company: "מחיקת מחלקה",
     managers_label: "מנהלים",
     employees_label: "עובדים",
     no_managers: "אין מנהלים משויכים",
@@ -511,6 +526,7 @@ export const translations = {
     reset_password_success: "הסיסמה עודכנה! כעת ניתן להתחבר.",
     reset_password_invalid_token: "קוד איפוס לא תקין או פג תוקף.",
     reset_back_to_login: "חזרה להתחברות",
+    back: "חזור",
 
     // --- General Actions ---
     save: "שמור",
@@ -902,7 +918,19 @@ export const translations = {
     // --- Profile multilingual name labels ---
     name_he_placeholder: "שם בעברית",
     name_en_placeholder: "Name in English",
-    name_th_placeholder: "ชื่อภาษาไทย"
+    name_th_placeholder: "ชื่อภาษาไทย",
+
+    // --- Task i18n fixes ---
+    assets_title: "פרטי ציוד",
+    urgency_high: "גבוה",
+    urgency_normal: "רגיל",
+    urgency_low: "נמוך",
+    delete_series_btn: "מחק את כל הסדרה",
+    delete_task_btn: "מחק משימה",
+    recurring_task_suffix: "חוזר",
+    delete_series_confirm: "למחוק משימה זו וכל המופעים העתידיים בסדרה?",
+    delete_task_confirm: "למחוק משימה זו לצמיתות?",
+    error_completing_task: "שגיאה בהשלמת המשימה.",
   },
 
   // --- Thai ---
@@ -914,6 +942,7 @@ export const translations = {
     nav_config: "การตั้งค่า",
     nav_profile: "โปรไฟล์",
     nav_companies: "บริษัท",
+    nav_help: "ช่วยเหลือ",
     companies_tab: "บริษัท",
     companies_subtitle: "จัดการบริษัทผู้เช่าทั้งหมด",
     create_company_btn: "บริษัทใหม่",
@@ -964,6 +993,7 @@ export const translations = {
     reset_password_success: "อัปเดตรหัสผ่านแล้ว! ตอนนี้คุณสามารถเข้าสู่ระบบได้",
     reset_password_invalid_token: "รหัสรีเซ็ตไม่ถูกต้องหรือหมดอายุแล้ว",
     reset_back_to_login: "กลับไปเข้าสู่ระบบ",
+    back: "กลับ",
 
     // --- General Actions ---
     save: "บันทึก",
@@ -1393,6 +1423,18 @@ export const translations = {
     // --- Profile multilingual name labels ---
     name_he_placeholder: "ชื่อภาษาฮีบรู",
     name_en_placeholder: "Name in English",
-    name_th_placeholder: "ชื่อภาษาไทย"
+    name_th_placeholder: "ชื่อภาษาไทย",
+
+    // --- Task i18n fixes ---
+    assets_title: "ข้อมูลทรัพย์สิน",
+    urgency_high: "สูง",
+    urgency_normal: "ปกติ",
+    urgency_low: "ต่ำ",
+    delete_series_btn: "ลบทั้งชุดงาน",
+    delete_task_btn: "ลบงาน",
+    recurring_task_suffix: "ประจำ",
+    delete_series_confirm: "ลบงานนี้และงานที่เกิดซ้ำในอนาคตทั้งหมดในชุดนี้?",
+    delete_task_confirm: "ลบงานนี้ถาวร?",
+    error_completing_task: "เกิดข้อผิดพลาดในการทำงาน",
   }
 };
