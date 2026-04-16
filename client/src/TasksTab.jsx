@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
@@ -806,20 +807,21 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
     const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.includes('video'));
     const openMedia = (url) => window.open(url, '_blank');
 
-    if (showSuccess) return (
-        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]">
+    if (showSuccess) return createPortal(
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[9999]">
             <div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center">
                 <Check size={40} className="text-green-600 mb-2"/>
                 <h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 
     const displayCreatorName = task.creator_name || '—';
 
-    return (
+    return createPortal(
         <>
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[100] backdrop-blur-sm p-4">
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[9999] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden shadow-xl border border-gray-200 animate-slide-up max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b border-gray-200 flex justify-between items-start sticky top-0 bg-white z-10">
                     <div>
@@ -970,7 +972,8 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                 t={t}
             />
         )}
-        </>
+        </>,
+        document.body
     );
 };
 
@@ -1010,17 +1013,18 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
         }
     };
 
-    if (showSuccess) return (
-        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[130]">
+    if (showSuccess) return createPortal(
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[9999]">
             <div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center">
                 <Check size={40} className="text-[#714B67] mb-2"/>
                 <h2 className="text-xl font-bold">{t.stuck_sent || 'Reported!'}</h2>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 
-    return (
-        <div className="fixed inset-0 bg-black/60 flex justify-center items-end sm:items-center z-[120] backdrop-blur-sm p-4">
+    return createPortal(
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[9999] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-md rounded-2xl overflow-hidden shadow-xl border border-gray-200 animate-slide-up">
                 <div className="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-base font-bold text-slate-800">{t.stuck_task_modal_title || 'Report Stuck Task'}</h2>
@@ -1055,7 +1059,8 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
