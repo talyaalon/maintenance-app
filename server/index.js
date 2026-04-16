@@ -2967,21 +2967,42 @@ app.put('/tasks/bulk-update-status', authenticateToken, async (req, res) => {
 // ── Edit task (single instance or full pending recurring set) ─────────────────
 // Auth: BIG_BOSS or the task creator may edit. Others receive 403.
 // Body fields (all optional, at least one required):
-//   title_en, title_he, title_th, description, urgency
+//   title_en, title_he, title_th, description, urgency, due_date
 //   update_mode: 'single' (default) | 'set'
+//   media: file upload (image/video) — prepended to images array
 // 'set' only applies to recurring tasks; it updates all PENDING siblings
 // sharing the same title + worker_id with due_date >= this task's due_date.
+// For 'set' + due_date: all future siblings are shifted by the same time delta.
 // NOTE: declared after /tasks/bulk-update-status so the literal path wins over :id.
-app.put('/tasks/:id', authenticateToken, async (req, res) => {
+app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     const taskId = parseInt(req.params.id);
     if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid task id' });
 
     const { role, id: userId } = req.user;
-    const { title_en, title_he, title_th, description, urgency, worker_id, category_id, location_id, asset_id, update_mode } = req.body;
+
+    // Normalise body fields — FormData sends empty strings for omitted fields
+    const norm = (v) => (v !== undefined && v !== '' ? v : undefined);
+    const { update_mode } = req.body;
+    const title_en   = norm(req.body.title_en);
+    const title_he   = norm(req.body.title_he);
+    const title_th   = norm(req.body.title_th);
+    const description = req.body.description !== undefined ? req.body.description : undefined;
+    const urgency    = norm(req.body.urgency);
+    const worker_id  = norm(req.body.worker_id);
+    const category_id = norm(req.body.category_id);
+    const location_id = norm(req.body.location_id);
+    const asset_id   = norm(req.body.asset_id);
+    const due_date   = norm(req.body.due_date);
+
     const mode = update_mode === 'set' ? 'set' : 'single';
+
+    // Handle uploaded media file
+    const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
+    const newMediaUrl  = uploadedFile ? (uploadedFile.secure_url || uploadedFile.path) : null;
 
     // Build SET clause from whichever fields were provided.
     // title mirrors title_en (both columns kept in sync).
+    // due_date is excluded here for 'set' mode (handled as delta shift below).
     const sets = [];
     const vals = [];
     let p = 1;
@@ -2999,8 +3020,16 @@ app.put('/tasks/:id', authenticateToken, async (req, res) => {
     if (category_id !== undefined) { sets.push(`category_id = $${p++}`); vals.push(category_id || null); }
     if (location_id !== undefined) { sets.push(`location_id = $${p++}`); vals.push(location_id || null); }
     if (asset_id !== undefined)    { sets.push(`asset_id = $${p++}`);    vals.push(asset_id || null); }
+    // In single mode, due_date is applied directly in the SET clause
+    if (due_date !== undefined && mode === 'single') {
+        sets.push(`due_date = $${p++}`);
+        vals.push(due_date);
+    }
 
-    if (sets.length === 0) {
+    const hasDueDateChange = due_date !== undefined;
+    const hasChanges = sets.length > 0 || newMediaUrl || hasDueDateChange;
+
+    if (!hasChanges) {
         return res.status(400).json({ error: 'No updatable fields provided' });
     }
 
@@ -3027,23 +3056,63 @@ app.put('/tasks/:id', authenticateToken, async (req, res) => {
         const isRecurring = task.title && task.title.endsWith(' (Recurring)');
 
         if (mode === 'set' && isRecurring) {
-            // Update this task + all future PENDING siblings (same title + worker).
-            // Match on OLD title before rename so siblings are found correctly.
-            const result = await client.query(
-                `UPDATE tasks
-                 SET ${sets.join(', ')}
-                 WHERE title = $${p} AND worker_id = $${p + 1}
-                   AND status = 'PENDING' AND due_date >= $${p + 2}`,
-                [...vals, task.title, task.worker_id, task.due_date]
-            );
-            updated = result.rowCount;
+            // ── Update all PENDING siblings (same title + worker, due_date >= current) ──
+
+            // Apply non-due_date field changes across all siblings
+            if (sets.length > 0) {
+                const result = await client.query(
+                    `UPDATE tasks
+                     SET ${sets.join(', ')}
+                     WHERE title = $${p} AND worker_id = $${p + 1}
+                       AND status = 'PENDING' AND due_date >= $${p + 2}`,
+                    [...vals, task.title, task.worker_id, task.due_date]
+                );
+                updated = result.rowCount;
+            }
+
+            // Shift due_dates by delta so the recurring pattern is preserved
+            if (hasDueDateChange && due_date) {
+                const deltaSeconds = Math.round(
+                    (new Date(due_date).getTime() - new Date(task.due_date).getTime()) / 1000
+                );
+                if (deltaSeconds !== 0) {
+                    const shiftResult = await client.query(
+                        `UPDATE tasks
+                         SET due_date = due_date + ($1 * interval '1 second')
+                         WHERE title = $2 AND worker_id = $3
+                           AND status = 'PENDING' AND due_date >= $4`,
+                        [deltaSeconds, task.title, task.worker_id, task.due_date]
+                    );
+                    updated = Math.max(updated, shiftResult.rowCount);
+                }
+            }
+
+            // Media: prepend to the specific task's images array only
+            if (newMediaUrl) {
+                await client.query(
+                    `UPDATE tasks SET images = array_prepend($1, COALESCE(images, '{}')) WHERE id = $2`,
+                    [newMediaUrl, taskId]
+                );
+                if (updated === 0) updated = 1;
+            }
         } else {
-            // Single-instance update
-            const result = await client.query(
-                `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${p}`,
-                [...vals, taskId]
-            );
-            updated = result.rowCount;
+            // ── Single-instance update ──
+            const allSets = [...sets];
+            const allVals = [...vals];
+            let pp = p;
+
+            if (newMediaUrl) {
+                allSets.push(`images = array_prepend($${pp++}, COALESCE(images, '{}'))`);
+                allVals.push(newMediaUrl);
+            }
+
+            if (allSets.length > 0) {
+                const result = await client.query(
+                    `UPDATE tasks SET ${allSets.join(', ')} WHERE id = $${pp}`,
+                    [...allVals, taskId]
+                );
+                updated = result.rowCount;
+            }
         }
 
         await client.query('COMMIT');

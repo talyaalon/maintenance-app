@@ -1,18 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check } from 'lucide-react';
+import { X, Check, Paperclip } from 'lucide-react';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
+// Format a UTC timestamp to Bangkok-timezone datetime-local string (YYYY-MM-DDTHH:mm)
+const toDatetimeLocal = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+        const fmt = new Intl.DateTimeFormat('sv-SE', {
+            timeZone: 'Asia/Bangkok',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit',
+        });
+        return fmt.format(new Date(dateStr)).replace(' ', 'T');
+    } catch { return ''; }
+};
+
 const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }) => {
-    const isRecurringSeries = task.recurring_group_id != null;
+    // Recurring series: check recurring_group_id first, fall back to title suffix
+    const isRecurringSeries =
+        task.recurring_group_id != null ||
+        !!(task.title && task.title.endsWith(' (Recurring)')) ||
+        !!(task.title_en && task.title_en.endsWith(' (Recurring)'));
 
     const stripRecurringSuffix = (str) => (str || '').replace(' (Recurring)', '').replace(' (מחזורי)', '').replace(' (เกิดซ้ำ)', '');
 
     const userRole = user?.role ? String(user.role).toUpperCase() : '';
     const isBigBoss = userRole === 'BIG_BOSS';
     const isManager = userRole === 'MANAGER' || userRole === 'COMPANY_MANAGER';
-    const isEmployee = !isBigBoss && !isManager;
 
     const [formData, setFormData] = useState({
         title_en: stripRecurringSuffix(task.title_en || task.title || ''),
@@ -23,6 +39,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
         worker_id: task.worker_id || '',
         location_id: task.location_id || '',
         asset_id: task.asset_id || '',
+        due_date: toDatetimeLocal(task.due_date),
     });
 
     const [selectedCategory, setSelectedCategory] = useState('');
@@ -30,6 +47,9 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     const [locations, setLocations] = useState([]);
     const [categories, setCategories] = useState([]);
     const [assets, setAssets] = useState([]);
+
+    const [mediaFile, setMediaFile] = useState(null);
+    const fileInputRef = useRef(null);
 
     const [showLangFields, setShowLangFields] = useState(!!(task.title_he || task.title_th));
     const [recurringPrompt, setRecurringPrompt] = useState(false);
@@ -86,25 +106,51 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
         setLoading(true);
         setError('');
         try {
-            const res = await fetch(`${BASE}/tasks/${task.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    title_en: formData.title_en,
-                    title_he: formData.title_he,
-                    title_th: formData.title_th,
-                    description: formData.description,
-                    urgency: formData.urgency,
-                    worker_id: formData.worker_id || null,
-                    location_id: formData.location_id || null,
-                    asset_id: formData.asset_id || null,
-                    category_id: selectedCategory || null,
-                    update_mode,
-                }),
-            });
+            let res;
+            if (mediaFile) {
+                // Multipart submission when a new file is attached
+                const fd = new FormData();
+                fd.append('title_en', formData.title_en);
+                fd.append('title_he', formData.title_he);
+                fd.append('title_th', formData.title_th);
+                fd.append('description', formData.description);
+                fd.append('urgency', formData.urgency);
+                fd.append('worker_id', formData.worker_id || '');
+                fd.append('location_id', formData.location_id || '');
+                fd.append('asset_id', formData.asset_id || '');
+                fd.append('category_id', selectedCategory || '');
+                fd.append('update_mode', update_mode);
+                if (formData.due_date) fd.append('due_date', formData.due_date);
+                fd.append('media', mediaFile);
+
+                res = await fetch(`${BASE}/tasks/${task.id}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: fd,
+                });
+            } else {
+                res = await fetch(`${BASE}/tasks/${task.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        title_en: formData.title_en,
+                        title_he: formData.title_he,
+                        title_th: formData.title_th,
+                        description: formData.description,
+                        urgency: formData.urgency,
+                        worker_id: formData.worker_id || null,
+                        location_id: formData.location_id || null,
+                        asset_id: formData.asset_id || null,
+                        category_id: selectedCategory || null,
+                        update_mode,
+                        due_date: formData.due_date || undefined,
+                    }),
+                });
+            }
+
             if (res.ok) {
                 setShowSuccess(true);
                 setTimeout(() => { setShowSuccess(false); onRefresh(); onClose(); }, 1500);
@@ -164,6 +210,24 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                             <option value="High">{t.urgent_label || 'High'}</option>
                             <option value="Low">{t.urgency_low || 'Low'}</option>
                         </select>
+                    </div>
+
+                    {/* Due Date */}
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+                            {t.due_date_label || 'Due Date'}
+                        </label>
+                        <input
+                            type="datetime-local"
+                            className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]"
+                            value={formData.due_date}
+                            onChange={e => setFormData(p => ({ ...p, due_date: e.target.value }))}
+                        />
+                        {isRecurringSeries && (
+                            <p className="text-xs text-amber-600 mt-1">
+                                {t.recurring_date_hint || 'For "Entire Set": future tasks will be shifted by the same time difference.'}
+                            </p>
+                        )}
                     </div>
 
                     {/* Assigned Worker */}
@@ -308,6 +372,37 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                             value={formData.description}
                             onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
                         />
+                    </div>
+
+                    {/* Media Upload */}
+                    <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+                            {t.media_label || 'Attach Media (Optional)'}
+                        </label>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*,video/*"
+                            className="hidden"
+                            onChange={e => setMediaFile(e.target.files[0] || null)}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-[#714B67] hover:text-[#714B67] transition w-full justify-center"
+                        >
+                            <Paperclip size={16}/>
+                            {mediaFile ? mediaFile.name : (t.attach_file_btn || 'Choose image or video...')}
+                        </button>
+                        {mediaFile && (
+                            <button
+                                type="button"
+                                onClick={() => { setMediaFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                                className="mt-1 text-xs text-red-500 hover:underline"
+                            >
+                                {t.remove_file || 'Remove'}
+                            </button>
+                        )}
                     </div>
 
                     {/* Error */}
