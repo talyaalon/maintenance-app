@@ -29,6 +29,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     const userRole = user?.role ? String(user.role).toUpperCase() : '';
     const isBigBoss = userRole === 'BIG_BOSS';
     const isManager = userRole === 'MANAGER' || userRole === 'COMPANY_MANAGER';
+    const userCompanyId = user?.company_id ?? null;
 
     // ── Frequency helpers ─────────────────────────────────────────────────────
     const getInitialFrequency = () => {
@@ -165,8 +166,33 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
         }
     }, [assets]);
 
+    // ── Cascading filter by worker's company_id (mirrors CreateTaskForm) ────────
+    let targetCompanyId = null;
+    if (isBigBoss && formData.worker_id) {
+        const selectedWorker = workers.find(u => String(u?.id) === String(formData.worker_id));
+        targetCompanyId = selectedWorker?.company_id ?? null;
+    } else if (!isBigBoss && userCompanyId) {
+        targetCompanyId = userCompanyId;
+    }
+
+    const filteredLocations = (() => {
+        if (!targetCompanyId) return isBigBoss ? [] : locations;
+        return locations.filter(l => l?.company_id == null || String(l?.company_id) === String(targetCompanyId));
+    })();
+
+    const filteredCategories = (() => {
+        if (!targetCompanyId) return isBigBoss ? [] : categories;
+        return categories.filter(c => c?.company_id == null || String(c?.company_id) === String(targetCompanyId));
+    })();
+
     const filteredAssets = selectedCategory
-        ? assets.filter(a => String(a?.category_id) === String(selectedCategory))
+        ? assets.filter(a => {
+            if (!a) return false;
+            const categoryMatch = String(a?.category_id) === String(selectedCategory);
+            if (!categoryMatch) return false;
+            if (!targetCompanyId) return true;
+            return a?.company_id == null || String(a?.company_id) === String(targetCompanyId);
+        })
         : [];
 
     // ── Submit ────────────────────────────────────────────────────────────────
@@ -434,7 +460,18 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                             <select
                                 className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]"
                                 value={formData.worker_id}
-                                onChange={e => setFormData(p => ({ ...p, worker_id: e.target.value }))}
+                                onChange={e => {
+                                    const newWorkerId = e.target.value;
+                                    const prevWorker = workers.find(u => String(u?.id) === String(formData.worker_id));
+                                    const newWorker  = workers.find(u => String(u?.id) === String(newWorkerId));
+                                    const deptChanged = prevWorker?.company_id !== newWorker?.company_id;
+                                    setFormData(p => ({
+                                        ...p,
+                                        worker_id: newWorkerId,
+                                        ...(deptChanged && { location_id: '', asset_id: '' }),
+                                    }));
+                                    if (deptChanged) setSelectedCategory('');
+                                }}
                             >
                                 <option value="">{t.select_worker || 'Select Worker...'}</option>
                                 {workers.map(u => (
@@ -445,30 +482,37 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                     )}
 
                     {/* Location */}
-                    {locations.length > 0 && (
+                    {(isBigBoss || locations.length > 0) && (
                         <div>
                             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
                                 {t.location || 'Location'}
                             </label>
                             <select
-                                className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]"
+                                className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67] disabled:opacity-50"
                                 value={formData.location_id}
                                 onChange={e => setFormData(p => ({ ...p, location_id: e.target.value }))}
+                                disabled={isBigBoss && !formData.worker_id}
                             >
                                 <option value="">{t.select_location || 'Select Location...'}</option>
-                                {locations.map(l => (
+                                {filteredLocations.map(l => (
                                     <option key={l.id} value={l.id}>{l['name_' + lang] || l.name_en || l.name}</option>
                                 ))}
                             </select>
+                            {isBigBoss && !formData.worker_id && (
+                                <p className="text-xs text-gray-400 mt-1">{t.select_worker_first || 'Select a worker first'}</p>
+                            )}
                         </div>
                     )}
 
                     {/* Category + Asset */}
-                    {categories.length > 0 && (
-                        <div>
+                    {(isBigBoss || categories.length > 0) && (
+                        <div className={isBigBoss && !formData.worker_id ? 'opacity-50 pointer-events-none' : ''}>
                             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
                                 {t.select_asset_title || 'Asset (Optional)'}
                             </label>
+                            {isBigBoss && !formData.worker_id && (
+                                <p className="text-xs text-gray-400 mb-1">{t.select_worker_first || 'Select a worker first'}</p>
+                            )}
                             <div className="flex gap-2">
                                 <select
                                     className="flex-1 p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67] text-sm"
@@ -479,7 +523,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                                     }}
                                 >
                                     <option value="">{t.category_label || 'Category'}</option>
-                                    {categories.map(c => (
+                                    {filteredCategories.map(c => (
                                         <option key={c.id} value={c.id}>{c['name_' + lang] || c.name_en || c.name}</option>
                                     ))}
                                 </select>
