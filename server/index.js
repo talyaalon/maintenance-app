@@ -2980,19 +2980,28 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
 
     const { role, id: userId } = req.user;
 
-    // Normalise body fields — FormData sends empty strings for omitted fields
+    // Normalise body fields — FormData sends everything as strings
     const norm = (v) => (v !== undefined && v !== '' ? v : undefined);
+    // Parse nullable integer IDs from FormData strings.
+    // Returns: undefined (field absent → no update), null (explicit clear), or integer.
+    const parseNullableInt = (v) => {
+        if (v === undefined || v === '') return undefined;
+        if (v === 'null' || v === 'undefined') return null;
+        const n = parseInt(v, 10);
+        return isNaN(n) ? null : n;
+    };
     const { update_mode } = req.body;
     const title_en   = norm(req.body.title_en);
     const title_he   = norm(req.body.title_he);
     const title_th   = norm(req.body.title_th);
     const description = req.body.description !== undefined ? req.body.description : undefined;
     const urgency    = norm(req.body.urgency);
-    const worker_id  = norm(req.body.worker_id);
-    const category_id = norm(req.body.category_id);
-    const location_id = norm(req.body.location_id);
-    const asset_id   = norm(req.body.asset_id);
+    const worker_id   = parseNullableInt(req.body.worker_id);
+    const category_id = parseNullableInt(req.body.category_id);
+    const location_id = parseNullableInt(req.body.location_id);
+    const asset_id    = parseNullableInt(req.body.asset_id);
     const due_date   = norm(req.body.due_date);
+    const removeMedia = req.body.remove_existing_media === 'true';
 
     const mode = update_mode === 'set' ? 'set' : 'single';
 
@@ -3016,10 +3025,10 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     if (title_th !== undefined)    { sets.push(`title_th = $${p++}`);    vals.push(title_th); }
     if (description !== undefined) { sets.push(`description = $${p++}`); vals.push(description); }
     if (urgency !== undefined)     { sets.push(`urgency = $${p++}`);     vals.push(urgency); }
-    if (worker_id !== undefined)   { sets.push(`worker_id = $${p++}`);   vals.push(worker_id || null); }
-    if (category_id !== undefined) { sets.push(`category_id = $${p++}`); vals.push(category_id || null); }
-    if (location_id !== undefined) { sets.push(`location_id = $${p++}`); vals.push(location_id || null); }
-    if (asset_id !== undefined)    { sets.push(`asset_id = $${p++}`);    vals.push(asset_id || null); }
+    if (worker_id !== undefined)   { sets.push(`worker_id = $${p++}`);   vals.push(worker_id); }
+    if (category_id !== undefined) { sets.push(`category_id = $${p++}`); vals.push(category_id); }
+    if (location_id !== undefined) { sets.push(`location_id = $${p++}`); vals.push(location_id); }
+    if (asset_id !== undefined)    { sets.push(`asset_id = $${p++}`);    vals.push(asset_id); }
     // In single mode, due_date is applied directly in the SET clause
     if (due_date !== undefined && mode === 'single') {
         sets.push(`due_date = $${p++}`);
@@ -3027,6 +3036,10 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     }
 
     const hasDueDateChange = due_date !== undefined;
+    // Media removal: clear media_url/media_type when requested and no new file uploaded
+    if (removeMedia && !newMediaUrl) {
+        sets.push(`media_url = NULL`, `media_type = NULL`);
+    }
     const hasChanges = sets.length > 0 || newMediaUrl || hasDueDateChange;
 
     if (!hasChanges) {
@@ -3119,7 +3132,7 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
         res.json({ success: true, updated, mode });
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('edit task error:', err);
+        console.error('[PUT /tasks/:id] SQL Error:', err);
         res.status(500).json({ error: 'Error updating task' });
     } finally {
         client.release();
