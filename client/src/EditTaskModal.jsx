@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Paperclip } from 'lucide-react';
+import { X, Check, Paperclip, Calendar } from 'lucide-react';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -30,6 +30,45 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     const isBigBoss = userRole === 'BIG_BOSS';
     const isManager = userRole === 'MANAGER' || userRole === 'COMPANY_MANAGER';
 
+    // ── Frequency helpers ─────────────────────────────────────────────────────
+    const getInitialFrequency = () => {
+        if (!task.is_recurring && !task.recurring_type) return 'Once';
+        const rt = (task.recurring_type || '').trim();
+        if (!rt) return 'Once';
+        return rt.charAt(0).toUpperCase() + rt.slice(1);
+    };
+
+    const parseSelectedDays = () => {
+        if (!task.selected_days) return [1, 2, 3, 4, 5];
+        if (Array.isArray(task.selected_days)) return task.selected_days;
+        try { return JSON.parse(task.selected_days); } catch { return [1, 2, 3, 4, 5]; }
+    };
+
+    const parseQuarterlyDates = () => {
+        if (!task.quarterly_dates) return { Q1: '', Q2: '', Q3: '', Q4: '' };
+        try {
+            const yr = new Date().getFullYear();
+            let parsed = task.quarterly_dates;
+            if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+            if (Array.isArray(parsed)) {
+                const keys = ['Q1', 'Q2', 'Q3', 'Q4'];
+                const result = { Q1: '', Q2: '', Q3: '', Q4: '' };
+                parsed.forEach((ds, i) => {
+                    if (ds && ds.includes('/')) {
+                        const [day, month] = ds.split('/');
+                        result[keys[i]] = `${yr}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                    }
+                });
+                return result;
+            }
+            if (typeof parsed === 'object' && parsed !== null) return parsed;
+        } catch {}
+        return { Q1: '', Q2: '', Q3: '', Q4: '' };
+    };
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    const [frequency, setFrequency] = useState(getInitialFrequency);
+
     const [formData, setFormData] = useState({
         title_en: stripRecurringSuffix(task.title_en || task.title || ''),
         title_he: stripRecurringSuffix(task.title_he || ''),
@@ -40,6 +79,10 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
         location_id: task.location_id || '',
         asset_id: task.asset_id || '',
         due_date: toDatetimeLocal(task.due_date),
+        selected_days: parseSelectedDays(),
+        recurring_date: task.recurring_date || 1,
+        recurring_month: task.recurring_month || 0,
+        quarterly_dates: parseQuarterlyDates(),
     });
 
     const [selectedCategory, setSelectedCategory] = useState('');
@@ -49,6 +92,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     const [assets, setAssets] = useState([]);
 
     const [mediaFile, setMediaFile] = useState(null);
+    const [removeExistingMedia, setRemoveExistingMedia] = useState(false);
     const fileInputRef = useRef(null);
 
     const [showLangFields, setShowLangFields] = useState(!!(task.title_he || task.title_th));
@@ -57,6 +101,43 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     const [error, setError] = useState('');
     const [showSuccess, setShowSuccess] = useState(false);
 
+    // ── Day labels & quarter constraints (match CreateTaskForm) ───────────────
+    const daysEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const daysHe = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+    const currentDays = lang === 'he' ? daysHe : daysEn;
+
+    const quarterConstraints = [
+        { label: t.q1_label || 'Q1 (Jan–Mar)', min: '-01-01', max: '-03-31' },
+        { label: t.q2_label || 'Q2 (Apr–Jun)', min: '-04-01', max: '-06-30' },
+        { label: t.q3_label || 'Q3 (Jul–Sep)', min: '-07-01', max: '-09-30' },
+        { label: t.q4_label || 'Q4 (Oct–Dec)', min: '-10-01', max: '-12-31' },
+    ];
+    const currentYear = new Date().getFullYear();
+
+    // ── Frequency handlers ────────────────────────────────────────────────────
+    const handleFrequencyChange = (newFreq) => {
+        setFrequency(newFreq);
+        if (newFreq === 'Daily') {
+            setFormData(prev => ({ ...prev, selected_days: [1, 2, 3, 4, 5] }));
+        } else if (newFreq === 'Weekly') {
+            setFormData(prev => ({ ...prev, selected_days: [] }));
+        }
+    };
+
+    const toggleDay = (dayIndex) => {
+        if (frequency === 'Weekly') {
+            setFormData(prev => ({ ...prev, selected_days: [dayIndex] }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                selected_days: prev.selected_days.includes(dayIndex)
+                    ? prev.selected_days.filter(d => d !== dayIndex)
+                    : [...prev.selected_days, dayIndex],
+            }));
+        }
+    };
+
+    // ── Data fetching ─────────────────────────────────────────────────────────
     useEffect(() => {
         const headers = { 'Authorization': `Bearer ${token}` };
 
@@ -88,6 +169,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
         ? assets.filter(a => String(a?.category_id) === String(selectedCategory))
         : [];
 
+    // ── Submit ────────────────────────────────────────────────────────────────
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!formData.title_en.trim()) {
@@ -106,50 +188,64 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
         setLoading(true);
         setError('');
         try {
-            let res;
-            if (mediaFile) {
-                // Multipart submission when a new file is attached
-                const fd = new FormData();
-                fd.append('title_en', formData.title_en);
-                fd.append('title_he', formData.title_he);
-                fd.append('title_th', formData.title_th);
-                fd.append('description', formData.description);
-                fd.append('urgency', formData.urgency);
-                fd.append('worker_id', formData.worker_id || '');
-                fd.append('location_id', formData.location_id || '');
-                fd.append('asset_id', formData.asset_id || '');
-                fd.append('category_id', selectedCategory || '');
-                fd.append('update_mode', update_mode);
-                if (formData.due_date) fd.append('due_date', formData.due_date);
-                fd.append('media', mediaFile);
+            // Always use FormData so we can include media + remove flag
+            const fd = new FormData();
+            fd.append('title_en', formData.title_en);
+            fd.append('title_he', formData.title_he);
+            fd.append('title_th', formData.title_th);
+            fd.append('description', formData.description);
+            fd.append('urgency', formData.urgency);
+            fd.append('worker_id', formData.worker_id || '');
+            fd.append('location_id', formData.location_id || '');
+            fd.append('asset_id', formData.asset_id || '');
+            fd.append('category_id', selectedCategory || '');
+            fd.append('update_mode', update_mode);
 
-                res = await fetch(`${BASE}/tasks/${task.id}`, {
-                    method: 'PUT',
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    body: fd,
-                });
-            } else {
-                res = await fetch(`${BASE}/tasks/${task.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        title_en: formData.title_en,
-                        title_he: formData.title_he,
-                        title_th: formData.title_th,
-                        description: formData.description,
-                        urgency: formData.urgency,
-                        worker_id: formData.worker_id || null,
-                        location_id: formData.location_id || null,
-                        asset_id: formData.asset_id || null,
-                        category_id: selectedCategory || null,
-                        update_mode,
-                        due_date: formData.due_date || undefined,
-                    }),
-                });
+            // Convert Bangkok datetime-local to UTC ISO
+            if (formData.due_date) {
+                const dueDateUtc = new Date(formData.due_date + ':00+07:00').toISOString();
+                fd.append('due_date', dueDateUtc);
             }
+
+            // Frequency fields
+            if (frequency === 'Once') {
+                fd.append('is_recurring', 'false');
+            } else {
+                fd.append('is_recurring', 'true');
+                fd.append('recurring_type', frequency.toLowerCase());
+
+                if (frequency === 'Daily' || frequency === 'Weekly') {
+                    fd.append('selected_days', JSON.stringify(formData.selected_days));
+                } else if (frequency === 'Monthly') {
+                    fd.append('recurring_date', String(formData.recurring_date));
+                } else if (frequency === 'Quarterly') {
+                    const qdates = ['Q1', 'Q2', 'Q3', 'Q4'].map(q => {
+                        const d = formData.quarterly_dates[q];
+                        if (!d) return '';
+                        const dt = new Date(d);
+                        return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}`;
+                    });
+                    fd.append('quarterly_dates', JSON.stringify(qdates));
+                } else if (frequency === 'Yearly') {
+                    const dateObj = new Date(formData.due_date);
+                    fd.append('recurring_month', String(dateObj.getMonth()));
+                    fd.append('recurring_date', String(dateObj.getDate()));
+                }
+            }
+
+            // Media
+            if (removeExistingMedia) {
+                fd.append('remove_existing_media', 'true');
+            }
+            if (mediaFile) {
+                fd.append('media', mediaFile);
+            }
+
+            const res = await fetch(`${BASE}/tasks/${task.id}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: fd,
+            });
 
             if (res.ok) {
                 setShowSuccess(true);
@@ -172,6 +268,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
         }
     };
 
+    // ── Success overlay ───────────────────────────────────────────────────────
     if (showSuccess) return createPortal(
         <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[10000]">
             <div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center">
@@ -182,6 +279,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
         document.body
     );
 
+    // ── Render ────────────────────────────────────────────────────────────────
     return createPortal(
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[10000] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-md rounded-2xl overflow-hidden shadow-xl border border-gray-200 animate-slide-up max-h-[90vh] overflow-y-auto">
@@ -212,22 +310,119 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                         </select>
                     </div>
 
-                    {/* Due Date */}
-                    <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
-                            {t.due_date_label || 'Due Date'}
+                    {/* Frequency / Date — matches CreateTaskForm card exactly */}
+                    <div className="bg-white p-4 rounded-xl border border-gray-200">
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+                            <Calendar size={18}/> {t.frequency_label || 'Frequency / Date'}
                         </label>
-                        <input
-                            type="datetime-local"
-                            className="w-full p-3 border rounded-lg bg-gray-50 outline-none focus:border-[#714B67]"
-                            value={formData.due_date}
-                            onChange={e => setFormData(p => ({ ...p, due_date: e.target.value }))}
-                        />
-                        {isRecurringSeries && (
-                            <p className="text-xs text-amber-600 mt-1">
-                                {t.recurring_date_hint || 'For "Entire Set": future tasks will be shifted by the same time difference.'}
-                            </p>
-                        )}
+
+                        <select
+                            className="w-full p-2.5 border rounded-lg bg-white font-bold text-gray-700 mb-3 focus:ring-1 focus:ring-[#714B67] outline-none"
+                            value={frequency}
+                            onChange={e => handleFrequencyChange(e.target.value)}
+                        >
+                            <option value="Once">{t.freq_once || 'One Time (Specific Date)'}</option>
+                            <option value="Daily">{t.freq_daily || 'Daily (Mon–Fri)'}</option>
+                            <option value="Weekly">{t.freq_weekly || 'Weekly (One Day)'}</option>
+                            <option value="Monthly">{t.freq_monthly || 'Monthly (Repeats)'}</option>
+                            <option value="Quarterly">{t.freq_quarterly || 'Quarterly'}</option>
+                            <option value="Yearly">{t.freq_yearly || 'Yearly (Repeats)'}</option>
+                        </select>
+
+                        <div className="animate-fade-in">
+                            {/* Date/time picker — shown for Once and Yearly */}
+                            {!['Daily', 'Weekly', 'Monthly', 'Quarterly'].includes(frequency) && (
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 mb-1 block">
+                                        {frequency === 'Once' ? (t.pick_date || 'Pick Date & Time') : (t.start_date || 'Start Date')}
+                                    </label>
+                                    <input
+                                        type="datetime-local"
+                                        className="w-full p-2 border border-[#714B67]/30 rounded-lg bg-white appearance-none outline-none focus:ring-2 focus:ring-[#714B67]/30 min-w-0"
+                                        value={formData.due_date}
+                                        onChange={e => setFormData(p => ({ ...p, due_date: e.target.value }))}
+                                    />
+                                    {isRecurringSeries && (
+                                        <p className="text-xs text-amber-600 mt-1">
+                                            {t.recurring_date_hint || 'For "Entire Set": future tasks will be shifted by the same time difference.'}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Day bubbles — Daily (multi) / Weekly (single) */}
+                            {(frequency === 'Daily' || frequency === 'Weekly') && (
+                                <div className="mt-3">
+                                    <label className="text-xs font-bold text-gray-500 mb-2 block">
+                                        {frequency === 'Daily'
+                                            ? (t.pick_days_daily || 'Select Days (Mon–Fri default)')
+                                            : (t.pick_day_weekly || 'Select One Day')}
+                                    </label>
+                                    <div className="grid grid-cols-7 gap-1 text-center">
+                                        {currentDays.map((day, index) => (
+                                            <button
+                                                type="button"
+                                                key={index}
+                                                onClick={() => toggleDay(index)}
+                                                className={`w-8 h-8 rounded-full text-[10px] font-bold transition-all flex items-center justify-center shadow-sm mx-auto ${
+                                                    formData.selected_days.includes(index)
+                                                        ? 'bg-[#714B67] text-white scale-110'
+                                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                {day}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Monthly — day of month picker */}
+                            {frequency === 'Monthly' && (
+                                <div className="mt-3">
+                                    <label className="text-xs font-bold text-gray-500 mb-1 block">
+                                        {t.pick_day_of_month || 'Day of Month'}
+                                    </label>
+                                    <select
+                                        className="w-full p-2 border rounded-lg outline-none focus:border-[#714B67]"
+                                        value={formData.recurring_date}
+                                        onChange={e => setFormData(p => ({ ...p, recurring_date: parseInt(e.target.value) }))}
+                                    >
+                                        {[...Array(31)].map((_, i) => (
+                                            <option key={i + 1} value={i + 1}>{i + 1}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Quarterly — one date per quarter */}
+                            {frequency === 'Quarterly' && (
+                                <div className="mt-3 space-y-2">
+                                    <label className="text-xs font-bold text-gray-500 mb-1 block">
+                                        {t.pick_quarterly_dates || 'Select One Date Per Quarter'}
+                                    </label>
+                                    {quarterConstraints.map((q, i) => {
+                                        const key = `Q${i + 1}`;
+                                        return (
+                                            <div key={key} className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-[#714B67] w-28 shrink-0">{q.label}</span>
+                                                <input
+                                                    type="date"
+                                                    min={`${currentYear}${q.min}`}
+                                                    max={`${currentYear}${q.max}`}
+                                                    className="flex-1 p-2 border border-[#714B67]/30 rounded-lg bg-white outline-none focus:ring-2 focus:ring-[#714B67]/30 text-sm"
+                                                    value={formData.quarterly_dates[key]}
+                                                    onChange={e => setFormData(prev => ({
+                                                        ...prev,
+                                                        quarterly_dates: { ...prev.quarterly_dates, [key]: e.target.value },
+                                                    }))}
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Assigned Worker */}
@@ -374,11 +569,55 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                         />
                     </div>
 
-                    {/* Media Upload */}
+                    {/* Media — existing preview + new upload */}
                     <div>
                         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
                             {t.media_label || 'Attach Media (Optional)'}
                         </label>
+
+                        {/* Existing media thumbnail */}
+                        {task.media_url && !removeExistingMedia && (
+                            <div className="mb-2 relative inline-block">
+                                {/\.(mp4|mov|webm|ogg)(\?|$)/i.test(task.media_url) ? (
+                                    <video
+                                        src={task.media_url}
+                                        className="h-24 w-auto rounded-lg border border-gray-200 object-cover"
+                                        muted
+                                        playsInline
+                                    />
+                                ) : (
+                                    <img
+                                        src={task.media_url}
+                                        alt="existing media"
+                                        className="h-24 w-auto rounded-lg border border-gray-200 object-cover"
+                                    />
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setRemoveExistingMedia(true)}
+                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition shadow"
+                                    title={t.remove_file || 'Remove'}
+                                >
+                                    <X size={12}/>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Removed notice */}
+                        {task.media_url && removeExistingMedia && (
+                            <p className="text-xs text-red-500 mb-2">
+                                {t.existing_media_removed || 'Existing media will be removed on save.'}
+                                <button
+                                    type="button"
+                                    onClick={() => setRemoveExistingMedia(false)}
+                                    className="ml-2 underline text-gray-500"
+                                >
+                                    {t.undo || 'Undo'}
+                                </button>
+                            </p>
+                        )}
+
+                        {/* File picker */}
                         <input
                             ref={fileInputRef}
                             type="file"
