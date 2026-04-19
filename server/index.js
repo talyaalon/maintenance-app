@@ -3070,7 +3070,6 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             if (description !== undefined) { vals.push(description); sets.push(`description = $${vals.length}::text`); }
             if (urgency !== undefined)     { vals.push(urgency);     sets.push(`urgency = $${vals.length}::text`); }
             if (worker_id !== undefined)   { vals.push(worker_id);   sets.push(`worker_id = $${vals.length}::integer`); }
-            if (category_id !== undefined) { vals.push(category_id); sets.push(`category_id = $${vals.length}::integer`); }
             if (location_id !== undefined) { vals.push(location_id); sets.push(`location_id = $${vals.length}::integer`); }
             if (asset_id !== undefined)    { vals.push(asset_id);    sets.push(`asset_id = $${vals.length}::integer`); }
             // removeMedia with no replacement → clear images on all siblings (literal, no param)
@@ -3127,7 +3126,6 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             if (description !== undefined) { vals.push(description); sets.push(`description = $${vals.length}::text`); }
             if (urgency !== undefined)     { vals.push(urgency);     sets.push(`urgency = $${vals.length}::text`); }
             if (worker_id !== undefined)   { vals.push(worker_id);   sets.push(`worker_id = $${vals.length}::integer`); }
-            if (category_id !== undefined) { vals.push(category_id); sets.push(`category_id = $${vals.length}::integer`); }
             if (location_id !== undefined) { vals.push(location_id); sets.push(`location_id = $${vals.length}::integer`); }
             if (asset_id !== undefined)    { vals.push(asset_id);    sets.push(`asset_id = $${vals.length}::integer`); }
             if (due_date !== undefined)    { vals.push(due_date);    sets.push(`due_date = $${vals.length}::timestamptz`); }
