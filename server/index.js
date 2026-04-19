@@ -3016,38 +3016,11 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
     const newMediaUrl  = uploadedFile ? (uploadedFile.secure_url || uploadedFile.path) : null;
 
-    // Build SET clause from whichever fields were provided.
-    // title mirrors title_en (both columns kept in sync).
-    // due_date is excluded here for 'set' mode (handled as delta shift below).
-    const sets = [];
-    const vals = [];
-    let p = 1;
-
-    if (title_en !== undefined) {
-        sets.push(`title = $${p}`, `title_en = $${p}`);
-        vals.push(title_en);
-        p++;
-    }
-    if (title_he !== undefined)    { sets.push(`title_he = $${p++}`);    vals.push(title_he); }
-    if (title_th !== undefined)    { sets.push(`title_th = $${p++}`);    vals.push(title_th); }
-    if (description !== undefined) { sets.push(`description = $${p++}`); vals.push(description); }
-    if (urgency !== undefined)     { sets.push(`urgency = $${p++}`);     vals.push(urgency); }
-    if (worker_id !== undefined)   { sets.push(`worker_id = $${p++}`);   vals.push(worker_id); }
-    if (category_id !== undefined) { sets.push(`category_id = $${p++}`); vals.push(category_id); }
-    if (location_id !== undefined) { sets.push(`location_id = $${p++}`); vals.push(location_id); }
-    if (asset_id !== undefined)    { sets.push(`asset_id = $${p++}`);    vals.push(asset_id); }
-    // In single mode, due_date is applied directly in the SET clause
-    if (due_date !== undefined && mode === 'single') {
-        sets.push(`due_date = $${p++}`);
-        vals.push(due_date);
-    }
-
     const hasDueDateChange = due_date !== undefined;
-    // Media removal: clear the images array when requested and no new file is replacing it
-    if (removeMedia && !newMediaUrl) {
-        sets.push(`images = '{}'`);
-    }
-    const hasChanges = sets.length > 0 || newMediaUrl || hasDueDateChange;
+    const hasChanges = title_en !== undefined || title_he !== undefined || title_th !== undefined
+        || description !== undefined || urgency !== undefined || worker_id !== undefined
+        || category_id !== undefined || location_id !== undefined || asset_id !== undefined
+        || hasDueDateChange || newMediaUrl || removeMedia;
 
     if (!hasChanges) {
         return res.status(400).json({ error: 'No updatable fields provided' });
@@ -3078,14 +3051,35 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
         if (mode === 'set' && isRecurring) {
             // ── Update all PENDING siblings (same title + worker, due_date >= current) ──
 
-            // Apply non-due_date field changes across all siblings
+            // Build SET clause. Rule: push to vals FIRST, then use $${vals.length} as placeholder.
+            // This guarantees the counter can never diverge from the array.
+            const sets = [];
+            const vals = [];
+
+            if (title_en !== undefined)    { vals.push(title_en);    sets.push(`title = $${vals.length}`, `title_en = $${vals.length}`); }
+            if (title_he !== undefined)    { vals.push(title_he);    sets.push(`title_he = $${vals.length}`); }
+            if (title_th !== undefined)    { vals.push(title_th);    sets.push(`title_th = $${vals.length}`); }
+            if (description !== undefined) { vals.push(description); sets.push(`description = $${vals.length}`); }
+            if (urgency !== undefined)     { vals.push(urgency);     sets.push(`urgency = $${vals.length}`); }
+            if (worker_id !== undefined)   { vals.push(worker_id);   sets.push(`worker_id = $${vals.length}`); }
+            if (category_id !== undefined) { vals.push(category_id); sets.push(`category_id = $${vals.length}`); }
+            if (location_id !== undefined) { vals.push(location_id); sets.push(`location_id = $${vals.length}`); }
+            if (asset_id !== undefined)    { vals.push(asset_id);    sets.push(`asset_id = $${vals.length}`); }
+            // removeMedia with no replacement → clear images on all siblings (literal, no param)
+            if (removeMedia && !newMediaUrl) { sets.push(`images = '{}'`); }
+
             if (sets.length > 0) {
+                // Append WHERE params to the same vals array after all SET params are locked in
+                vals.push(task.title);    const pTitle  = vals.length;
+                vals.push(task.worker_id); const pWorker = vals.length;
+                vals.push(task.due_date);  const pDue    = vals.length;
+
                 const result = await client.query(
                     `UPDATE tasks
                      SET ${sets.join(', ')}
-                     WHERE title = $${p} AND worker_id = $${p + 1}
-                       AND status = 'PENDING' AND due_date >= $${p + 2}`,
-                    [...vals, task.title, task.worker_id, task.due_date]
+                     WHERE title = $${pTitle} AND worker_id = $${pWorker}
+                       AND status = 'PENDING' AND due_date >= $${pDue}`,
+                    vals
                 );
                 updated = result.rowCount;
             }
@@ -3107,40 +3101,47 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 }
             }
 
-            // Media: update the specific task's images array only
+            // Media: update only this specific task's images (standalone query, own param array)
             if (newMediaUrl) {
-                // removeMedia + new file → replace entirely; otherwise prepend
-                const imgVals = [];
-                imgVals.push(newMediaUrl);
-                const mediaParam = imgVals.length;   // always 1, but avoids hardcoded $1
-                imgVals.push(taskId);
-                const idParam = imgVals.length;      // always 2, but avoids hardcoded $2
                 const imgSql = removeMedia
-                    ? `UPDATE tasks SET images = ARRAY[$${mediaParam}::text] WHERE id = $${idParam}`
-                    : `UPDATE tasks SET images = array_prepend($${mediaParam}::text, COALESCE(images, '{}')) WHERE id = $${idParam}`;
-                await client.query(imgSql, imgVals);
+                    ? `UPDATE tasks SET images = ARRAY[$1::text] WHERE id = $2`
+                    : `UPDATE tasks SET images = array_prepend($1::text, COALESCE(images, '{}')) WHERE id = $2`;
+                await client.query(imgSql, [newMediaUrl, taskId]);
                 if (updated === 0) updated = 1;
             }
         } else {
             // ── Single-instance update ──
-            const allSets = [...sets];
-            const allVals = [...vals];
-            let pp = p;
+            // Same rule: push to vals FIRST, then use $${vals.length} as placeholder.
+            const sets = [];
+            const vals = [];
+
+            if (title_en !== undefined)    { vals.push(title_en);    sets.push(`title = $${vals.length}`, `title_en = $${vals.length}`); }
+            if (title_he !== undefined)    { vals.push(title_he);    sets.push(`title_he = $${vals.length}`); }
+            if (title_th !== undefined)    { vals.push(title_th);    sets.push(`title_th = $${vals.length}`); }
+            if (description !== undefined) { vals.push(description); sets.push(`description = $${vals.length}`); }
+            if (urgency !== undefined)     { vals.push(urgency);     sets.push(`urgency = $${vals.length}`); }
+            if (worker_id !== undefined)   { vals.push(worker_id);   sets.push(`worker_id = $${vals.length}`); }
+            if (category_id !== undefined) { vals.push(category_id); sets.push(`category_id = $${vals.length}`); }
+            if (location_id !== undefined) { vals.push(location_id); sets.push(`location_id = $${vals.length}`); }
+            if (asset_id !== undefined)    { vals.push(asset_id);    sets.push(`asset_id = $${vals.length}`); }
+            if (due_date !== undefined)    { vals.push(due_date);    sets.push(`due_date = $${vals.length}`); }
 
             if (newMediaUrl) {
-                // removeMedia + new file → replace with a single-element array; otherwise prepend
+                vals.push(newMediaUrl);
                 if (removeMedia) {
-                    allSets.push(`images = ARRAY[$${pp++}::text]`);
+                    sets.push(`images = ARRAY[$${vals.length}::text]`);
                 } else {
-                    allSets.push(`images = array_prepend($${pp++}::text, COALESCE(images, '{}'))`);
+                    sets.push(`images = array_prepend($${vals.length}::text, COALESCE(images, '{}'))`);
                 }
-                allVals.push(newMediaUrl);
+            } else if (removeMedia) {
+                sets.push(`images = '{}'`);
             }
 
-            if (allSets.length > 0) {
+            if (sets.length > 0) {
+                vals.push(taskId);
                 const result = await client.query(
-                    `UPDATE tasks SET ${allSets.join(', ')} WHERE id = $${pp}`,
-                    [...allVals, taskId]
+                    `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${vals.length}`,
+                    vals
                 );
                 updated = result.rowCount;
             }
