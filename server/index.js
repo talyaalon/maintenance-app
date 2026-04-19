@@ -3146,7 +3146,7 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('[PUT /tasks/:id] SQL Error:', err);
-        res.status(500).json({ error: 'Error updating task' });
+        res.status(500).json({ error: err.message || err.toString() });
     } finally {
         client.release();
     }
