@@ -3028,10 +3028,16 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
 
     const client = await pool.connect();
     try {
+        console.log('[PUT /tasks/:id] Executing SQL:', 'BEGIN');
+        console.log('[PUT /tasks/:id] With Vals:', []);
         await client.query('BEGIN');
 
+        console.log('[PUT /tasks/:id] Executing SQL:', 'SELECT * FROM tasks WHERE id = $1');
+        console.log('[PUT /tasks/:id] With Vals:', [taskId]);
         const taskRes = await client.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
         if (taskRes.rows.length === 0) {
+            console.log('[PUT /tasks/:id] Executing SQL:', 'ROLLBACK (404)');
+            console.log('[PUT /tasks/:id] With Vals:', []);
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Task not found' });
         }
@@ -3040,6 +3046,8 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
         // Auth: only BIG_BOSS or the original creator may edit
         if (role !== 'BIG_BOSS') {
             if (task.created_by === null || task.created_by !== userId) {
+                console.log('[PUT /tasks/:id] Executing SQL:', 'ROLLBACK (403)');
+                console.log('[PUT /tasks/:id] With Vals:', []);
                 await client.query('ROLLBACK');
                 return res.status(403).json({ error: 'ERR_NOT_CREATOR' });
             }
@@ -3074,13 +3082,10 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 vals.push(task.worker_id); const pWorker = vals.length;
                 vals.push(task.due_date);  const pDue    = vals.length;
 
-                const result = await client.query(
-                    `UPDATE tasks
-                     SET ${sets.join(', ')}
-                     WHERE title = $${pTitle} AND worker_id = $${pWorker}
-                       AND status = 'PENDING' AND due_date >= $${pDue}`,
-                    vals
-                );
+                const setModeSql = `UPDATE tasks SET ${sets.join(', ')} WHERE title = $${pTitle} AND worker_id = $${pWorker} AND status = 'PENDING' AND due_date >= $${pDue}`;
+                console.log('[PUT /tasks/:id] Executing SQL:', setModeSql);
+                console.log('[PUT /tasks/:id] With Vals:', vals);
+                const result = await client.query(setModeSql, vals);
                 updated = result.rowCount;
             }
 
@@ -3090,13 +3095,11 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                     (new Date(due_date).getTime() - new Date(task.due_date).getTime()) / 1000
                 );
                 if (deltaSeconds !== 0) {
-                    const shiftResult = await client.query(
-                        `UPDATE tasks
-                         SET due_date = due_date + ($1 * interval '1 second')
-                         WHERE title = $2 AND worker_id = $3
-                           AND status = 'PENDING' AND due_date >= $4`,
-                        [deltaSeconds, task.title, task.worker_id, task.due_date]
-                    );
+                    const shiftSql = `UPDATE tasks SET due_date = due_date + ($1 * interval '1 second') WHERE title = $2 AND worker_id = $3 AND status = 'PENDING' AND due_date >= $4`;
+                    const shiftVals = [deltaSeconds, task.title, task.worker_id, task.due_date];
+                    console.log('[PUT /tasks/:id] Executing SQL:', shiftSql);
+                    console.log('[PUT /tasks/:id] With Vals:', shiftVals);
+                    const shiftResult = await client.query(shiftSql, shiftVals);
                     updated = Math.max(updated, shiftResult.rowCount);
                 }
             }
@@ -3104,9 +3107,12 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             // Media: update only this specific task's images (standalone query, own param array)
             if (newMediaUrl) {
                 const imgSql = removeMedia
-                    ? `UPDATE tasks SET images = ARRAY[$1::text] WHERE id = $2`
-                    : `UPDATE tasks SET images = array_prepend($1::text, COALESCE(images, '{}')) WHERE id = $2`;
-                await client.query(imgSql, [newMediaUrl, taskId]);
+                    ? `UPDATE tasks SET images = ARRAY[$1::text] WHERE id = $2::integer`
+                    : `UPDATE tasks SET images = array_prepend($1::text, COALESCE(images, '{}'::text[])) WHERE id = $2::integer`;
+                const imgVals = [newMediaUrl, taskId];
+                console.log('[PUT /tasks/:id] Executing SQL:', imgSql);
+                console.log('[PUT /tasks/:id] With Vals:', imgVals);
+                await client.query(imgSql, imgVals);
                 if (updated === 0) updated = 1;
             }
         } else {
@@ -3131,7 +3137,7 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 if (removeMedia) {
                     sets.push(`images = ARRAY[$${vals.length}::text]`);
                 } else {
-                    sets.push(`images = array_prepend($${vals.length}::text, COALESCE(images, '{}'))`);
+                    sets.push(`images = array_prepend($${vals.length}::text, COALESCE(images, '{}'::text[]))`);
                 }
             } else if (removeMedia) {
                 sets.push(`images = '{}'`);
@@ -3139,17 +3145,21 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
 
             if (sets.length > 0) {
                 vals.push(taskId);
-                const result = await client.query(
-                    `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${vals.length}`,
-                    vals
-                );
+                const singleSql = `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${vals.length}`;
+                console.log('[PUT /tasks/:id] Executing SQL:', singleSql);
+                console.log('[PUT /tasks/:id] With Vals:', vals);
+                const result = await client.query(singleSql, vals);
                 updated = result.rowCount;
             }
         }
 
+        console.log('[PUT /tasks/:id] Executing SQL:', 'COMMIT');
+        console.log('[PUT /tasks/:id] With Vals:', []);
         await client.query('COMMIT');
         res.json({ success: true, updated, mode });
     } catch (err) {
+        console.log('[PUT /tasks/:id] Executing SQL:', 'ROLLBACK (catch)');
+        console.log('[PUT /tasks/:id] With Vals:', []);
         await client.query('ROLLBACK');
         console.error('[PUT /tasks/:id] SQL Error:', err);
         res.status(500).json({ error: err.message || err.toString() });
