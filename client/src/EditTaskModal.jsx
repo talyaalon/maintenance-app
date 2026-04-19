@@ -18,6 +18,8 @@ const toDatetimeLocal = (dateStr) => {
 };
 
 const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }) => {
+    console.log('[Init] Task Data:', task);
+
     // Recurring series: check recurring_group_id first, fall back to title suffix
     const isRecurringSeries =
         task.recurring_group_id != null ||
@@ -40,9 +42,11 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     };
 
     const parseSelectedDays = () => {
-        if (!task.selected_days) return [1, 2, 3, 4, 5];
-        if (Array.isArray(task.selected_days)) return task.selected_days;
-        try { return JSON.parse(task.selected_days); } catch { return [1, 2, 3, 4, 5]; }
+        // API may return either `selected_days` or `recurring_days` — check both
+        const raw = task.selected_days ?? task.recurring_days;
+        if (!raw) return [1, 2, 3, 4, 5];
+        if (Array.isArray(raw)) return raw;
+        try { return JSON.parse(raw); } catch { return [1, 2, 3, 4, 5]; }
     };
 
     const parseQuarterlyDates = () => {
@@ -178,12 +182,24 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     }
 
     const filteredLocations = (() => {
-        if (!targetCompanyId) return isBigBoss ? [] : locations;
+        if (!targetCompanyId) {
+            if (isBigBoss) {
+                // Workers list still loading but a worker_id is already set (edit mode):
+                // show all locations so task.location_id is visible while workers fetch completes
+                return (formData.worker_id && workers.length === 0) ? locations : [];
+            }
+            return locations;
+        }
         return locations.filter(l => String(l?.company_id) === String(targetCompanyId));
     })();
 
     const filteredCategories = (() => {
-        if (!targetCompanyId) return isBigBoss ? [] : categories;
+        if (!targetCompanyId) {
+            if (isBigBoss) {
+                return (formData.worker_id && workers.length === 0) ? categories : [];
+            }
+            return categories;
+        }
         return categories.filter(c => String(c?.company_id) === String(targetCompanyId));
     })();
 

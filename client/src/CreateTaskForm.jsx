@@ -102,33 +102,22 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   }
 
   const filteredLocations = (() => {
-      let list = locations ?? [];
-      if (isBigBoss && targetAreaId)
-          list = list.filter(l => String(l?.area_id) === String(targetAreaId) || !l?.area_id);
-      else if (!isBigBoss && targetCompanyId)
-          list = list.filter(l => l?.company_id == null || String(l?.company_id) === String(targetCompanyId));
-      return list;
+      if (!targetCompanyId) return isBigBoss ? [] : (locations ?? []);
+      return (locations ?? []).filter(l => String(l?.company_id) === String(targetCompanyId));
   })();
 
   const filteredCategories = (() => {
-      let list = categories ?? [];
-      if (isBigBoss && targetAreaId)
-          list = list.filter(c => String(c?.area_id) === String(targetAreaId) || !c?.area_id);
-      else if (!isBigBoss && targetCompanyId)
-          list = list.filter(c => c?.company_id == null || String(c?.company_id) === String(targetCompanyId));
-      return list;
+      if (!targetCompanyId) return isBigBoss ? [] : (categories ?? []);
+      return (categories ?? []).filter(c => String(c?.company_id) === String(targetCompanyId));
   })();
 
   const filteredAssets = selectedCategory
       ? (assets ?? []).filter(a => {
           if (!a) return false;
           const categoryMatch = String(a?.category_id) === String(selectedCategory);
-          let areaMatch = true;
-          if (isBigBoss && targetAreaId)
-              areaMatch = String(a?.area_id) === String(targetAreaId) || !a?.area_id;
-          else if (!isBigBoss && targetCompanyId)
-              areaMatch = a?.company_id == null || String(a?.company_id) === String(targetCompanyId);
-          return categoryMatch && areaMatch;
+          if (!categoryMatch) return false;
+          if (!targetCompanyId) return !isBigBoss;
+          return String(a?.company_id) === String(targetCompanyId);
       })
       : [];
 
