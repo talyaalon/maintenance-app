@@ -328,7 +328,10 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
           const searchSource = isSearching
               ? tasks.filter(task => task.status === 'PENDING' && !isBefore(getBkkDateObj(task.due_date), startOfDay(todayBkk)))
               : todayTasks;
-          const filtered = applyFilters(applySearch(searchSource));
+          const urgencyWeight = { 'High': 3, 'Medium': 2, 'Low': 1 };
+          const filtered = applyFilters(applySearch(searchSource))
+              .slice()
+              .sort((a, b) => (urgencyWeight[b.urgency] ?? 0) - (urgencyWeight[a.urgency] ?? 0));
           return (
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
                   <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200 text-center mb-5">
