@@ -3110,10 +3110,15 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             // Media: update the specific task's images array only
             if (newMediaUrl) {
                 // removeMedia + new file → replace entirely; otherwise prepend
+                const imgVals = [];
+                imgVals.push(newMediaUrl);
+                const mediaParam = imgVals.length;   // always 1, but avoids hardcoded $1
+                imgVals.push(taskId);
+                const idParam = imgVals.length;      // always 2, but avoids hardcoded $2
                 const imgSql = removeMedia
-                    ? `UPDATE tasks SET images = ARRAY[$1::text] WHERE id = $2`
-                    : `UPDATE tasks SET images = array_prepend($1, COALESCE(images, '{}')) WHERE id = $2`;
-                await client.query(imgSql, [newMediaUrl, taskId]);
+                    ? `UPDATE tasks SET images = ARRAY[$${mediaParam}::text] WHERE id = $${idParam}`
+                    : `UPDATE tasks SET images = array_prepend($${mediaParam}::text, COALESCE(images, '{}')) WHERE id = $${idParam}`;
+                await client.query(imgSql, imgVals);
                 if (updated === 0) updated = 1;
             }
         } else {
@@ -3127,7 +3132,7 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 if (removeMedia) {
                     allSets.push(`images = ARRAY[$${pp++}::text]`);
                 } else {
-                    allSets.push(`images = array_prepend($${pp++}, COALESCE(images, '{}'))`);
+                    allSets.push(`images = array_prepend($${pp++}::text, COALESCE(images, '{}'))`);
                 }
                 allVals.push(newMediaUrl);
             }
