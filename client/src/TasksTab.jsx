@@ -66,7 +66,7 @@ const calendarStyles = `
   .react-calendar__tile:hover { background-color: #f8fafc; }
   .react-calendar__tile--now { background: #f5f3ff !important; color: #714B67; border: 1px solid #e9d5ff; }
   .react-calendar__tile--active { background: #714B67 !important; color: white !important; border-radius: 6px; }
-  .task-count-badge { font-size: 9px; background-color: #e5e7eb; color: #374151; padding: 1px 5px; border-radius: 99px; margin-top: 2px; }
+  .task-count-badge { font-size: 9px; background-color: #e5e7eb; color: #374151; padding: 1px 6px; border-radius: 99px; margin-top: 2px; white-space: nowrap; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.25); color: white; }
 `;
 
