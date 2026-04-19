@@ -267,6 +267,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                 fd.append('media', mediaFile);
             }
 
+            console.log('[EditTaskModal] FormData Contents:', Object.fromEntries(fd.entries()));
             const res = await fetch(`${BASE}/tasks/${task.id}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` },
@@ -619,36 +620,42 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                             {t.media_label || 'Attach Media (Optional)'}
                         </label>
 
-                        {/* Existing media thumbnail */}
-                        {task.media_url && !removeExistingMedia && (
-                            <div className="mb-2 relative inline-block">
-                                {/\.(mp4|mov|webm|ogg)(\?|$)/i.test(task.media_url) ? (
-                                    <video
-                                        src={task.media_url}
-                                        className="h-24 w-auto rounded-lg border border-gray-200 object-cover"
-                                        muted
-                                        playsInline
-                                    />
-                                ) : (
-                                    <img
-                                        src={task.media_url}
-                                        alt="existing media"
-                                        className="h-24 w-auto rounded-lg border border-gray-200 object-cover"
-                                    />
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => setRemoveExistingMedia(true)}
-                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition shadow"
-                                    title={t.remove_file || 'Remove'}
-                                >
-                                    <X size={12}/>
-                                </button>
-                            </div>
-                        )}
+                        {/* Existing media thumbnail — images[] array takes precedence over legacy media_url */}
+                        {(() => {
+                            const existingUrl = (task.images && task.images.length > 0)
+                                ? task.images[0]
+                                : (task.media_url || null);
+                            if (!existingUrl || removeExistingMedia) return null;
+                            return (
+                                <div className="mb-2 relative inline-block">
+                                    {/\.(mp4|mov|webm|ogg)(\?|$)/i.test(existingUrl) ? (
+                                        <video
+                                            src={existingUrl}
+                                            className="h-24 w-auto rounded-lg border border-gray-200 object-cover"
+                                            muted
+                                            playsInline
+                                        />
+                                    ) : (
+                                        <img
+                                            src={existingUrl}
+                                            alt="existing media"
+                                            className="h-24 w-auto rounded-lg border border-gray-200 object-cover"
+                                        />
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setRemoveExistingMedia(true)}
+                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition shadow"
+                                        title={t.remove_file || 'Remove'}
+                                    >
+                                        <X size={12}/>
+                                    </button>
+                                </div>
+                            );
+                        })()}
 
                         {/* Removed notice */}
-                        {task.media_url && removeExistingMedia && (
+                        {((task.images && task.images.length > 0) || task.media_url) && removeExistingMedia && (
                             <p className="text-xs text-red-500 mb-2">
                                 {t.existing_media_removed || 'Existing media will be removed on save.'}
                                 <button

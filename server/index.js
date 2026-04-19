@@ -3036,9 +3036,9 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     }
 
     const hasDueDateChange = due_date !== undefined;
-    // Media removal: clear media_url/media_type when requested and no new file uploaded
+    // Media removal: clear the images array when requested and no new file is replacing it
     if (removeMedia && !newMediaUrl) {
-        sets.push(`media_url = NULL`, `media_type = NULL`);
+        sets.push(`images = '{}'`);
     }
     const hasChanges = sets.length > 0 || newMediaUrl || hasDueDateChange;
 
