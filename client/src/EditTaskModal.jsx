@@ -177,13 +177,15 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
 
     const filteredLocations = (() => {
         if (!targetCompanyId) return isBigBoss ? [] : locations;
-        return locations.filter(l => l?.company_id == null || String(l?.company_id) === String(targetCompanyId));
+        return locations.filter(l => String(l?.company_id) === String(targetCompanyId));
     })();
 
     const filteredCategories = (() => {
         if (!targetCompanyId) return isBigBoss ? [] : categories;
-        return categories.filter(c => c?.company_id == null || String(c?.company_id) === String(targetCompanyId));
+        return categories.filter(c => String(c?.company_id) === String(targetCompanyId));
     })();
+
+    console.log('[EditTaskModal] Target Company ID:', targetCompanyId, 'Filtered Categories count:', filteredCategories.length);
 
     const filteredAssets = selectedCategory
         ? assets.filter(a => {
@@ -191,7 +193,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
             const categoryMatch = String(a?.category_id) === String(selectedCategory);
             if (!categoryMatch) return false;
             if (!targetCompanyId) return true;
-            return a?.company_id == null || String(a?.company_id) === String(targetCompanyId);
+            return String(a?.company_id) === String(targetCompanyId);
         })
         : [];
 
