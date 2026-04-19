@@ -2308,7 +2308,14 @@ app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) =
             return res.status(403).json({ message: 'Forbidden: You do not have permission to delete this location.' });
         }
 
-        // Nullify FK references using the location's own company_id to avoid Postgres 23503 violations
+        // Block deletion if categories are still linked to this location
+        const catResult = await pool.query('SELECT name FROM categories WHERE location_id = $1', [id]);
+        if (catResult.rows.length > 0) {
+            const categories = catResult.rows.map(r => r.name);
+            return res.status(400).json({ error: 'ERR_HAS_CATEGORIES', categories });
+        }
+
+        // Detach tasks and assets before deleting to avoid FK violations
         await Promise.all([
             pool.query('UPDATE tasks  SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, locationCompanyId]),
             pool.query('UPDATE assets SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, locationCompanyId]),
