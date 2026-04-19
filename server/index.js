@@ -3008,19 +3008,21 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     const location_id = parseNullableInt(req.body.location_id);
     const asset_id    = parseNullableInt(req.body.asset_id);
     const due_date   = norm(req.body.due_date);
-    const removeMedia = req.body.remove_existing_media === 'true';
-
     const mode = update_mode === 'set' ? 'set' : 'single';
 
-    // Handle uploaded media file
-    const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
-    const newMediaUrl  = uploadedFile ? (uploadedFile.secure_url || uploadedFile.path) : null;
+    // Handle uploaded media files (multiple) + kept existing URLs
+    const newUrls = (req.files || []).map(f => f.secure_url || f.path).filter(Boolean);
+    const keptImages = req.body.keptImages !== undefined
+        ? JSON.parse(req.body.keptImages || '[]').filter(Boolean)
+        : null; // null = field not sent → don't touch images
+    const finalImages = keptImages !== null ? [...keptImages, ...newUrls] : null;
+    const hasImageUpdate = finalImages !== null;
 
     const hasDueDateChange = due_date !== undefined;
     const hasChanges = title_en !== undefined || title_he !== undefined || title_th !== undefined
         || description !== undefined || urgency !== undefined || worker_id !== undefined
         || category_id !== undefined || location_id !== undefined || asset_id !== undefined
-        || hasDueDateChange || newMediaUrl || removeMedia;
+        || hasDueDateChange || hasImageUpdate;
 
     if (!hasChanges) {
         return res.status(400).json({ error: 'No updatable fields provided' });
@@ -3072,8 +3074,7 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             if (worker_id !== undefined)   { vals.push(worker_id);   sets.push(`worker_id = $${vals.length}::integer`); }
             if (location_id !== undefined) { vals.push(location_id); sets.push(`location_id = $${vals.length}::integer`); }
             if (asset_id !== undefined)    { vals.push(asset_id);    sets.push(`asset_id = $${vals.length}::integer`); }
-            // removeMedia with no replacement → clear images on all siblings (literal, no param)
-            if (removeMedia && !newMediaUrl) { sets.push(`images = '{}'`); }
+            // Images are per-task, never bulk-updated across the set (handled below)
 
             if (sets.length > 0) {
                 // Append WHERE params to the same vals array after all SET params are locked in
@@ -3104,11 +3105,9 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             }
 
             // Media: update only this specific task's images (standalone query, own param array)
-            if (newMediaUrl) {
-                const imgSql = removeMedia
-                    ? `UPDATE tasks SET images = ARRAY[$1::text] WHERE id = $2::integer`
-                    : `UPDATE tasks SET images = array_prepend($1::text, COALESCE(images, '{}'::text[])) WHERE id = $2::integer`;
-                const imgVals = [newMediaUrl, taskId];
+            if (hasImageUpdate) {
+                const imgSql = `UPDATE tasks SET images = $1::text[] WHERE id = $2::integer`;
+                const imgVals = [finalImages, taskId];
                 console.log('[PUT /tasks/:id] Executing SQL:', imgSql);
                 console.log('[PUT /tasks/:id] With Vals:', imgVals);
                 await client.query(imgSql, imgVals);
@@ -3130,15 +3129,9 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             if (asset_id !== undefined)    { vals.push(asset_id);    sets.push(`asset_id = $${vals.length}::integer`); }
             if (due_date !== undefined)    { vals.push(due_date);    sets.push(`due_date = $${vals.length}::timestamptz`); }
 
-            if (newMediaUrl) {
-                vals.push(newMediaUrl);
-                if (removeMedia) {
-                    sets.push(`images = ARRAY[$${vals.length}::text]`);
-                } else {
-                    sets.push(`images = array_prepend($${vals.length}::text, COALESCE(images, '{}'::text[]))`);
-                }
-            } else if (removeMedia) {
-                sets.push(`images = '{}'`);
+            if (hasImageUpdate) {
+                vals.push(finalImages);
+                sets.push(`images = $${vals.length}::text[]`);
             }
 
             if (sets.length > 0) {

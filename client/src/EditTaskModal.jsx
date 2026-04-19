@@ -33,10 +33,10 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
 
     // ── Frequency helpers ─────────────────────────────────────────────────────
     const getInitialFrequency = () => {
-        if (!task.is_recurring && !task.recurring_type) return 'Once';
         const rt = (task.recurring_type || '').trim();
-        if (!rt) return 'Once';
-        return rt.charAt(0).toUpperCase() + rt.slice(1);
+        if (rt) return rt.charAt(0).toUpperCase() + rt.slice(1);
+        if (task.is_recurring) return 'Daily'; // fallback: recurring flag set but type missing
+        return 'Once';
     };
 
     const parseSelectedDays = () => {
@@ -92,8 +92,10 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     const [categories, setCategories] = useState([]);
     const [assets, setAssets] = useState([]);
 
-    const [mediaFile, setMediaFile] = useState(null);
-    const [removeExistingMedia, setRemoveExistingMedia] = useState(false);
+    const [existingImages, setExistingImages] = useState(
+        Array.isArray(task.images) ? task.images.filter(Boolean) : []
+    );
+    const [newFiles, setNewFiles] = useState([]);
     const fileInputRef = useRef(null);
 
     const [showLangFields, setShowLangFields] = useState(!!(task.title_he || task.title_th));
@@ -261,13 +263,9 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                 }
             }
 
-            // Media
-            if (removeExistingMedia) {
-                fd.append('remove_existing_media', 'true');
-            }
-            if (mediaFile) {
-                fd.append('media', mediaFile);
-            }
+            // Images: send kept URLs + any new files
+            fd.append('keptImages', JSON.stringify(existingImages));
+            newFiles.forEach(f => fd.append('media', f));
 
             console.log('[EditTaskModal] FormData Contents:', Object.fromEntries(fd.entries()));
             const res = await fetch(`${BASE}/tasks/${task.id}`, {
@@ -616,67 +614,79 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                         />
                     </div>
 
-                    {/* Media — existing preview + new upload */}
+                    {/* Media — existing thumbnails grid + new upload */}
                     <div>
                         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
                             {t.media_label || 'Attach Media (Optional)'}
                         </label>
 
-                        {/* Existing media thumbnail — images[] array takes precedence over legacy media_url */}
-                        {(() => {
-                            const existingUrl = (task.images && task.images.length > 0)
-                                ? task.images[0]
-                                : (task.media_url || null);
-                            if (!existingUrl || removeExistingMedia) return null;
-                            return (
-                                <div className="mb-2 relative inline-block">
-                                    {/\.(mp4|mov|webm|ogg)(\?|$)/i.test(existingUrl) ? (
-                                        <video
-                                            src={existingUrl}
-                                            className="h-24 w-auto rounded-lg border border-gray-200 object-cover"
-                                            muted
-                                            playsInline
-                                        />
-                                    ) : (
-                                        <img
-                                            src={existingUrl}
-                                            alt="existing media"
-                                            className="h-24 w-auto rounded-lg border border-gray-200 object-cover"
-                                        />
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => setRemoveExistingMedia(true)}
-                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition shadow"
-                                        title={t.remove_file || 'Remove'}
-                                    >
-                                        <X size={12}/>
-                                    </button>
-                                </div>
-                            );
-                        })()}
-
-                        {/* Removed notice */}
-                        {((task.images && task.images.length > 0) || task.media_url) && removeExistingMedia && (
-                            <p className="text-xs text-red-500 mb-2">
-                                {t.existing_media_removed || 'Existing media will be removed on save.'}
-                                <button
-                                    type="button"
-                                    onClick={() => setRemoveExistingMedia(false)}
-                                    className="ml-2 underline text-gray-500"
-                                >
-                                    {t.undo || 'Undo'}
-                                </button>
-                            </p>
+                        {/* Existing images grid — one thumbnail per URL with individual X */}
+                        {existingImages.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                {existingImages.map((url, idx) => (
+                                    <div key={url} className="relative inline-block">
+                                        {/\.(mp4|mov|webm|ogg)(\?|$)/i.test(url) ? (
+                                            <video
+                                                src={url}
+                                                className="h-20 w-auto rounded-lg border border-gray-200 object-cover"
+                                                muted
+                                                playsInline
+                                            />
+                                        ) : (
+                                            <img
+                                                src={url}
+                                                alt={`media ${idx + 1}`}
+                                                className="h-20 w-auto rounded-lg border border-gray-200 object-cover"
+                                            />
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setExistingImages(prev => prev.filter((_, i) => i !== idx))}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition shadow"
+                                            title={t.remove_file || 'Remove'}
+                                        >
+                                            <X size={12}/>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         )}
 
-                        {/* File picker */}
+                        {/* New files preview */}
+                        {newFiles.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                {newFiles.map((f, idx) => (
+                                    <div key={idx} className="relative inline-block">
+                                        <img
+                                            src={URL.createObjectURL(f)}
+                                            alt={f.name}
+                                            className="h-20 w-auto rounded-lg border border-dashed border-[#714B67]/40 object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewFiles(prev => prev.filter((_, i) => i !== idx))}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition shadow"
+                                            title={t.remove_file || 'Remove'}
+                                        >
+                                            <X size={12}/>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* File picker — multiple */}
                         <input
                             ref={fileInputRef}
                             type="file"
                             accept="image/*,video/*"
+                            multiple
                             className="hidden"
-                            onChange={e => setMediaFile(e.target.files[0] || null)}
+                            onChange={e => {
+                                const picked = Array.from(e.target.files || []);
+                                if (picked.length) setNewFiles(prev => [...prev, ...picked]);
+                                e.target.value = '';
+                            }}
                         />
                         <button
                             type="button"
@@ -684,17 +694,8 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                             className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-[#714B67] hover:text-[#714B67] transition w-full justify-center"
                         >
                             <Paperclip size={16}/>
-                            {mediaFile ? mediaFile.name : (t.attach_file_btn || 'Choose image or video...')}
+                            {t.attach_file_btn || 'Add images or videos...'}
                         </button>
-                        {mediaFile && (
-                            <button
-                                type="button"
-                                onClick={() => { setMediaFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                                className="mt-1 text-xs text-red-500 hover:underline"
-                            >
-                                {t.remove_file || 'Remove'}
-                            </button>
-                        )}
                     </div>
 
                     {/* Error */}
