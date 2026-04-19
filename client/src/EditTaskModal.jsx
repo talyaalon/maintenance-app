@@ -18,7 +18,6 @@ const toDatetimeLocal = (dateStr) => {
 };
 
 const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }) => {
-    console.log('[Init] Task Data:', task);
 
     // Recurring series: check recurring_group_id first, fall back to title suffix
     const isRecurringSeries =
@@ -35,14 +34,24 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
 
     // ── Frequency helpers ─────────────────────────────────────────────────────
     const getInitialFrequency = () => {
-        const rt = (task.recurring_type || '').trim();
-        if (rt) return rt.charAt(0).toUpperCase() + rt.slice(1);
-        if (task.is_recurring) return 'Daily'; // fallback: recurring flag set but type missing
+        // Normalize to lowercase so 'DAILY', 'Daily', 'daily' all match
+        const rt = (task.recurring_type || '').trim().toLowerCase();
+        console.log('[Recurrence Debug] recurring_type:', task.recurring_type, '| is_recurring:', task.is_recurring, '| recurring_group_id:', task.recurring_group_id);
+        if (rt === 'daily')     return 'Daily';
+        if (rt === 'weekly')    return 'Weekly';
+        if (rt === 'monthly')   return 'Monthly';
+        if (rt === 'quarterly') return 'Quarterly';
+        if (rt === 'yearly')    return 'Yearly';
+        // No valid recurring_type string — check flag and group as fallback
+        const isRec = task.is_recurring === true || task.is_recurring === 1
+            || task.is_recurring === '1' || task.is_recurring === 'true';
+        if (isRec || task.recurring_group_id != null) return 'Daily';
         return 'Once';
     };
 
     const parseSelectedDays = () => {
         // API may return either `selected_days` or `recurring_days` — check both
+        console.log('[Recurrence Debug] Raw task days:', task.recurring_days, task.selected_days);
         const raw = task.selected_days ?? task.recurring_days;
         if (!raw) return [1, 2, 3, 4, 5];
         if (Array.isArray(raw)) return raw;
@@ -107,6 +116,17 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showSuccess, setShowSuccess] = useState(false);
+
+    // ── Safety net: correct frequency if getInitialFrequency() fired before task hydrated ──
+    useEffect(() => {
+        const isRec = task.is_recurring === true || task.is_recurring === 1
+            || task.is_recurring === '1' || task.is_recurring === 'true';
+        if ((isRec || task.recurring_group_id != null) && frequency === 'Once') {
+            const rt = (task.recurring_type || '').trim().toLowerCase();
+            const map = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' };
+            setFrequency(map[rt] || 'Daily');
+        }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Day labels & quarter constraints (match CreateTaskForm) ───────────────
     const daysEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
