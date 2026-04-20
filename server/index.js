@@ -3018,6 +3018,11 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     const due_date   = norm(req.body.due_date);
     const mode = update_mode === 'set' ? 'set' : 'single';
 
+    // Recurrence metadata sent by EditTaskModal
+    const new_recurring_type    = norm(req.body.recurring_type);    // e.g. 'daily'
+    const new_selected_days_raw = norm(req.body.selected_days);     // JSON string e.g. '[1,3,4]'
+    const hasRecurrenceChange   = new_recurring_type !== undefined || new_selected_days_raw !== undefined;
+
     // Handle uploaded media files (multiple) + kept existing URLs
     const newUrls = (req.files || []).map(f => f.secure_url || f.path).filter(Boolean);
     const keptImages = req.body.keptImages !== undefined
@@ -3030,7 +3035,7 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     const hasChanges = title_en !== undefined || title_he !== undefined || title_th !== undefined
         || description !== undefined || urgency !== undefined || worker_id !== undefined
         || category_id !== undefined || location_id !== undefined || asset_id !== undefined
-        || hasDueDateChange || hasImageUpdate;
+        || hasDueDateChange || hasImageUpdate || hasRecurrenceChange;
 
     if (!hasChanges) {
         return res.status(400).json({ error: 'No updatable fields provided' });
@@ -3069,12 +3074,18 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
         if (mode === 'set' && isRecurring) {
             // ── Update all PENDING siblings (same title + worker, due_date >= current) ──
 
+            // The modal strips ' (Recurring)' from the display title — re-add it so the
+            // group marker is never lost when saving the entire set.
+            const effectiveTitleEn = (title_en !== undefined && !title_en.endsWith(' (Recurring)'))
+                ? title_en + ' (Recurring)'
+                : title_en;
+
             // Build SET clause. Rule: push to vals FIRST, then use $${vals.length} as placeholder.
             // This guarantees the counter can never diverge from the array.
             const sets = [];
             const vals = [];
 
-            if (title_en !== undefined)    { vals.push(title_en);    const p = vals.length; sets.push(`title = $${p}::text`, `title_en = $${p}::text`); }
+            if (effectiveTitleEn !== undefined) { vals.push(effectiveTitleEn); const p = vals.length; sets.push(`title = $${p}::text`, `title_en = $${p}::text`); }
             if (title_he !== undefined)    { vals.push(title_he);    sets.push(`title_he = $${vals.length}::text`); }
             if (title_th !== undefined)    { vals.push(title_th);    sets.push(`title_th = $${vals.length}::text`); }
             if (description !== undefined) { vals.push(description); sets.push(`description = $${vals.length}::text`); }
@@ -3082,6 +3093,9 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             if (worker_id !== undefined)   { vals.push(worker_id);   sets.push(`worker_id = $${vals.length}::integer`); }
             if (location_id !== undefined) { vals.push(location_id); sets.push(`location_id = $${vals.length}::integer`); }
             if (asset_id !== undefined)    { vals.push(asset_id);    sets.push(`asset_id = $${vals.length}::integer`); }
+            // Recurrence metadata — keep the whole group in sync
+            if (new_recurring_type !== undefined)    { vals.push(new_recurring_type);    sets.push(`recurring_type = $${vals.length}::text`); }
+            if (new_selected_days_raw !== undefined) { vals.push(new_selected_days_raw); sets.push(`selected_days = $${vals.length}::text`); }
             // Images are per-task, never bulk-updated across the set (handled below)
 
             if (sets.length > 0) {
@@ -3112,6 +3126,74 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 }
             }
 
+            // ── Regenerate occurrences when selected_days changed ─────────────────
+            if (new_selected_days_raw !== undefined) {
+                let oldDays = [];
+                let newDays = [];
+                try { if (task.selected_days) oldDays = JSON.parse(task.selected_days).map(Number); } catch {}
+                try { newDays = JSON.parse(new_selected_days_raw).map(Number); } catch {}
+
+                const addedDays   = newDays.filter(d => !oldDays.includes(d));
+                const removedDays = oldDays.filter(d => !newDays.includes(d));
+
+                // After the bulk SET above, tasks now carry the effective (post-update) values.
+                // Use those same effective values so DELETE/SELECT/INSERT stay in sync.
+                const dayChangeTitle  = effectiveTitleEn !== undefined ? effectiveTitleEn : task.title;
+                const dayChangeWorker = worker_id !== undefined ? worker_id : task.worker_id;
+
+                // Delete PENDING future tasks whose due_date weekday was removed
+                for (const day of removedDays) {
+                    const delSql = `DELETE FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING' AND due_date > NOW() AND EXTRACT(DOW FROM due_date AT TIME ZONE 'UTC') = $3`;
+                    const delRes = await client.query(delSql, [dayChangeTitle, dayChangeWorker, day]);
+                    console.log(`[PUT /tasks/:id] Deleted ${delRes.rowCount} instances for removed day ${day}`);
+                    updated += delRes.rowCount;
+                }
+
+                // Insert new PENDING tasks for each added weekday
+                if (addedDays.length > 0) {
+                    const rangeRes = await client.query(
+                        `SELECT MAX(due_date) AS max_due FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING'`,
+                        [dayChangeTitle, dayChangeWorker]
+                    );
+                    const maxDue = rangeRes.rows[0]?.max_due;
+                    if (maxDue) {
+                        const rangeStart = new Date();
+                        rangeStart.setUTCHours(0, 0, 0, 0);
+                        const rangeEnd = new Date(maxDue);
+                        rangeEnd.setUTCHours(0, 0, 0, 0);
+
+                        const insertTitleHe = title_he !== undefined ? title_he : task.title_he;
+                        const insertTitleTh = title_th !== undefined ? title_th : task.title_th;
+                        const insertLoc     = location_id !== undefined ? location_id : task.location_id;
+                        const insertUrgency = urgency !== undefined ? urgency : task.urgency;
+                        const insertAsset   = asset_id !== undefined ? asset_id : task.asset_id;
+                        const insertDesc    = description !== undefined ? description : task.description;
+                        const insertRType   = new_recurring_type !== undefined ? new_recurring_type : task.recurring_type;
+
+                        for (let d = new Date(rangeStart); d <= rangeEnd; d.setUTCDate(d.getUTCDate() + 1)) {
+                            if (addedDays.includes(d.getUTCDay())) {
+                                // Skip if a PENDING task already exists on this exact date
+                                const chk = await client.query(
+                                    `SELECT 1 FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING' AND due_date::date = $3::date LIMIT 1`,
+                                    [dayChangeTitle, dayChangeWorker, d]
+                                );
+                                if (chk.rows.length > 0) continue;
+
+                                const insSql = `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, status, asset_id, created_by, company_id, recurring_type, selected_days)
+                                    VALUES ($1::text,$2::text,$3::text,$4::text,$5::integer,$6::integer,$7::text,$8::timestamptz,$9::text,'PENDING',$10::integer,$11::integer,$12::integer,$13::text,$14::text)`;
+                                const insVals = [dayChangeTitle, dayChangeTitle, insertTitleHe, insertTitleTh,
+                                    insertLoc, dayChangeWorker, insertUrgency, new Date(d),
+                                    insertDesc, insertAsset, task.created_by, task.company_id,
+                                    insertRType, new_selected_days_raw];
+                                await client.query(insSql, insVals);
+                                updated++;
+                            }
+                        }
+                        console.log(`[PUT /tasks/:id] Inserted new instances for added days: ${addedDays}`);
+                    }
+                }
+            }
+
             // Media: update only this specific task's images (standalone query, own param array)
             if (hasImageUpdate) {
                 const imgSql = `UPDATE tasks SET images = $1::text[] WHERE id = $2::integer`;
@@ -3136,6 +3218,8 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             if (location_id !== undefined) { vals.push(location_id); sets.push(`location_id = $${vals.length}::integer`); }
             if (asset_id !== undefined)    { vals.push(asset_id);    sets.push(`asset_id = $${vals.length}::integer`); }
             if (due_date !== undefined)    { vals.push(due_date);    sets.push(`due_date = $${vals.length}::timestamptz`); }
+            if (new_recurring_type !== undefined)    { vals.push(new_recurring_type);    sets.push(`recurring_type = $${vals.length}::text`); }
+            if (new_selected_days_raw !== undefined) { vals.push(new_selected_days_raw); sets.push(`selected_days = $${vals.length}::text`); }
 
             if (hasImageUpdate) {
                 vals.push(finalImages);
