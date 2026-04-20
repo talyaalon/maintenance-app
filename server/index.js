@@ -3106,7 +3106,8 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             // Recurrence metadata — keep the whole group in sync
             if (new_recurring_type !== undefined)    { vals.push(new_recurring_type);    sets.push(`recurring_type = $${vals.length}::text`); }
             if (new_selected_days_raw !== undefined) { vals.push(new_selected_days_raw); sets.push(`selected_days = $${vals.length}::text`); }
-            // Images are per-task, never bulk-updated across the set (handled below)
+            // Images: propagate finalImages to every task in the series
+            if (hasImageUpdate) { vals.push(finalImages); sets.push(`images = $${vals.length}::text[]`); }
 
             if (sets.length > 0) {
                 // Append WHERE params to the same vals array after all SET params are locked in.
@@ -3228,12 +3229,13 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                                 }
                                 if (chk.rows.length > 0) continue;
 
-                                const insSql = `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, status, asset_id, created_by, company_id, recurring_type, selected_days, recurring_group_id, is_recurring)
-                                    VALUES ($1::text,$2::text,$3::text,$4::text,$5::integer,$6::integer,$7::text,$8::timestamptz,$9::text,'PENDING',$10::integer,$11::integer,$12::integer,$13::text,$14::text,$15::integer,$16::boolean)`;
+                                const insSql = `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, status, asset_id, created_by, company_id, recurring_type, selected_days, recurring_group_id, is_recurring, images)
+                                    VALUES ($1::text,$2::text,$3::text,$4::text,$5::integer,$6::integer,$7::text,$8::timestamptz,$9::text,'PENDING',$10::integer,$11::integer,$12::integer,$13::text,$14::text,$15::integer,$16::boolean,$17::text[])`;
                                 const insVals = [dayChangeTitle, dayChangeTitle, insertTitleHe, insertTitleTh,
                                     insertLoc, dayChangeWorker, insertUrgency, new Date(d),
                                     insertDesc, insertAsset, task.created_by, task.company_id,
-                                    insertRType, new_selected_days_raw, task.recurring_group_id, true];
+                                    insertRType, new_selected_days_raw, task.recurring_group_id, true,
+                                    hasImageUpdate ? finalImages : (task.images || [])];
                                 await client.query(insSql, insVals);
                                 updated++;
                             }
@@ -3243,15 +3245,6 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 }
             }
 
-            // Media: update only this specific task's images (standalone query, own param array)
-            if (hasImageUpdate) {
-                const imgSql = `UPDATE tasks SET images = $1::text[] WHERE id = $2::integer`;
-                const imgVals = [finalImages, taskId];
-                console.log('[PUT /tasks/:id] Executing SQL:', imgSql);
-                console.log('[PUT /tasks/:id] With Vals:', imgVals);
-                await client.query(imgSql, imgVals);
-                if (updated === 0) updated = 1;
-            }
         } else {
             // ── Single-instance update ──
             // Same rule: push to vals FIRST, then use $${vals.length} as placeholder.
@@ -3282,6 +3275,17 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 console.log('[PUT /tasks/:id] With Vals:', vals);
                 const result = await client.query(singleSql, vals);
                 updated = result.rowCount;
+            }
+
+            // Safety net: always persist images in a dedicated query so they can
+            // never be silently dropped by an edge-case in the dynamic SET builder.
+            if (hasImageUpdate) {
+                const imgSql = `UPDATE tasks SET images = $1::text[] WHERE id = $2::integer`;
+                const imgVals = [finalImages, taskId];
+                console.log('[PUT /tasks/:id] Executing SQL:', imgSql);
+                console.log('[PUT /tasks/:id] With Vals:', imgVals);
+                await client.query(imgSql, imgVals);
+                if (updated === 0) updated = 1;
             }
         }
 
