@@ -734,6 +734,10 @@ app.get('/fix-db', async (req, res) => {
             // Migrate existing title data into the English column
             await client.query("UPDATE tasks SET title_en = title WHERE title_en IS NULL AND title IS NOT NULL");
 
+            // Recurring task metadata — lets EditTaskModal read back the type and selected days
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurring_type TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS selected_days TEXT');
+
             console.log("✅ DB Fix Completed!");
             res.send(`
                 <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
@@ -2453,9 +2457,13 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
         );
     } else {
         const tasksToInsert = [];
+        // Normalise to UTC midnight so getUTCDay() always matches the calendar day
+        // the Bangkok user sees.  Without this, times before 07:00 BKK roll back one
+        // UTC day and every generated instance lands one day late (+1 shift bug).
         const start = new Date(due_date);
+        start.setUTCHours(0, 0, 0, 0);
         const end = new Date(start);
-        end.setFullYear(end.getFullYear() + 1);
+        end.setUTCFullYear(end.getUTCFullYear() + 1);
 
         let daysArray = [];
         if (selected_days) {
@@ -2468,17 +2476,17 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
             try { quarterlyDatesArray = JSON.parse(quarterly_dates).filter(d => d); } catch (e) {}
         }
 
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
             let match = false;
             if (recurring_type === 'daily' || recurring_type === 'weekly') {
-                if (daysArray.includes(d.getDay())) match = true;
+                if (daysArray.includes(d.getUTCDay())) match = true;
             } else if (recurring_type === 'monthly') {
-                if (d.getDate() === monthlyDate) match = true;
+                if (d.getUTCDate() === monthlyDate) match = true;
             } else if (recurring_type === 'quarterly') {
-                const dayMonthStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const dayMonthStr = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
                 if (quarterlyDatesArray.includes(dayMonthStr)) match = true;
             } else if (recurring_type === 'yearly') {
-                if (d.getMonth() === start.getMonth() && d.getDate() === start.getDate()) match = true;
+                if (d.getUTCMonth() === start.getUTCMonth() && d.getUTCDate() === start.getUTCDate()) match = true;
             }
 
             if (match) tasksToInsert.push(new Date(d));
@@ -2488,9 +2496,9 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
         for (const date of tasksToInsert) {
             await pool.query(
-                `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by, company_id)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13)`,
-                [resolvedTitleEn + ' (Recurring)', resolvedTitleEn + ' (Recurring)', resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id, taskCompanyId]
+                `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by, company_id, recurring_type, selected_days)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13, $14::text, $15::text)`,
+                [resolvedTitleEn + ' (Recurring)', resolvedTitleEn + ' (Recurring)', resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id, taskCompanyId, recurring_type, selected_days || null]
             );
         }
         createdCount = tasksToInsert.length;

@@ -34,18 +34,23 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
 
     // ── Frequency helpers ─────────────────────────────────────────────────────
     const getInitialFrequency = () => {
-        // Normalize to lowercase so 'DAILY', 'Daily', 'daily' all match
-        const rt = (task.recurring_type || '').trim().toLowerCase();
-        console.log('[Recurrence Debug] recurring_type:', task.recurring_type, '| is_recurring:', task.is_recurring, '| recurring_group_id:', task.recurring_group_id);
+        // Check both snake_case (DB) and camelCase (possible API transform)
+        const rt = (task.recurring_type || task.recurringType || '').trim().toLowerCase();
+        console.log('[Recurrence Debug] recurring_type:', task.recurring_type, task.recurringType, '| is_recurring:', task.is_recurring, task.isRecurring, '| recurring_group_id:', task.recurring_group_id);
         if (rt === 'daily')     return 'Daily';
         if (rt === 'weekly')    return 'Weekly';
         if (rt === 'monthly')   return 'Monthly';
         if (rt === 'quarterly') return 'Quarterly';
         if (rt === 'yearly')    return 'Yearly';
-        // No valid recurring_type string — check flag and group as fallback
+        // No valid recurring_type — check flag, group id, and title suffix (for pre-migration tasks)
         const isRec = task.is_recurring === true || task.is_recurring === 1
-            || task.is_recurring === '1' || task.is_recurring === 'true';
-        if (isRec || task.recurring_group_id != null) return 'Daily';
+            || task.is_recurring === '1' || task.is_recurring === 'true'
+            || task.isRecurring === true || task.isRecurring === 1
+            || task.isRecurring === 'true';
+        const hasTitleSuffix =
+            !!(task.title    && task.title.endsWith(' (Recurring)')) ||
+            !!(task.title_en && task.title_en.endsWith(' (Recurring)'));
+        if (isRec || task.recurring_group_id != null || hasTitleSuffix) return 'Daily';
         return 'Once';
     };
 
@@ -120,9 +125,14 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     // ── Safety net: correct frequency if getInitialFrequency() fired before task hydrated ──
     useEffect(() => {
         const isRec = task.is_recurring === true || task.is_recurring === 1
-            || task.is_recurring === '1' || task.is_recurring === 'true';
-        if ((isRec || task.recurring_group_id != null) && frequency === 'Once') {
-            const rt = (task.recurring_type || '').trim().toLowerCase();
+            || task.is_recurring === '1' || task.is_recurring === 'true'
+            || task.isRecurring === true || task.isRecurring === 1
+            || task.isRecurring === 'true';
+        const hasTitleSuffix =
+            !!(task.title    && task.title.endsWith(' (Recurring)')) ||
+            !!(task.title_en && task.title_en.endsWith(' (Recurring)'));
+        if ((isRec || task.recurring_group_id != null || hasTitleSuffix) && frequency === 'Once') {
+            const rt = (task.recurring_type || task.recurringType || '').trim().toLowerCase();
             const map = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' };
             setFrequency(map[rt] || 'Daily');
         }
