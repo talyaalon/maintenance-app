@@ -737,6 +737,8 @@ app.get('/fix-db', async (req, res) => {
             // Recurring task metadata — lets EditTaskModal read back the type and selected days
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurring_type TEXT');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS selected_days TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurring_group_id INTEGER');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE');
 
             console.log("✅ DB Fix Completed!");
             res.send(`
