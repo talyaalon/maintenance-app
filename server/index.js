@@ -3008,6 +3008,9 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
         return isNaN(n) ? null : n;
     };
     const { update_mode } = req.body;
+    // FormData transmits everything as strings; guard against both string and native boolean.
+    const mode = (update_mode === 'set' || update_mode === true) ? 'set' : 'single';
+    console.log('[Bulk Debug] update_mode received:', req.body.update_mode, '→ resolved mode:', mode);
     const title_en   = norm(req.body.title_en);
     const title_he   = norm(req.body.title_he);
     const title_th   = norm(req.body.title_th);
@@ -3018,7 +3021,6 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     const location_id = parseNullableInt(req.body.location_id);
     const asset_id    = parseNullableInt(req.body.asset_id);
     const due_date   = norm(req.body.due_date);
-    const mode = update_mode === 'set' ? 'set' : 'single';
 
     // Recurrence metadata sent by EditTaskModal
     const new_recurring_type    = norm(req.body.recurring_type);    // e.g. 'daily'
@@ -3071,8 +3073,13 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
         }
 
         let updated = 0;
+        // Mirror the frontend's isRecurringSeries detection exactly:
+        // check recurring_group_id, DB is_recurring flag, title, and title_en (all three suffixes).
         const isRecurring = task.recurring_group_id != null ||
-            (task.title && task.title.endsWith(' (Recurring)'));
+            task.is_recurring === true || task.is_recurring === 1 ||
+            (task.title    && task.title.endsWith(' (Recurring)')) ||
+            (task.title_en && task.title_en.endsWith(' (Recurring)'));
+        console.log('[Bulk Debug] isRecurring:', isRecurring, '| recurring_group_id:', task.recurring_group_id, '| is_recurring:', task.is_recurring);
 
         if (mode === 'set' && isRecurring) {
             // ── Update all PENDING siblings (same title + worker, due_date >= current) ──
