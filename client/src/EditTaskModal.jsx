@@ -110,9 +110,15 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     const [categories, setCategories] = useState([]);
     const [assets, setAssets] = useState([]);
 
-    const [existingImages, setExistingImages] = useState(
-        Array.isArray(task.images) ? task.images.filter(Boolean) : []
-    );
+    const parseImages = () => {
+        console.log('[Media Debug] Initializing with:', task.images);
+        if (Array.isArray(task.images)) return task.images.filter(Boolean);
+        if (typeof task.images === 'string' && task.images) {
+            try { return JSON.parse(task.images).filter(Boolean); } catch {}
+        }
+        return [];
+    };
+    const [existingImages, setExistingImages] = useState(parseImages);
     const [newFiles, setNewFiles] = useState([]);
     const fileInputRef = useRef(null);
 

@@ -3069,7 +3069,8 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
         }
 
         let updated = 0;
-        const isRecurring = task.title && task.title.endsWith(' (Recurring)');
+        const isRecurring = task.recurring_group_id != null ||
+            (task.title && task.title.endsWith(' (Recurring)'));
 
         if (mode === 'set' && isRecurring) {
             // ── Update all PENDING siblings (same title + worker, due_date >= current) ──
@@ -3099,12 +3100,21 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             // Images are per-task, never bulk-updated across the set (handled below)
 
             if (sets.length > 0) {
-                // Append WHERE params to the same vals array after all SET params are locked in
-                vals.push(task.title);    const pTitle  = vals.length;
-                vals.push(task.worker_id); const pWorker = vals.length;
-                vals.push(task.due_date);  const pDue    = vals.length;
+                // Append WHERE params to the same vals array after all SET params are locked in.
+                // Prefer recurring_group_id (precise) over title+worker (legacy fallback).
+                let setModeWhereSuffix;
+                if (task.recurring_group_id != null) {
+                    vals.push(task.recurring_group_id); const pGroup = vals.length;
+                    vals.push(task.due_date);           const pDue   = vals.length;
+                    setModeWhereSuffix = `recurring_group_id = $${pGroup}::integer AND status = 'PENDING' AND due_date >= $${pDue}::timestamptz`;
+                } else {
+                    vals.push(task.title);    const pTitle  = vals.length;
+                    vals.push(task.worker_id); const pWorker = vals.length;
+                    vals.push(task.due_date);  const pDue    = vals.length;
+                    setModeWhereSuffix = `title = $${pTitle}::text AND worker_id = $${pWorker}::integer AND status = 'PENDING' AND due_date >= $${pDue}::timestamptz`;
+                }
 
-                const setModeSql = `UPDATE tasks SET ${sets.join(', ')} WHERE title = $${pTitle}::text AND worker_id = $${pWorker}::integer AND status = 'PENDING' AND due_date >= $${pDue}::timestamptz`;
+                const setModeSql = `UPDATE tasks SET ${sets.join(', ')} WHERE ${setModeWhereSuffix}`;
                 console.log('[PUT /tasks/:id] Executing SQL:', setModeSql);
                 console.log('[PUT /tasks/:id] With Vals:', vals);
                 const result = await client.query(setModeSql, vals);
@@ -3117,8 +3127,14 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                     (new Date(due_date).getTime() - new Date(task.due_date).getTime()) / 1000
                 );
                 if (deltaSeconds !== 0) {
-                    const shiftSql = `UPDATE tasks SET due_date = due_date + ($1 * interval '1 second') WHERE title = $2 AND worker_id = $3 AND status = 'PENDING' AND due_date >= $4`;
-                    const shiftVals = [deltaSeconds, task.title, task.worker_id, task.due_date];
+                    let shiftSql, shiftVals;
+                    if (task.recurring_group_id != null) {
+                        shiftSql = `UPDATE tasks SET due_date = due_date + ($1 * interval '1 second') WHERE recurring_group_id = $2::integer AND status = 'PENDING' AND due_date >= $3`;
+                        shiftVals = [deltaSeconds, task.recurring_group_id, task.due_date];
+                    } else {
+                        shiftSql = `UPDATE tasks SET due_date = due_date + ($1 * interval '1 second') WHERE title = $2 AND worker_id = $3 AND status = 'PENDING' AND due_date >= $4`;
+                        shiftVals = [deltaSeconds, task.title, task.worker_id, task.due_date];
+                    }
                     console.log('[PUT /tasks/:id] Executing SQL:', shiftSql);
                     console.log('[PUT /tasks/:id] With Vals:', shiftVals);
                     const shiftResult = await client.query(shiftSql, shiftVals);
@@ -3141,20 +3157,36 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 const dayChangeTitle  = effectiveTitleEn !== undefined ? effectiveTitleEn : task.title;
                 const dayChangeWorker = worker_id !== undefined ? worker_id : task.worker_id;
 
-                // Delete PENDING future tasks whose due_date weekday was removed
+                // Delete PENDING future tasks whose due_date weekday was removed.
+                // Use recurring_group_id when available (precise); fall back to title+worker.
                 for (const day of removedDays) {
-                    const delSql = `DELETE FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING' AND due_date > NOW() AND EXTRACT(DOW FROM due_date AT TIME ZONE 'UTC') = $3`;
-                    const delRes = await client.query(delSql, [dayChangeTitle, dayChangeWorker, day]);
+                    let delSql, delParams;
+                    if (task.recurring_group_id != null) {
+                        delSql = `DELETE FROM tasks WHERE recurring_group_id = $1::integer AND status = 'PENDING' AND due_date > NOW() AND EXTRACT(DOW FROM due_date AT TIME ZONE 'UTC') = $2`;
+                        delParams = [task.recurring_group_id, day];
+                    } else {
+                        delSql = `DELETE FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING' AND due_date > NOW() AND EXTRACT(DOW FROM due_date AT TIME ZONE 'UTC') = $3`;
+                        delParams = [dayChangeTitle, dayChangeWorker, day];
+                    }
+                    const delRes = await client.query(delSql, delParams);
                     console.log(`[PUT /tasks/:id] Deleted ${delRes.rowCount} instances for removed day ${day}`);
                     updated += delRes.rowCount;
                 }
 
                 // Insert new PENDING tasks for each added weekday
                 if (addedDays.length > 0) {
-                    const rangeRes = await client.query(
-                        `SELECT MAX(due_date) AS max_due FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING'`,
-                        [dayChangeTitle, dayChangeWorker]
-                    );
+                    let rangeRes;
+                    if (task.recurring_group_id != null) {
+                        rangeRes = await client.query(
+                            `SELECT MAX(due_date) AS max_due FROM tasks WHERE recurring_group_id = $1::integer AND status = 'PENDING'`,
+                            [task.recurring_group_id]
+                        );
+                    } else {
+                        rangeRes = await client.query(
+                            `SELECT MAX(due_date) AS max_due FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING'`,
+                            [dayChangeTitle, dayChangeWorker]
+                        );
+                    }
                     const maxDue = rangeRes.rows[0]?.max_due;
                     if (maxDue) {
                         const rangeStart = new Date();
@@ -3172,19 +3204,27 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
 
                         for (let d = new Date(rangeStart); d <= rangeEnd; d.setUTCDate(d.getUTCDate() + 1)) {
                             if (addedDays.includes(d.getUTCDay())) {
-                                // Skip if a PENDING task already exists on this exact date
-                                const chk = await client.query(
-                                    `SELECT 1 FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING' AND due_date::date = $3::date LIMIT 1`,
-                                    [dayChangeTitle, dayChangeWorker, d]
-                                );
+                                // Skip if a PENDING task already exists on this exact date for this group
+                                let chk;
+                                if (task.recurring_group_id != null) {
+                                    chk = await client.query(
+                                        `SELECT 1 FROM tasks WHERE recurring_group_id = $1::integer AND status = 'PENDING' AND due_date::date = $2::date LIMIT 1`,
+                                        [task.recurring_group_id, d]
+                                    );
+                                } else {
+                                    chk = await client.query(
+                                        `SELECT 1 FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING' AND due_date::date = $3::date LIMIT 1`,
+                                        [dayChangeTitle, dayChangeWorker, d]
+                                    );
+                                }
                                 if (chk.rows.length > 0) continue;
 
-                                const insSql = `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, status, asset_id, created_by, company_id, recurring_type, selected_days)
-                                    VALUES ($1::text,$2::text,$3::text,$4::text,$5::integer,$6::integer,$7::text,$8::timestamptz,$9::text,'PENDING',$10::integer,$11::integer,$12::integer,$13::text,$14::text)`;
+                                const insSql = `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, status, asset_id, created_by, company_id, recurring_type, selected_days, recurring_group_id, is_recurring)
+                                    VALUES ($1::text,$2::text,$3::text,$4::text,$5::integer,$6::integer,$7::text,$8::timestamptz,$9::text,'PENDING',$10::integer,$11::integer,$12::integer,$13::text,$14::text,$15::integer,$16::boolean)`;
                                 const insVals = [dayChangeTitle, dayChangeTitle, insertTitleHe, insertTitleTh,
                                     insertLoc, dayChangeWorker, insertUrgency, new Date(d),
                                     insertDesc, insertAsset, task.created_by, task.company_id,
-                                    insertRType, new_selected_days_raw];
+                                    insertRType, new_selected_days_raw, task.recurring_group_id, true];
                                 await client.query(insSql, insVals);
                                 updated++;
                             }
