@@ -2918,27 +2918,50 @@ app.delete('/tasks/:id', authenticateToken, async (req, res) => {
         }
 
         let deleted = 0;
-        if (task.title && task.title.endsWith(' (Recurring)')) {
-            // Delete this instance + all future PENDING instances sharing title/worker
-            if (role === 'COMPANY_MANAGER') {
-                // Match sibling recurring tasks scoped to this company.
-                // Some older tasks have company_id = NULL; handle both cases.
-                const result = await client.query(
-                    `DELETE FROM tasks
-                     WHERE title = $1 AND worker_id = $2 AND status = 'PENDING' AND due_date >= $3
-                       AND (company_id = $4 OR company_id IS NULL)`,
-                    [task.title, task.worker_id, task.due_date, company_id]
-                );
-                deleted = result.rowCount;
+        // Mirror the frontend's isRecurringSeries detection exactly (same as PUT handler).
+        const isRecurring = task.recurring_group_id != null ||
+            task.is_recurring === true || task.is_recurring === 1 ||
+            (task.title    && task.title.endsWith(' (Recurring)')) ||
+            (task.title_en && task.title_en.endsWith(' (Recurring)'));
+
+        if (isRecurring) {
+            if (task.recurring_group_id != null) {
+                // ── Precise path: delete ALL non-completed tasks in this series (all dates) ──
+                if (role === 'COMPANY_MANAGER') {
+                    const result = await client.query(
+                        `DELETE FROM tasks
+                         WHERE recurring_group_id = $1 AND status != 'COMPLETED'
+                           AND (company_id = $2 OR company_id IS NULL)`,
+                        [task.recurring_group_id, company_id]
+                    );
+                    deleted = result.rowCount;
+                } else {
+                    const result = await client.query(
+                        `DELETE FROM tasks WHERE recurring_group_id = $1 AND status != 'COMPLETED'`,
+                        [task.recurring_group_id]
+                    );
+                    deleted = result.rowCount;
+                }
             } else {
-                const result = await client.query(
-                    `DELETE FROM tasks WHERE title = $1 AND worker_id = $2 AND status = 'PENDING' AND due_date >= $3`,
-                    [task.title, task.worker_id, task.due_date]
-                );
-                deleted = result.rowCount;
+                // ── Legacy fallback: match by title + worker, all dates, non-completed ──
+                if (role === 'COMPANY_MANAGER') {
+                    const result = await client.query(
+                        `DELETE FROM tasks
+                         WHERE title = $1 AND worker_id = $2 AND status != 'COMPLETED'
+                           AND (company_id = $3 OR company_id IS NULL)`,
+                        [task.title, task.worker_id, company_id]
+                    );
+                    deleted = result.rowCount;
+                } else {
+                    const result = await client.query(
+                        `DELETE FROM tasks WHERE title = $1 AND worker_id = $2 AND status != 'COMPLETED'`,
+                        [task.title, task.worker_id]
+                    );
+                    deleted = result.rowCount;
+                }
+                // Safety net: ensure target is removed even if it has a non-standard status
+                await client.query('DELETE FROM tasks WHERE id = $1 AND status != \'COMPLETED\'', [taskId]);
             }
-            // Ensure target is removed even if it was non-PENDING
-            await client.query('DELETE FROM tasks WHERE id = $1', [taskId]);
         } else {
             const result = await client.query('DELETE FROM tasks WHERE id = $1', [taskId]);
             deleted = result.rowCount;
