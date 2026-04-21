@@ -740,6 +740,13 @@ app.get('/fix-db', async (req, res) => {
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurring_group_id INTEGER');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE');
 
+            // ── Performance indexes — prevent full-table scans on hot query paths ──
+            await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_due_date            ON tasks(due_date)');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_company_id          ON tasks(company_id)');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_worker_id           ON tasks(worker_id)');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_recurring_group_id  ON tasks(recurring_group_id)');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_status              ON tasks(status)');
+
             console.log("✅ DB Fix Completed!");
             res.send(`
                 <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
@@ -2356,27 +2363,34 @@ app.delete('/assets/:id', authenticateToken, requireAdmin, (req, res) => deleteI
 app.get('/tasks', authenticateToken, async (req, res) => {
     try {
         const { role, id } = req.user;
+        // ── Lightweight query: no images/completion_images/description blobs ────
+        // Full task detail (incl. images) is fetched on-demand via GET /tasks/:id
         let query = `
-            SELECT t.*,
-                   u.full_name as worker_name,
-                   cb.full_name as creator_name,
-                   l.name as location_name,
-                   COALESCE(l.name_en, l.name) as location_name_en,
-                   COALESCE(l.name_he, l.name) as location_name_he,
-                   COALESCE(l.name_th, l.name) as location_name_th,
-                   a.name as asset_name,
-                   COALESCE(a.name_en, a.name) as asset_name_en,
-                   COALESCE(a.name_he, a.name) as asset_name_he,
-                   COALESCE(a.name_th, a.name) as asset_name_th,
-                   a.code as asset_code,
-                   c.id as category_id,
-                   c.name as category_name,
-                   COALESCE(c.name_en, c.name) as category_name_en,
-                   COALESCE(c.name_he, c.name) as category_name_he,
-                   COALESCE(c.name_th, c.name) as category_name_th
+            SELECT t.id, t.title, t.title_en, t.title_he, t.title_th,
+                   t.due_date, t.status, t.urgency,
+                   t.worker_id, t.location_id, t.asset_id, t.company_id,
+                   t.recurring_group_id, t.is_recurring, t.recurring_type, t.selected_days,
+                   t.is_stuck,
+                   (t.images IS NOT NULL AND array_length(t.images, 1) > 0)                              AS has_images,
+                   (t.images IS NOT NULL AND array_length(t.images, 1) > 0
+                    AND (t.images[1] ILIKE '%mp4%' OR t.images[1] ILIKE '%video%'))                      AS is_video,
+                   u.full_name AS worker_name,
+                   l.name AS location_name,
+                   COALESCE(l.name_en, l.name) AS location_name_en,
+                   COALESCE(l.name_he, l.name) AS location_name_he,
+                   COALESCE(l.name_th, l.name) AS location_name_th,
+                   a.name AS asset_name,
+                   COALESCE(a.name_en, a.name) AS asset_name_en,
+                   COALESCE(a.name_he, a.name) AS asset_name_he,
+                   COALESCE(a.name_th, a.name) AS asset_name_th,
+                   a.code AS asset_code,
+                   c.id AS category_id,
+                   c.name AS category_name,
+                   COALESCE(c.name_en, c.name) AS category_name_en,
+                   COALESCE(c.name_he, c.name) AS category_name_he,
+                   COALESCE(c.name_th, c.name) AS category_name_th
             FROM tasks t
             LEFT JOIN users u ON t.worker_id = u.id
-            LEFT JOIN users cb ON t.created_by = cb.id
             LEFT JOIN locations l ON t.location_id = l.id
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN categories c ON a.category_id = c.id
@@ -4151,6 +4165,46 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).send("Error fetching user tasks");
+    }
+});
+
+// ── GET /tasks/:id — full task detail (images, description, etc.) for edit modal
+// Must be declared AFTER all more-specific /tasks/* routes to avoid shadowing them.
+app.get('/tasks/:id', authenticateToken, async (req, res) => {
+    try {
+        const taskId = parseInt(req.params.id, 10);
+        if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid task id' });
+        const result = await pool.query(`
+            SELECT t.*,
+                   u.full_name AS worker_name,
+                   cb.full_name AS creator_name,
+                   l.name AS location_name,
+                   COALESCE(l.name_en, l.name) AS location_name_en,
+                   COALESCE(l.name_he, l.name) AS location_name_he,
+                   COALESCE(l.name_th, l.name) AS location_name_th,
+                   a.name AS asset_name,
+                   COALESCE(a.name_en, a.name) AS asset_name_en,
+                   COALESCE(a.name_he, a.name) AS asset_name_he,
+                   COALESCE(a.name_th, a.name) AS asset_name_th,
+                   a.code AS asset_code,
+                   c.id AS category_id,
+                   c.name AS category_name,
+                   COALESCE(c.name_en, c.name) AS category_name_en,
+                   COALESCE(c.name_he, c.name) AS category_name_he,
+                   COALESCE(c.name_th, c.name) AS category_name_th
+            FROM tasks t
+            LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN users cb ON t.created_by = cb.id
+            LEFT JOIN locations l ON t.location_id = l.id
+            LEFT JOIN assets a ON t.asset_id = a.id
+            LEFT JOIN categories c ON a.category_id = c.id
+            WHERE t.id = $1
+        `, [taskId]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('GET /tasks/:id error:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -6024,6 +6078,13 @@ app.listen(port, async () => {
         await pool.query("UPDATE tasks SET title_en = title WHERE title_en IS NULL AND title IS NOT NULL");
 
         console.log("✅ DB columns verified.");
+
+        // ── Performance indexes — idempotent, safe to run every startup ──
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tasks_due_date            ON tasks(due_date)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tasks_company_id          ON tasks(company_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tasks_worker_id           ON tasks(worker_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tasks_recurring_group_id  ON tasks(recurring_group_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tasks_status              ON tasks(status)');
     } catch (e) {
         console.error("⚠️ Startup migration warning:", e.message);
     }

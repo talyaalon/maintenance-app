@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
@@ -90,6 +90,28 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [loadingTaskId, setLoadingTaskId] = useState(null);
+
+  // Fetch the full task (images, description, etc.) only when the user taps to open it.
+  // The list payload is intentionally lightweight — no blobs until needed.
+  const handleTaskClick = useCallback(async (task) => {
+      setLoadingTaskId(task.id);
+      try {
+          const res = await fetch(`${BASE}/tasks/${task.id}`, {
+              headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+              const fullTask = await res.json();
+              setSelectedTask(fullTask);
+          } else {
+              setSelectedTask(task); // fallback to lightweight data
+          }
+      } catch {
+          setSelectedTask(task); // fallback on network error
+      } finally {
+          setLoadingTaskId(null);
+      }
+  }, [token]);
 
   // ── API-fetched filter options (role-scoped) ─────────────────────────────
   const [apiLocations,  setApiLocations]  = useState([]);
@@ -256,17 +278,18 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
 
   // Wraps a TaskCard with a selection checkbox for BIG_BOSS / COMPANY_MANAGER
   const renderTaskCard = (task, prefixContent = null) => {
+      const isLoading = loadingTaskId === task.id;
       if (!isBulkRole || !isSelectionMode) {
           return (
-              <div key={task.id}>
+              <div key={task.id} className={isLoading ? 'opacity-60 pointer-events-none' : ''}>
                   {prefixContent}
-                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+                  <TaskCard task={task} t={t} lang={lang} onClick={() => handleTaskClick(task)} />
               </div>
           );
       }
       const isSelected = selectedIds.has(task.id);
       return (
-          <div key={task.id} className={`flex items-start gap-2 rounded-xl transition-colors ${isSelected ? 'bg-[#714B67]/5' : ''}`}>
+          <div key={task.id} className={`flex items-start gap-2 rounded-xl transition-colors ${isSelected ? 'bg-[#714B67]/5' : ''} ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
               <label
                   className="flex items-center pt-3.5 pl-0.5 cursor-pointer shrink-0"
                   onClick={e => e.stopPropagation()}
@@ -281,7 +304,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
               </label>
               <div className="flex-1 min-w-0">
                   {prefixContent}
-                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+                  <TaskCard task={task} t={t} lang={lang} onClick={() => handleTaskClick(task)} />
               </div>
           </div>
       );
@@ -298,6 +321,36 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const filteredTodayCount     = applyFilters(applySearch(todayTasks)).length;
   const filteredWaitingCount   = applyFilters(applySearch(waitingTasks)).length;
   const filteredCompletedCount = applyFilters(applySearch(completedTasks)).length;
+  // Pre-compute date → pending task count once per tasks/filter change.
+  // This makes each calendar tile an O(1) Map lookup instead of O(n) filter.
+  const calendarTaskCounts = useMemo(() => {
+      const counts = new Map();
+      const pending = applyFilters(tasks.filter(t => t.status === 'PENDING'));
+      pending.forEach(task => {
+          const d = getBkkDateObj(task.due_date);
+          // Key by year-month-day so midnight boundary differences don't matter
+          const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+          counts.set(key, (counts.get(key) || 0) + 1);
+      });
+      return counts;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, filterPriority, filterLocation, filterCategory, filterAssignee]);
+
+  // Stable tileContent callback — only recreates when counts or locale strings change.
+  const calendarTileContent = useCallback(({ date, view }) => {
+      if (view !== 'month') return null;
+      const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      const count = calendarTaskCounts.get(key) || 0;
+      if (count === 0) return null;
+      return (
+          <div className="flex flex-col items-center">
+              <span className="task-count-badge">
+                  {count} {count === 1 ? (t.task_singular || 'Task') : (t.tasks_plural || 'Tasks')}
+              </span>
+          </div>
+      );
+  }, [calendarTaskCounts, t]);
+
   const calendarTasks = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), selectedDate)));
 
   const renderOverdueView = () => {
@@ -387,12 +440,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                         onChange={setSelectedDate}
                         value={selectedDate}
                         locale={getLocale(lang)}
-                        tileContent={({ date, view }) => {
-                            if (view === 'month') {
-                                const count = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), date))).length;
-                                if (count > 0) return <div className="flex flex-col items-center"><span className="task-count-badge">{count} {count === 1 ? (t.task_singular || "Task") : (t.tasks_plural || "Tasks")}</span></div>;
-                            }
-                        }}
+                        tileContent={calendarTileContent}
                       />
                   </div>
                   <div className="mt-8 w-full max-w-[800px] pb-28">

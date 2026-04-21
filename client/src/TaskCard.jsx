@@ -20,8 +20,10 @@ const TaskCard = ({ task, onClick, t, lang = 'en' }) => {
                      : task.urgency === 'Low' ? 'bg-blue-50 text-blue-600 border-blue-100'
                      : 'bg-gray-50 text-gray-600 border-gray-100';
 
-  const hasMedia = task.images && task.images.length > 0;
-  const isVideo = hasMedia && (task.images[0].includes('mp4') || task.images[0].includes('video'));
+  // Support both the lightweight flag (from GET /tasks list) and the full array (from GET /tasks/:id)
+  const hasMedia = task.has_images || (Array.isArray(task.images) && task.images.length > 0);
+  const isVideo  = task.is_video  || (hasMedia && Array.isArray(task.images) && task.images[0] &&
+                    (task.images[0].includes('mp4') || task.images[0].includes('video')));
   const displayCode = task.asset_code || '';
 
   return (
