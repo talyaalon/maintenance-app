@@ -3136,13 +3136,11 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 let setModeWhereSuffix;
                 if (task.recurring_group_id != null) {
                     vals.push(task.recurring_group_id); const pGroup = vals.length;
-                    vals.push(task.due_date);           const pDue   = vals.length;
-                    setModeWhereSuffix = `recurring_group_id = $${pGroup}::integer AND status = 'PENDING' AND due_date >= $${pDue}::timestamptz`;
+                    setModeWhereSuffix = `recurring_group_id = $${pGroup}::integer AND status != 'COMPLETED'`;
                 } else {
-                    vals.push(task.title);    const pTitle  = vals.length;
+                    vals.push(task.title);     const pTitle  = vals.length;
                     vals.push(task.worker_id); const pWorker = vals.length;
-                    vals.push(task.due_date);  const pDue    = vals.length;
-                    setModeWhereSuffix = `title = $${pTitle}::text AND worker_id = $${pWorker}::integer AND status = 'PENDING' AND due_date >= $${pDue}::timestamptz`;
+                    setModeWhereSuffix = `title = $${pTitle}::text AND worker_id = $${pWorker}::integer AND status != 'COMPLETED'`;
                 }
 
                 const setModeSql = `UPDATE tasks SET ${sets.join(', ')} WHERE ${setModeWhereSuffix}`;
@@ -3155,8 +3153,8 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             // Safety net: belt-and-suspenders image propagation for the whole group.
             // Mirrors the single-branch fallback so images can never be silently dropped.
             if (hasImageUpdate && task.recurring_group_id != null) {
-                const imgBulkSql = `UPDATE tasks SET images = $1::text[] WHERE recurring_group_id = $2::integer AND status = 'PENDING' AND due_date >= $3::timestamptz`;
-                const imgBulkVals = [finalImages, task.recurring_group_id, task.due_date];
+                const imgBulkSql = `UPDATE tasks SET images = $1::text[] WHERE recurring_group_id = $2::integer AND status != 'COMPLETED'`;
+                const imgBulkVals = [finalImages, task.recurring_group_id];
                 console.log('[PUT /tasks/:id] Executing SQL (bulk img safety-net):', imgBulkSql);
                 console.log('[PUT /tasks/:id] With Vals:', imgBulkVals);
                 await client.query(imgBulkSql, imgBulkVals);
@@ -3171,11 +3169,11 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 if (deltaSeconds !== 0) {
                     let shiftSql, shiftVals;
                     if (task.recurring_group_id != null) {
-                        shiftSql = `UPDATE tasks SET due_date = due_date + ($1 * interval '1 second') WHERE recurring_group_id = $2::integer AND status = 'PENDING' AND due_date >= $3`;
-                        shiftVals = [deltaSeconds, task.recurring_group_id, task.due_date];
+                        shiftSql = `UPDATE tasks SET due_date = due_date + ($1 * interval '1 second') WHERE recurring_group_id = $2::integer AND status != 'COMPLETED'`;
+                        shiftVals = [deltaSeconds, task.recurring_group_id];
                     } else {
-                        shiftSql = `UPDATE tasks SET due_date = due_date + ($1 * interval '1 second') WHERE title = $2 AND worker_id = $3 AND status = 'PENDING' AND due_date >= $4`;
-                        shiftVals = [deltaSeconds, task.title, task.worker_id, task.due_date];
+                        shiftSql = `UPDATE tasks SET due_date = due_date + ($1 * interval '1 second') WHERE title = $2 AND worker_id = $3 AND status != 'COMPLETED'`;
+                        shiftVals = [deltaSeconds, task.title, task.worker_id];
                     }
                     console.log('[PUT /tasks/:id] Executing SQL:', shiftSql);
                     console.log('[PUT /tasks/:id] With Vals:', shiftVals);
