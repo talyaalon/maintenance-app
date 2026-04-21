@@ -2434,6 +2434,93 @@ app.get('/tasks', authenticateToken, async (req, res) => {
     } catch (err) { console.error(err); res.sendStatus(500); }
 });
 
+// ── Admin List View ──────────────────────────────────────────────────────────
+// GET /tasks/admin/list
+// Restricted to BIG_BOSS and COMPANY_MANAGER.
+// Returns paginated tasks + totalCount for the admin list view.
+// Uses the same lightweight column set as GET /tasks (no images/description blobs).
+app.get('/tasks/admin/list', authenticateToken, async (req, res) => {
+    try {
+        const { role, id } = req.user;
+
+        if (role !== 'BIG_BOSS' && role !== 'COMPANY_MANAGER') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const limit  = Math.max(1, parseInt(req.query.limit,  10) || 50);
+        const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+
+        // Lightweight select — identical to GET /tasks (no images/completion_images/description)
+        const baseSelect = `
+            SELECT t.id, t.title, t.title_en, t.title_he, t.title_th,
+                   t.due_date, t.status, t.urgency,
+                   t.worker_id, t.location_id, t.asset_id, t.company_id,
+                   t.recurring_group_id, t.is_recurring, t.recurring_type, t.selected_days,
+                   t.is_stuck,
+                   (t.images IS NOT NULL AND array_length(t.images, 1) > 0)                              AS has_images,
+                   (t.images IS NOT NULL AND array_length(t.images, 1) > 0
+                    AND (t.images[1] ILIKE '%mp4%' OR t.images[1] ILIKE '%video%'))                      AS is_video,
+                   u.full_name AS worker_name,
+                   l.name AS location_name,
+                   COALESCE(l.name_en, l.name) AS location_name_en,
+                   COALESCE(l.name_he, l.name) AS location_name_he,
+                   COALESCE(l.name_th, l.name) AS location_name_th,
+                   a.name AS asset_name,
+                   COALESCE(a.name_en, a.name) AS asset_name_en,
+                   COALESCE(a.name_he, a.name) AS asset_name_he,
+                   COALESCE(a.name_th, a.name) AS asset_name_th,
+                   a.code AS asset_code,
+                   c.id AS category_id,
+                   c.name AS category_name,
+                   COALESCE(c.name_en, c.name) AS category_name_en,
+                   COALESCE(c.name_he, c.name) AS category_name_he,
+                   COALESCE(c.name_th, c.name) AS category_name_th
+            FROM tasks t
+            LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN locations l ON t.location_id = l.id
+            LEFT JOIN assets a ON t.asset_id = a.id
+            LEFT JOIN categories c ON a.category_id = c.id
+        `;
+
+        // Build WHERE clause and params.
+        // Uses t.company_id directly — it is explicitly stamped on every task and has an index.
+        let whereClause = '';
+        let params = [];
+
+        if (role === 'COMPANY_MANAGER') {
+            const companyId = req.user.company_id || null;
+            if (companyId) {
+                whereClause = ` WHERE t.company_id = $1`;
+                params.push(companyId);
+            } else {
+                // Edge-case: COMPANY_MANAGER with no company — scope to own tasks
+                whereClause = ` WHERE t.worker_id = $1`;
+                params.push(id);
+            }
+        } else {
+            // BIG_BOSS: optional company_id filter via query param
+            if (req.query.company_id) {
+                whereClause = ` WHERE t.company_id = $1`;
+                params.push(req.query.company_id);
+            }
+        }
+
+        // Run count and data queries in parallel
+        const [countResult, dataResult] = await Promise.all([
+            pool.query(`SELECT COUNT(*) FROM tasks t${whereClause}`, params),
+            pool.query(
+                `${baseSelect}${whereClause} ORDER BY t.due_date ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+                [...params, limit, offset]
+            ),
+        ]);
+
+        res.json({
+            tasks: dataResult.rows,
+            totalCount: parseInt(countResult.rows[0].count, 10),
+        });
+    } catch (err) { console.error(err); res.sendStatus(500); }
+});
+
 app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
   try {
     const files = req.files || [];
