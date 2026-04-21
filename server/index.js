@@ -2482,30 +2482,64 @@ app.get('/tasks/admin/list', authenticateToken, async (req, res) => {
             LEFT JOIN categories c ON a.category_id = c.id
         `;
 
-        // Build WHERE clause and params.
+        // Build WHERE clause and params using a conditions array so server-side
+        // filters can be appended cleanly after the role-scoping base conditions.
         // Uses t.company_id directly — it is explicitly stamped on every task and has an index.
-        let whereClause = '';
-        let params = [];
+        const conditions = [];
+        const params = [];
 
+        // ── Role-based company scoping (unchanged) ───────────────────────────
         if (role === 'COMPANY_MANAGER') {
             const companyId = req.user.company_id || null;
             if (companyId) {
-                whereClause = ` WHERE t.company_id = $1`;
+                conditions.push(`t.company_id = $${params.length + 1}`);
                 params.push(companyId);
             } else {
                 // Edge-case: COMPANY_MANAGER with no company — scope to own tasks
-                whereClause = ` WHERE t.worker_id = $1`;
+                conditions.push(`t.worker_id = $${params.length + 1}`);
                 params.push(id);
             }
         } else {
             // BIG_BOSS: optional company_id filter via query param
             if (req.query.company_id) {
-                whereClause = ` WHERE t.company_id = $1`;
+                conditions.push(`t.company_id = $${params.length + 1}`);
                 params.push(req.query.company_id);
             }
         }
 
-        // Run count and data queries in parallel
+        // ── Server-side filters ───────────────────────────────────────────────
+        if (req.query.worker_id) {
+            conditions.push(`t.worker_id = $${params.length + 1}`);
+            params.push(req.query.worker_id);
+        }
+
+        if (req.query.location_id) {
+            conditions.push(`t.location_id = $${params.length + 1}`);
+            params.push(req.query.location_id);
+        }
+
+        if (req.query.category_id) {
+            // category_id lives on the assets table; use a subquery to avoid
+            // adding an extra JOIN to the lightweight COUNT query.
+            conditions.push(`t.asset_id IN (SELECT id FROM assets WHERE category_id = $${params.length + 1})`);
+            params.push(req.query.category_id);
+        }
+
+        if (req.query.urgency) {
+            conditions.push(`t.urgency = $${params.length + 1}`);
+            params.push(req.query.urgency);
+        }
+
+        if (req.query.search) {
+            const p = `$${params.length + 1}`;
+            conditions.push(`(t.title ILIKE ${p} OR t.title_en ILIKE ${p} OR t.title_he ILIKE ${p} OR t.title_th ILIKE ${p})`);
+            params.push(`%${req.query.search}%`);
+        }
+
+        const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+
+        // Run count and data queries in parallel.
+        // Both use the SAME whereClause so totalCount always reflects the filtered set.
         const [countResult, dataResult] = await Promise.all([
             pool.query(`SELECT COUNT(*) FROM tasks t${whereClause}`, params),
             pool.query(
