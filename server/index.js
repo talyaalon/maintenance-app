@@ -3027,6 +3027,12 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     const new_selected_days_raw = norm(req.body.selected_days);     // JSON string e.g. '[1,3,4]'
     const hasRecurrenceChange   = new_recurring_type !== undefined || new_selected_days_raw !== undefined;
 
+    // is_recurring is sent by the frontend as 'true'/'false' string; parse to boolean.
+    // undefined when the field is absent (legacy clients) — skip update in that case.
+    const is_recurring_val = req.body.is_recurring !== undefined
+        ? (req.body.is_recurring === 'true' || req.body.is_recurring === true)
+        : undefined;
+
     // Handle uploaded media files (multiple) + kept existing URLs
     const newUrls = (req.files || []).map(f => f.secure_url || f.path).filter(Boolean);
     const keptImages = req.body.keptImages !== undefined
@@ -3106,6 +3112,7 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             // Recurrence metadata — keep the whole group in sync
             if (new_recurring_type !== undefined)    { vals.push(new_recurring_type);    sets.push(`recurring_type = $${vals.length}::text`); }
             if (new_selected_days_raw !== undefined) { vals.push(new_selected_days_raw); sets.push(`selected_days = $${vals.length}::text`); }
+            if (is_recurring_val !== undefined)      { vals.push(is_recurring_val);      sets.push(`is_recurring = $${vals.length}::boolean`); }
             // Images: propagate finalImages to every task in the series
             if (hasImageUpdate) { vals.push(finalImages); sets.push(`images = $${vals.length}::text[]`); }
 
@@ -3129,6 +3136,17 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
                 console.log('[PUT /tasks/:id] With Vals:', vals);
                 const result = await client.query(setModeSql, vals);
                 updated = result.rowCount;
+            }
+
+            // Safety net: belt-and-suspenders image propagation for the whole group.
+            // Mirrors the single-branch fallback so images can never be silently dropped.
+            if (hasImageUpdate && task.recurring_group_id != null) {
+                const imgBulkSql = `UPDATE tasks SET images = $1::text[] WHERE recurring_group_id = $2::integer AND status = 'PENDING' AND due_date >= $3::timestamptz`;
+                const imgBulkVals = [finalImages, task.recurring_group_id, task.due_date];
+                console.log('[PUT /tasks/:id] Executing SQL (bulk img safety-net):', imgBulkSql);
+                console.log('[PUT /tasks/:id] With Vals:', imgBulkVals);
+                await client.query(imgBulkSql, imgBulkVals);
+                if (updated === 0) updated = 1;
             }
 
             // Shift due_dates by delta so the recurring pattern is preserved
@@ -3262,6 +3280,7 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             if (due_date !== undefined)    { vals.push(due_date);    sets.push(`due_date = $${vals.length}::timestamptz`); }
             if (new_recurring_type !== undefined)    { vals.push(new_recurring_type);    sets.push(`recurring_type = $${vals.length}::text`); }
             if (new_selected_days_raw !== undefined) { vals.push(new_selected_days_raw); sets.push(`selected_days = $${vals.length}::text`); }
+            if (is_recurring_val !== undefined)      { vals.push(is_recurring_val);      sets.push(`is_recurring = $${vals.length}::boolean`); }
 
             if (hasImageUpdate) {
                 vals.push(finalImages);
