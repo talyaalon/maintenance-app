@@ -181,7 +181,12 @@ const LocationsTab = ({ token, t, lang = 'en' }) => {
             } else {
                 const data = await res.json().catch(() => ({}));
                 console.error('Delete failed, server response:', data);
-                alert(data.message || t?.error_deleting_location || 'Error deleting location. It may be in use.');
+                if (data.error === 'ERR_HAS_CATEGORIES') {
+                    const list = data.categories?.join(', ') || '';
+                    alert(`Cannot delete this location because the following categories are still attached: ${list}. Please delete them first.`);
+                } else {
+                    alert(data.message || t?.error_deleting_location || 'Error deleting location. It may be in use.');
+                }
             }
         } catch (err) {
             console.error('Delete location error:', err);

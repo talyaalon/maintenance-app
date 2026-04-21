@@ -727,6 +727,26 @@ app.get('/fix-db', async (req, res) => {
             // Backfill existing single-name into the English column
             await client.query("UPDATE companies SET name_en = name WHERE name_en IS NULL AND name IS NOT NULL");
 
+            // ── Multilingual task titles ──
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_en TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_he TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_th TEXT');
+            // Migrate existing title data into the English column
+            await client.query("UPDATE tasks SET title_en = title WHERE title_en IS NULL AND title IS NOT NULL");
+
+            // Recurring task metadata — lets EditTaskModal read back the type and selected days
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurring_type TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS selected_days TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurring_group_id INTEGER');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE');
+
+            // ── Performance indexes — prevent full-table scans on hot query paths ──
+            await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_due_date            ON tasks(due_date)');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_company_id          ON tasks(company_id)');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_worker_id           ON tasks(worker_id)');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_recurring_group_id  ON tasks(recurring_group_id)');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_status              ON tasks(status)');
+
             console.log("✅ DB Fix Completed!");
             res.send(`
                 <div style="font-family: Arial; text-align: center; margin-top: 50px; direction: rtl;">
@@ -737,6 +757,24 @@ app.get('/fix-db', async (req, res) => {
             `);
         } catch (dbError) {
             console.error("❌ DB Fix Failed:", dbError);
+            res.status(500).send("DB Error: " + dbError.message);
+        } finally {
+            client.release();
+        }
+    } catch (e) {
+        res.status(500).send("Connection Error: " + e.message);
+    }
+});
+
+app.get('/force-db-update', async (req, res) => {
+    try {
+        const client = await pool.connect();
+        try {
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_en TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_he TEXT');
+            await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_th TEXT');
+            res.send("DB Columns Updated Successfully!");
+        } catch (dbError) {
             res.status(500).send("DB Error: " + dbError.message);
         } finally {
             client.release();
@@ -2283,7 +2321,14 @@ app.delete('/locations/:id', authenticateToken, requireAdmin, async (req, res) =
             return res.status(403).json({ message: 'Forbidden: You do not have permission to delete this location.' });
         }
 
-        // Nullify FK references using the location's own company_id to avoid Postgres 23503 violations
+        // Block deletion if categories are still linked to this location
+        const catResult = await pool.query('SELECT name FROM categories WHERE location_id = $1', [id]);
+        if (catResult.rows.length > 0) {
+            const categories = catResult.rows.map(r => r.name);
+            return res.status(400).json({ error: 'ERR_HAS_CATEGORIES', categories });
+        }
+
+        // Detach tasks and assets before deleting to avoid FK violations
         await Promise.all([
             pool.query('UPDATE tasks  SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, locationCompanyId]),
             pool.query('UPDATE assets SET location_id = NULL WHERE location_id = $1 AND company_id = $2', [id, locationCompanyId]),
@@ -2318,27 +2363,34 @@ app.delete('/assets/:id', authenticateToken, requireAdmin, (req, res) => deleteI
 app.get('/tasks', authenticateToken, async (req, res) => {
     try {
         const { role, id } = req.user;
+        // ── Lightweight query: no images/completion_images/description blobs ────
+        // Full task detail (incl. images) is fetched on-demand via GET /tasks/:id
         let query = `
-            SELECT t.*,
-                   u.full_name as worker_name,
-                   cb.full_name as creator_name,
-                   l.name as location_name,
-                   COALESCE(l.name_en, l.name) as location_name_en,
-                   COALESCE(l.name_he, l.name) as location_name_he,
-                   COALESCE(l.name_th, l.name) as location_name_th,
-                   a.name as asset_name,
-                   COALESCE(a.name_en, a.name) as asset_name_en,
-                   COALESCE(a.name_he, a.name) as asset_name_he,
-                   COALESCE(a.name_th, a.name) as asset_name_th,
-                   a.code as asset_code,
-                   c.id as category_id,
-                   c.name as category_name,
-                   COALESCE(c.name_en, c.name) as category_name_en,
-                   COALESCE(c.name_he, c.name) as category_name_he,
-                   COALESCE(c.name_th, c.name) as category_name_th
+            SELECT t.id, t.title, t.title_en, t.title_he, t.title_th,
+                   t.due_date, t.status, t.urgency,
+                   t.worker_id, t.location_id, t.asset_id, t.company_id,
+                   t.recurring_group_id, t.is_recurring, t.recurring_type, t.selected_days,
+                   t.is_stuck,
+                   (t.images IS NOT NULL AND array_length(t.images, 1) > 0)                              AS has_images,
+                   (t.images IS NOT NULL AND array_length(t.images, 1) > 0
+                    AND (t.images[1] ILIKE '%mp4%' OR t.images[1] ILIKE '%video%'))                      AS is_video,
+                   u.full_name AS worker_name,
+                   l.name AS location_name,
+                   COALESCE(l.name_en, l.name) AS location_name_en,
+                   COALESCE(l.name_he, l.name) AS location_name_he,
+                   COALESCE(l.name_th, l.name) AS location_name_th,
+                   a.name AS asset_name,
+                   COALESCE(a.name_en, a.name) AS asset_name_en,
+                   COALESCE(a.name_he, a.name) AS asset_name_he,
+                   COALESCE(a.name_th, a.name) AS asset_name_th,
+                   a.code AS asset_code,
+                   c.id AS category_id,
+                   c.name AS category_name,
+                   COALESCE(c.name_en, c.name) AS category_name_en,
+                   COALESCE(c.name_he, c.name) AS category_name_he,
+                   COALESCE(c.name_th, c.name) AS category_name_th
             FROM tasks t
             LEFT JOIN users u ON t.worker_id = u.id
-            LEFT JOIN users cb ON t.created_by = cb.id
             LEFT JOIN locations l ON t.location_id = l.id
             LEFT JOIN assets a ON t.asset_id = a.id
             LEFT JOIN categories c ON a.category_id = c.id
@@ -2389,28 +2441,45 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
     
     console.log("📝 Creating Task:", { body: req.body, images: imageUrls });
 
-    let { title, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id, quarterly_dates } = req.body;
+    let { title, title_en, title_he, title_th, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id, quarterly_dates } = req.body;
 
     if (!location_id || location_id === 'undefined') return res.status(400).json({ error: "Location is required" });
     if (!asset_id || asset_id === 'undefined' || asset_id === 'null') asset_id = null;
     if (!due_date) due_date = new Date();
 
+    // Normalize: title_en falls back to title for backwards compatibility
+    const resolvedTitleEn = title_en || title || '';
+    const resolvedTitleHe = title_he || null;
+    const resolvedTitleTh = title_th || null;
+
     const worker_id = (assigned_worker_id && assigned_worker_id !== 'undefined') ? assigned_worker_id : req.user.id;
     const isRecurring = is_recurring === 'true';
+
+    // Resolve company_id: prefer creator's company, fall back to the worker's company.
+    // BIG_BOSS has no company_id, so we look up the worker to keep tasks scoped correctly.
+    let taskCompanyId = req.user.company_id ?? null;
+    if (!taskCompanyId) {
+        const wkCoRes = await pool.query('SELECT company_id FROM users WHERE id = $1', [worker_id]);
+        taskCompanyId = wkCoRes.rows[0]?.company_id ?? null;
+    }
 
     let createdCount = 1;
 
     if (!isRecurring) {
         await pool.query(
-            `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8, $9)`,
-            [title, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id, req.user.id]
+            `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by, company_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13)`,
+            [resolvedTitleEn, resolvedTitleEn, resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id, req.user.id, taskCompanyId]
         );
     } else {
         const tasksToInsert = [];
+        // Normalise to UTC midnight so getUTCDay() always matches the calendar day
+        // the Bangkok user sees.  Without this, times before 07:00 BKK roll back one
+        // UTC day and every generated instance lands one day late (+1 shift bug).
         const start = new Date(due_date);
+        start.setUTCHours(0, 0, 0, 0);
         const end = new Date(start);
-        end.setFullYear(end.getFullYear() + 1);
+        end.setUTCFullYear(end.getUTCFullYear() + 1);
 
         let daysArray = [];
         if (selected_days) {
@@ -2423,17 +2492,17 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
             try { quarterlyDatesArray = JSON.parse(quarterly_dates).filter(d => d); } catch (e) {}
         }
 
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
             let match = false;
             if (recurring_type === 'daily' || recurring_type === 'weekly') {
-                if (daysArray.includes(d.getDay())) match = true;
+                if (daysArray.includes(d.getUTCDay())) match = true;
             } else if (recurring_type === 'monthly') {
-                if (d.getDate() === monthlyDate) match = true;
+                if (d.getUTCDate() === monthlyDate) match = true;
             } else if (recurring_type === 'quarterly') {
-                const dayMonthStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const dayMonthStr = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
                 if (quarterlyDatesArray.includes(dayMonthStr)) match = true;
             } else if (recurring_type === 'yearly') {
-                if (d.getMonth() === start.getMonth() && d.getDate() === start.getDate()) match = true;
+                if (d.getUTCMonth() === start.getUTCMonth() && d.getUTCDate() === start.getUTCDate()) match = true;
             }
 
             if (match) tasksToInsert.push(new Date(d));
@@ -2443,9 +2512,9 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
         for (const date of tasksToInsert) {
             await pool.query(
-                `INSERT INTO tasks (title, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8, $9)`,
-                [title + ' (Recurring)', location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id]
+                `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by, company_id, recurring_type, selected_days)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13, $14::text, $15::text)`,
+                [resolvedTitleEn + ' (Recurring)', resolvedTitleEn + ' (Recurring)', resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id, taskCompanyId, recurring_type, selected_days || null]
             );
         }
         createdCount = tasksToInsert.length;
@@ -2824,29 +2893,75 @@ app.delete('/tasks/:id', authenticateToken, async (req, res) => {
         }
         const task = taskRes.rows[0];
 
-        if (role === 'COMPANY_MANAGER' && task.company_id !== company_id) {
+        if (role === 'COMPANY_MANAGER') {
+            // If the task carries an explicit company_id, it must match the manager's company.
+            // If it is NULL (tasks created via the UI form before company_id was required),
+            // fall back to verifying that the assigned worker belongs to this company.
+            let authorized = task.company_id !== null && task.company_id === company_id;
+            if (!authorized && task.company_id === null) {
+                const wkRes = await client.query(
+                    'SELECT company_id FROM users WHERE id = $1', [task.worker_id]
+                );
+                authorized = wkRes.rows[0]?.company_id === company_id;
+            }
+            if (!authorized) {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: 'Access denied' });
+            }
+        }
+
+        // Non-BIG_BOSS users may only delete tasks they personally created.
+        // (If created_by is NULL the task pre-dates creator tracking; allow deletion.)
+        if (role !== 'BIG_BOSS' && task.created_by !== null && task.created_by !== req.user.id) {
             await client.query('ROLLBACK');
-            return res.status(403).json({ error: 'Access denied' });
+            return res.status(403).json({ error: 'ERR_NOT_CREATOR' });
         }
 
         let deleted = 0;
-        if (task.title && task.title.endsWith(' (Recurring)')) {
-            // Delete this instance + all future PENDING instances sharing title/worker
-            if (role === 'COMPANY_MANAGER') {
-                const result = await client.query(
-                    `DELETE FROM tasks WHERE title = $1 AND worker_id = $2 AND company_id = $3 AND status = 'PENDING' AND due_date >= $4`,
-                    [task.title, task.worker_id, company_id, task.due_date]
-                );
-                deleted = result.rowCount;
+        // Mirror the frontend's isRecurringSeries detection exactly (same as PUT handler).
+        const isRecurring = task.recurring_group_id != null ||
+            task.is_recurring === true || task.is_recurring === 1 ||
+            (task.title    && task.title.endsWith(' (Recurring)')) ||
+            (task.title_en && task.title_en.endsWith(' (Recurring)'));
+
+        if (isRecurring) {
+            if (task.recurring_group_id != null) {
+                // ── Precise path: delete ALL non-completed tasks in this series (all dates) ──
+                if (role === 'COMPANY_MANAGER') {
+                    const result = await client.query(
+                        `DELETE FROM tasks
+                         WHERE recurring_group_id = $1 AND status != 'COMPLETED'
+                           AND (company_id = $2 OR company_id IS NULL)`,
+                        [task.recurring_group_id, company_id]
+                    );
+                    deleted = result.rowCount;
+                } else {
+                    const result = await client.query(
+                        `DELETE FROM tasks WHERE recurring_group_id = $1 AND status != 'COMPLETED'`,
+                        [task.recurring_group_id]
+                    );
+                    deleted = result.rowCount;
+                }
             } else {
-                const result = await client.query(
-                    `DELETE FROM tasks WHERE title = $1 AND worker_id = $2 AND status = 'PENDING' AND due_date >= $3`,
-                    [task.title, task.worker_id, task.due_date]
-                );
-                deleted = result.rowCount;
+                // ── Legacy fallback: match by title + worker, all dates, non-completed ──
+                if (role === 'COMPANY_MANAGER') {
+                    const result = await client.query(
+                        `DELETE FROM tasks
+                         WHERE title = $1 AND worker_id = $2 AND status != 'COMPLETED'
+                           AND (company_id = $3 OR company_id IS NULL)`,
+                        [task.title, task.worker_id, company_id]
+                    );
+                    deleted = result.rowCount;
+                } else {
+                    const result = await client.query(
+                        `DELETE FROM tasks WHERE title = $1 AND worker_id = $2 AND status != 'COMPLETED'`,
+                        [task.title, task.worker_id]
+                    );
+                    deleted = result.rowCount;
+                }
+                // Safety net: ensure target is removed even if it has a non-standard status
+                await client.query('DELETE FROM tasks WHERE id = $1 AND status != \'COMPLETED\'', [taskId]);
             }
-            // Ensure target is removed even if it was non-PENDING
-            await client.query('DELETE FROM tasks WHERE id = $1', [taskId]);
         } else {
             const result = await client.query('DELETE FROM tasks WHERE id = $1', [taskId]);
             deleted = result.rowCount;
@@ -2898,6 +3013,346 @@ app.put('/tasks/bulk-update-status', authenticateToken, async (req, res) => {
         await client.query('ROLLBACK');
         console.error('bulk-update-status error:', err);
         res.status(500).json({ error: 'Error updating tasks' });
+    } finally {
+        client.release();
+    }
+});
+
+// ── Edit task (single instance or full pending recurring set) ─────────────────
+// Auth: BIG_BOSS or the task creator may edit. Others receive 403.
+// Body fields (all optional, at least one required):
+//   title_en, title_he, title_th, description, urgency, due_date
+//   update_mode: 'single' (default) | 'set'
+//   media: file upload (image/video) — prepended to images array
+// 'set' only applies to recurring tasks; it updates all PENDING siblings
+// sharing the same title + worker_id with due_date >= this task's due_date.
+// For 'set' + due_date: all future siblings are shifted by the same time delta.
+// NOTE: declared after /tasks/bulk-update-status so the literal path wins over :id.
+app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
+    const taskId = parseInt(req.params.id);
+    if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid task id' });
+
+    const { role, id: userId } = req.user;
+
+    // Normalise body fields — FormData sends everything as strings
+    const norm = (v) => (v !== undefined && v !== '' ? v : undefined);
+    // Parse nullable integer IDs from FormData strings.
+    // Returns: undefined (field absent → no update), null (explicit clear), or integer.
+    const parseNullableInt = (v) => {
+        if (v === undefined || v === '') return undefined;
+        if (v === 'null' || v === 'undefined') return null;
+        const n = parseInt(v, 10);
+        return isNaN(n) ? null : n;
+    };
+    const { update_mode } = req.body;
+    // FormData transmits everything as strings; guard against both string and native boolean.
+    const mode = (update_mode === 'set' || update_mode === true) ? 'set' : 'single';
+    console.log('[Bulk Debug] update_mode received:', req.body.update_mode, '→ resolved mode:', mode);
+    const title_en   = norm(req.body.title_en);
+    const title_he   = norm(req.body.title_he);
+    const title_th   = norm(req.body.title_th);
+    const description = req.body.description !== undefined ? req.body.description : undefined;
+    const urgency    = norm(req.body.urgency);
+    const worker_id   = parseNullableInt(req.body.worker_id);
+    const category_id = parseNullableInt(req.body.category_id);
+    const location_id = parseNullableInt(req.body.location_id);
+    const asset_id    = parseNullableInt(req.body.asset_id);
+    const due_date   = norm(req.body.due_date);
+
+    // Recurrence metadata sent by EditTaskModal
+    const new_recurring_type    = norm(req.body.recurring_type);    // e.g. 'daily'
+    const new_selected_days_raw = norm(req.body.selected_days);     // JSON string e.g. '[1,3,4]'
+    const hasRecurrenceChange   = new_recurring_type !== undefined || new_selected_days_raw !== undefined;
+
+    // is_recurring is sent by the frontend as 'true'/'false' string; parse to boolean.
+    // undefined when the field is absent (legacy clients) — skip update in that case.
+    const is_recurring_val = req.body.is_recurring !== undefined
+        ? (req.body.is_recurring === 'true' || req.body.is_recurring === true)
+        : undefined;
+
+    // Handle uploaded media files (multiple) + kept existing URLs
+    const newUrls = (req.files || []).map(f => f.secure_url || f.path).filter(Boolean);
+    const keptImages = req.body.keptImages !== undefined
+        ? JSON.parse(req.body.keptImages || '[]').filter(Boolean)
+        : null; // null = field not sent → don't touch images
+    const finalImages = keptImages !== null ? [...keptImages, ...newUrls] : null;
+    const hasImageUpdate = finalImages !== null;
+
+    const hasDueDateChange = due_date !== undefined;
+    const hasChanges = title_en !== undefined || title_he !== undefined || title_th !== undefined
+        || description !== undefined || urgency !== undefined || worker_id !== undefined
+        || category_id !== undefined || location_id !== undefined || asset_id !== undefined
+        || hasDueDateChange || hasImageUpdate || hasRecurrenceChange;
+
+    if (!hasChanges) {
+        return res.status(400).json({ error: 'No updatable fields provided' });
+    }
+
+    const client = await pool.connect();
+    try {
+        console.log('[PUT /tasks/:id] Executing SQL:', 'BEGIN');
+        console.log('[PUT /tasks/:id] With Vals:', []);
+        await client.query('BEGIN');
+
+        console.log('[PUT /tasks/:id] Executing SQL:', 'SELECT * FROM tasks WHERE id = $1');
+        console.log('[PUT /tasks/:id] With Vals:', [taskId]);
+        const taskRes = await client.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+        if (taskRes.rows.length === 0) {
+            console.log('[PUT /tasks/:id] Executing SQL:', 'ROLLBACK (404)');
+            console.log('[PUT /tasks/:id] With Vals:', []);
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Task not found' });
+        }
+        const task = taskRes.rows[0];
+
+        // Auth: only BIG_BOSS or the original creator may edit
+        if (role !== 'BIG_BOSS') {
+            if (task.created_by === null || task.created_by !== userId) {
+                console.log('[PUT /tasks/:id] Executing SQL:', 'ROLLBACK (403)');
+                console.log('[PUT /tasks/:id] With Vals:', []);
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: 'ERR_NOT_CREATOR' });
+            }
+        }
+
+        let updated = 0;
+        // Mirror the frontend's isRecurringSeries detection exactly:
+        // check recurring_group_id, DB is_recurring flag, title, and title_en (all three suffixes).
+        const isRecurring = task.recurring_group_id != null ||
+            task.is_recurring === true || task.is_recurring === 1 ||
+            (task.title    && task.title.endsWith(' (Recurring)')) ||
+            (task.title_en && task.title_en.endsWith(' (Recurring)'));
+        console.log('[Bulk Debug] isRecurring:', isRecurring, '| recurring_group_id:', task.recurring_group_id, '| is_recurring:', task.is_recurring);
+
+        if (mode === 'set' && isRecurring) {
+            // ── Update all PENDING siblings (same title + worker, due_date >= current) ──
+
+            // The modal strips ' (Recurring)' from the display title — re-add it so the
+            // group marker is never lost when saving the entire set.
+            const effectiveTitleEn = (title_en !== undefined && !title_en.endsWith(' (Recurring)'))
+                ? title_en + ' (Recurring)'
+                : title_en;
+
+            // Build SET clause. Rule: push to vals FIRST, then use $${vals.length} as placeholder.
+            // This guarantees the counter can never diverge from the array.
+            const sets = [];
+            const vals = [];
+
+            if (effectiveTitleEn !== undefined) { vals.push(effectiveTitleEn); const p = vals.length; sets.push(`title = $${p}::text`, `title_en = $${p}::text`); }
+            if (title_he !== undefined)    { vals.push(title_he);    sets.push(`title_he = $${vals.length}::text`); }
+            if (title_th !== undefined)    { vals.push(title_th);    sets.push(`title_th = $${vals.length}::text`); }
+            if (description !== undefined) { vals.push(description); sets.push(`description = $${vals.length}::text`); }
+            if (urgency !== undefined)     { vals.push(urgency);     sets.push(`urgency = $${vals.length}::text`); }
+            if (worker_id !== undefined)   { vals.push(worker_id);   sets.push(`worker_id = $${vals.length}::integer`); }
+            if (location_id !== undefined) { vals.push(location_id); sets.push(`location_id = $${vals.length}::integer`); }
+            if (asset_id !== undefined)    { vals.push(asset_id);    sets.push(`asset_id = $${vals.length}::integer`); }
+            // Recurrence metadata — keep the whole group in sync
+            if (new_recurring_type !== undefined)    { vals.push(new_recurring_type);    sets.push(`recurring_type = $${vals.length}::text`); }
+            if (new_selected_days_raw !== undefined) { vals.push(new_selected_days_raw); sets.push(`selected_days = $${vals.length}::text`); }
+            if (is_recurring_val !== undefined)      { vals.push(is_recurring_val);      sets.push(`is_recurring = $${vals.length}::boolean`); }
+            // Images: propagate finalImages to every task in the series
+            if (hasImageUpdate) { vals.push(finalImages); sets.push(`images = $${vals.length}::text[]`); }
+
+            if (sets.length > 0) {
+                // Append WHERE params to the same vals array after all SET params are locked in.
+                // Prefer recurring_group_id (precise) over title+worker (legacy fallback).
+                let setModeWhereSuffix;
+                if (task.recurring_group_id != null) {
+                    vals.push(task.recurring_group_id); const pGroup = vals.length;
+                    setModeWhereSuffix = `recurring_group_id = $${pGroup}::integer AND status != 'COMPLETED'`;
+                } else {
+                    vals.push(task.title);     const pTitle  = vals.length;
+                    vals.push(task.worker_id); const pWorker = vals.length;
+                    setModeWhereSuffix = `title = $${pTitle}::text AND worker_id = $${pWorker}::integer AND status != 'COMPLETED'`;
+                }
+
+                const setModeSql = `UPDATE tasks SET ${sets.join(', ')} WHERE ${setModeWhereSuffix}`;
+                console.log('[PUT /tasks/:id] Executing SQL:', setModeSql);
+                console.log('[PUT /tasks/:id] With Vals:', vals);
+                const result = await client.query(setModeSql, vals);
+                updated = result.rowCount;
+            }
+
+            // Safety net: belt-and-suspenders image propagation for the whole group.
+            // Mirrors the single-branch fallback so images can never be silently dropped.
+            if (hasImageUpdate && task.recurring_group_id != null) {
+                const imgBulkSql = `UPDATE tasks SET images = $1::text[] WHERE recurring_group_id = $2::integer AND status != 'COMPLETED'`;
+                const imgBulkVals = [finalImages, task.recurring_group_id];
+                console.log('[PUT /tasks/:id] Executing SQL (bulk img safety-net):', imgBulkSql);
+                console.log('[PUT /tasks/:id] With Vals:', imgBulkVals);
+                await client.query(imgBulkSql, imgBulkVals);
+                if (updated === 0) updated = 1;
+            }
+
+            // Shift due_dates by delta so the recurring pattern is preserved
+            if (hasDueDateChange && due_date) {
+                const deltaSeconds = Math.round(
+                    (new Date(due_date).getTime() - new Date(task.due_date).getTime()) / 1000
+                );
+                if (deltaSeconds !== 0) {
+                    let shiftSql, shiftVals;
+                    if (task.recurring_group_id != null) {
+                        shiftSql = `UPDATE tasks SET due_date = due_date + ($1 * interval '1 second') WHERE recurring_group_id = $2::integer AND status != 'COMPLETED'`;
+                        shiftVals = [deltaSeconds, task.recurring_group_id];
+                    } else {
+                        shiftSql = `UPDATE tasks SET due_date = due_date + ($1 * interval '1 second') WHERE title = $2 AND worker_id = $3 AND status != 'COMPLETED'`;
+                        shiftVals = [deltaSeconds, task.title, task.worker_id];
+                    }
+                    console.log('[PUT /tasks/:id] Executing SQL:', shiftSql);
+                    console.log('[PUT /tasks/:id] With Vals:', shiftVals);
+                    const shiftResult = await client.query(shiftSql, shiftVals);
+                    updated = Math.max(updated, shiftResult.rowCount);
+                }
+            }
+
+            // ── Regenerate occurrences when selected_days changed ─────────────────
+            if (new_selected_days_raw !== undefined) {
+                let oldDays = [];
+                let newDays = [];
+                try { if (task.selected_days) oldDays = JSON.parse(task.selected_days).map(Number); } catch {}
+                try { newDays = JSON.parse(new_selected_days_raw).map(Number); } catch {}
+
+                const addedDays   = newDays.filter(d => !oldDays.includes(d));
+                const removedDays = oldDays.filter(d => !newDays.includes(d));
+
+                // After the bulk SET above, tasks now carry the effective (post-update) values.
+                // Use those same effective values so DELETE/SELECT/INSERT stay in sync.
+                const dayChangeTitle  = effectiveTitleEn !== undefined ? effectiveTitleEn : task.title;
+                const dayChangeWorker = worker_id !== undefined ? worker_id : task.worker_id;
+
+                // Delete PENDING future tasks whose due_date weekday was removed.
+                // Use recurring_group_id when available (precise); fall back to title+worker.
+                for (const day of removedDays) {
+                    let delSql, delParams;
+                    if (task.recurring_group_id != null) {
+                        delSql = `DELETE FROM tasks WHERE recurring_group_id = $1::integer AND status = 'PENDING' AND due_date > NOW() AND EXTRACT(DOW FROM due_date AT TIME ZONE 'UTC') = $2`;
+                        delParams = [task.recurring_group_id, day];
+                    } else {
+                        delSql = `DELETE FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING' AND due_date > NOW() AND EXTRACT(DOW FROM due_date AT TIME ZONE 'UTC') = $3`;
+                        delParams = [dayChangeTitle, dayChangeWorker, day];
+                    }
+                    const delRes = await client.query(delSql, delParams);
+                    console.log(`[PUT /tasks/:id] Deleted ${delRes.rowCount} instances for removed day ${day}`);
+                    updated += delRes.rowCount;
+                }
+
+                // Insert new PENDING tasks for each added weekday
+                if (addedDays.length > 0) {
+                    let rangeRes;
+                    if (task.recurring_group_id != null) {
+                        rangeRes = await client.query(
+                            `SELECT MAX(due_date) AS max_due FROM tasks WHERE recurring_group_id = $1::integer AND status = 'PENDING'`,
+                            [task.recurring_group_id]
+                        );
+                    } else {
+                        rangeRes = await client.query(
+                            `SELECT MAX(due_date) AS max_due FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING'`,
+                            [dayChangeTitle, dayChangeWorker]
+                        );
+                    }
+                    const maxDue = rangeRes.rows[0]?.max_due;
+                    if (maxDue) {
+                        const rangeStart = new Date();
+                        rangeStart.setUTCHours(0, 0, 0, 0);
+                        const rangeEnd = new Date(maxDue);
+                        rangeEnd.setUTCHours(0, 0, 0, 0);
+
+                        const insertTitleHe = title_he !== undefined ? title_he : task.title_he;
+                        const insertTitleTh = title_th !== undefined ? title_th : task.title_th;
+                        const insertLoc     = location_id !== undefined ? location_id : task.location_id;
+                        const insertUrgency = urgency !== undefined ? urgency : task.urgency;
+                        const insertAsset   = asset_id !== undefined ? asset_id : task.asset_id;
+                        const insertDesc    = description !== undefined ? description : task.description;
+                        const insertRType   = new_recurring_type !== undefined ? new_recurring_type : task.recurring_type;
+
+                        for (let d = new Date(rangeStart); d <= rangeEnd; d.setUTCDate(d.getUTCDate() + 1)) {
+                            if (addedDays.includes(d.getUTCDay())) {
+                                // Skip if a PENDING task already exists on this exact date for this group
+                                let chk;
+                                if (task.recurring_group_id != null) {
+                                    chk = await client.query(
+                                        `SELECT 1 FROM tasks WHERE recurring_group_id = $1::integer AND status = 'PENDING' AND due_date::date = $2::date LIMIT 1`,
+                                        [task.recurring_group_id, d]
+                                    );
+                                } else {
+                                    chk = await client.query(
+                                        `SELECT 1 FROM tasks WHERE title = $1::text AND worker_id = $2::integer AND status = 'PENDING' AND due_date::date = $3::date LIMIT 1`,
+                                        [dayChangeTitle, dayChangeWorker, d]
+                                    );
+                                }
+                                if (chk.rows.length > 0) continue;
+
+                                const insSql = `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, status, asset_id, created_by, company_id, recurring_type, selected_days, recurring_group_id, is_recurring, images)
+                                    VALUES ($1::text,$2::text,$3::text,$4::text,$5::integer,$6::integer,$7::text,$8::timestamptz,$9::text,'PENDING',$10::integer,$11::integer,$12::integer,$13::text,$14::text,$15::integer,$16::boolean,$17::text[])`;
+                                const insVals = [dayChangeTitle, dayChangeTitle, insertTitleHe, insertTitleTh,
+                                    insertLoc, dayChangeWorker, insertUrgency, new Date(d),
+                                    insertDesc, insertAsset, task.created_by, task.company_id,
+                                    insertRType, new_selected_days_raw, task.recurring_group_id, true,
+                                    hasImageUpdate ? finalImages : (task.images || [])];
+                                await client.query(insSql, insVals);
+                                updated++;
+                            }
+                        }
+                        console.log(`[PUT /tasks/:id] Inserted new instances for added days: ${addedDays}`);
+                    }
+                }
+            }
+
+        } else {
+            // ── Single-instance update ──
+            // Same rule: push to vals FIRST, then use $${vals.length} as placeholder.
+            const sets = [];
+            const vals = [];
+
+            if (title_en !== undefined)    { vals.push(title_en);    const p = vals.length; sets.push(`title = $${p}::text`, `title_en = $${p}::text`); }
+            if (title_he !== undefined)    { vals.push(title_he);    sets.push(`title_he = $${vals.length}::text`); }
+            if (title_th !== undefined)    { vals.push(title_th);    sets.push(`title_th = $${vals.length}::text`); }
+            if (description !== undefined) { vals.push(description); sets.push(`description = $${vals.length}::text`); }
+            if (urgency !== undefined)     { vals.push(urgency);     sets.push(`urgency = $${vals.length}::text`); }
+            if (worker_id !== undefined)   { vals.push(worker_id);   sets.push(`worker_id = $${vals.length}::integer`); }
+            if (location_id !== undefined) { vals.push(location_id); sets.push(`location_id = $${vals.length}::integer`); }
+            if (asset_id !== undefined)    { vals.push(asset_id);    sets.push(`asset_id = $${vals.length}::integer`); }
+            if (due_date !== undefined)    { vals.push(due_date);    sets.push(`due_date = $${vals.length}::timestamptz`); }
+            if (new_recurring_type !== undefined)    { vals.push(new_recurring_type);    sets.push(`recurring_type = $${vals.length}::text`); }
+            if (new_selected_days_raw !== undefined) { vals.push(new_selected_days_raw); sets.push(`selected_days = $${vals.length}::text`); }
+            if (is_recurring_val !== undefined)      { vals.push(is_recurring_val);      sets.push(`is_recurring = $${vals.length}::boolean`); }
+
+            if (hasImageUpdate) {
+                vals.push(finalImages);
+                sets.push(`images = $${vals.length}::text[]`);
+            }
+
+            if (sets.length > 0) {
+                vals.push(taskId);
+                const singleSql = `UPDATE tasks SET ${sets.join(', ')} WHERE id = $${vals.length}`;
+                console.log('[PUT /tasks/:id] Executing SQL:', singleSql);
+                console.log('[PUT /tasks/:id] With Vals:', vals);
+                const result = await client.query(singleSql, vals);
+                updated = result.rowCount;
+            }
+
+            // Safety net: always persist images in a dedicated query so they can
+            // never be silently dropped by an edge-case in the dynamic SET builder.
+            if (hasImageUpdate) {
+                const imgSql = `UPDATE tasks SET images = $1::text[] WHERE id = $2::integer`;
+                const imgVals = [finalImages, taskId];
+                console.log('[PUT /tasks/:id] Executing SQL:', imgSql);
+                console.log('[PUT /tasks/:id] With Vals:', imgVals);
+                await client.query(imgSql, imgVals);
+                if (updated === 0) updated = 1;
+            }
+        }
+
+        console.log('[PUT /tasks/:id] Executing SQL:', 'COMMIT');
+        console.log('[PUT /tasks/:id] With Vals:', []);
+        await client.query('COMMIT');
+        res.json({ success: true, updated, mode });
+    } catch (err) {
+        console.log('[PUT /tasks/:id] Executing SQL:', 'ROLLBACK (catch)');
+        console.log('[PUT /tasks/:id] With Vals:', []);
+        await client.query('ROLLBACK');
+        console.error('[PUT /tasks/:id] SQL Error:', err);
+        res.status(500).json({ error: err.message || err.toString() });
     } finally {
         client.release();
     }
@@ -3376,7 +3831,9 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
             const empNameEn    = get(row, ['employee_name_en *', 'employee_name_en']);
             const empNameHe    = get(row, ['employee_name_he (Optional)', 'employee_name_he']);
             const empNameTh    = get(row, ['employee_name_th (Optional)', 'employee_name_th']);
-            const taskNameEn   = get(row, ['task_name_en *', 'task_name_en', 'Title', 'title']);
+            const taskNameEn   = get(row, ['Title (EN) *', 'task_name_en *', 'task_name_en', 'Title', 'title']);
+            const taskNameHe   = get(row, ['Title (HE) (Optional)', 'task_name_he (Optional)', 'task_name_he']);
+            const taskNameTh   = get(row, ['Title (TH) (Optional)', 'task_name_th (Optional)', 'task_name_th']);
             const locationRaw  = get(row, ['location *', 'location', 'Location']);
             const frequencyRaw = get(row, ['frequency *', 'frequency', 'Frequency']);
             const dateOrDays   = get(row, ['date_or_days *', 'date_or_days', 'Date or Days']);
@@ -3564,6 +4021,9 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
             } else {
                 validRows.push({
                     title:       taskNameEn,
+                    title_en:    taskNameEn,
+                    title_he:    taskNameHe || null,
+                    title_th:    taskNameTh || null,
                     description: notesRaw || '',
                     urgency,
                     worker_id,
@@ -3605,9 +4065,9 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
         for (const t of validRows) {
             if (t.frequency === 'one-time') {
                 await client.query(
-                    `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
-                     VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10)`,
-                    [t.title, t.description, t.urgency, t.parsedDate, t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
+                    `INSERT INTO tasks (title, title_en, title_he, title_th, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
+                     VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, $11, $12, $13)`,
+                    [t.title, t.title_en, t.title_he, t.title_th, t.description, t.urgency, t.parsedDate, t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
                 );
                 insertedCount++;
             } else {
@@ -3627,9 +4087,9 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
                     }
                     if (match) {
                         await client.query(
-                            `INSERT INTO tasks (title, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
-                             VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10)`,
-                            [t.title, t.description, t.urgency, new Date(d), t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
+                            `INSERT INTO tasks (title, title_en, title_he, title_th, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
+                             VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, $11, $12, $13)`,
+                            [t.title, t.title_en, t.title_he, t.title_th, t.description, t.urgency, new Date(d), t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
                         );
                         insertedCount++;
                     }
@@ -3726,6 +4186,46 @@ app.get('/tasks/user/:userId', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).send("Error fetching user tasks");
+    }
+});
+
+// ── GET /tasks/:id — full task detail (images, description, etc.) for edit modal
+// Must be declared AFTER all more-specific /tasks/* routes to avoid shadowing them.
+app.get('/tasks/:id', authenticateToken, async (req, res) => {
+    try {
+        const taskId = parseInt(req.params.id, 10);
+        if (isNaN(taskId)) return res.status(400).json({ error: 'Invalid task id' });
+        const result = await pool.query(`
+            SELECT t.*,
+                   u.full_name AS worker_name,
+                   cb.full_name AS creator_name,
+                   l.name AS location_name,
+                   COALESCE(l.name_en, l.name) AS location_name_en,
+                   COALESCE(l.name_he, l.name) AS location_name_he,
+                   COALESCE(l.name_th, l.name) AS location_name_th,
+                   a.name AS asset_name,
+                   COALESCE(a.name_en, a.name) AS asset_name_en,
+                   COALESCE(a.name_he, a.name) AS asset_name_he,
+                   COALESCE(a.name_th, a.name) AS asset_name_th,
+                   a.code AS asset_code,
+                   c.id AS category_id,
+                   c.name AS category_name,
+                   COALESCE(c.name_en, c.name) AS category_name_en,
+                   COALESCE(c.name_he, c.name) AS category_name_he,
+                   COALESCE(c.name_th, c.name) AS category_name_th
+            FROM tasks t
+            LEFT JOIN users u ON t.worker_id = u.id
+            LEFT JOIN users cb ON t.created_by = cb.id
+            LEFT JOIN locations l ON t.location_id = l.id
+            LEFT JOIN assets a ON t.asset_id = a.id
+            LEFT JOIN categories c ON a.category_id = c.id
+            WHERE t.id = $1
+        `, [taskId]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('GET /tasks/:id error:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -5591,7 +6091,21 @@ app.listen(port, async () => {
             WHERE company_id IS NULL
         `);
 
+        // ── Multilingual task title columns — required by Excel import & task creation ──
+        await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_en TEXT');
+        await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_he TEXT');
+        await pool.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS title_th TEXT');
+        // Backfill existing title data into the English column
+        await pool.query("UPDATE tasks SET title_en = title WHERE title_en IS NULL AND title IS NOT NULL");
+
         console.log("✅ DB columns verified.");
+
+        // ── Performance indexes — idempotent, safe to run every startup ──
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tasks_due_date            ON tasks(due_date)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tasks_company_id          ON tasks(company_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tasks_worker_id           ON tasks(worker_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tasks_recurring_group_id  ON tasks(recurring_group_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_tasks_status              ON tasks(status)');
     } catch (e) {
         console.error("⚠️ Startup migration warning:", e.message);
     }

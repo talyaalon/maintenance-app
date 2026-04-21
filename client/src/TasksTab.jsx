@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2, ListChecks } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2, ListChecks, Pencil } from 'lucide-react';
 import ConfigExcelPanel from './ConfigExcelPanel';
 import CreateTaskForm from './CreateTaskForm';
+import EditTaskModal from './EditTaskModal';
 import TaskCard from './TaskCard';
 
 const getLocale = (lang) => {
@@ -64,7 +66,7 @@ const calendarStyles = `
   .react-calendar__tile:hover { background-color: #f8fafc; }
   .react-calendar__tile--now { background: #f5f3ff !important; color: #714B67; border: 1px solid #e9d5ff; }
   .react-calendar__tile--active { background: #714B67 !important; color: white !important; border-radius: 6px; }
-  .task-count-badge { font-size: 9px; background-color: #e5e7eb; color: #374151; padding: 1px 5px; border-radius: 99px; margin-top: 2px; }
+  .task-count-badge { font-size: 9px; background-color: #e5e7eb; color: #374151; padding: 1px 6px; border-radius: 99px; margin-top: 2px; white-space: nowrap; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .react-calendar__tile--active .task-count-badge { background-color: rgba(255,255,255,0.25); color: white; }
 `;
 
@@ -88,6 +90,28 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [loadingTaskId, setLoadingTaskId] = useState(null);
+
+  // Fetch the full task (images, description, etc.) only when the user taps to open it.
+  // The list payload is intentionally lightweight — no blobs until needed.
+  const handleTaskClick = useCallback(async (task) => {
+      setLoadingTaskId(task.id);
+      try {
+          const res = await fetch(`${BASE}/tasks/${task.id}`, {
+              headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+              const fullTask = await res.json();
+              setSelectedTask(fullTask);
+          } else {
+              setSelectedTask(task); // fallback to lightweight data
+          }
+      } catch {
+          setSelectedTask(task); // fallback on network error
+      } finally {
+          setLoadingTaskId(null);
+      }
+  }, [token]);
 
   // ── API-fetched filter options (role-scoped) ─────────────────────────────
   const [apiLocations,  setApiLocations]  = useState([]);
@@ -254,17 +278,18 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
 
   // Wraps a TaskCard with a selection checkbox for BIG_BOSS / COMPANY_MANAGER
   const renderTaskCard = (task, prefixContent = null) => {
+      const isLoading = loadingTaskId === task.id;
       if (!isBulkRole || !isSelectionMode) {
           return (
-              <div key={task.id}>
+              <div key={task.id} className={isLoading ? 'opacity-60 pointer-events-none' : ''}>
                   {prefixContent}
-                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+                  <TaskCard task={task} t={t} lang={lang} onClick={() => handleTaskClick(task)} />
               </div>
           );
       }
       const isSelected = selectedIds.has(task.id);
       return (
-          <div key={task.id} className={`flex items-start gap-2 rounded-xl transition-colors ${isSelected ? 'bg-[#714B67]/5' : ''}`}>
+          <div key={task.id} className={`flex items-start gap-2 rounded-xl transition-colors ${isSelected ? 'bg-[#714B67]/5' : ''} ${isLoading ? 'opacity-60 pointer-events-none' : ''}`}>
               <label
                   className="flex items-center pt-3.5 pl-0.5 cursor-pointer shrink-0"
                   onClick={e => e.stopPropagation()}
@@ -279,7 +304,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
               </label>
               <div className="flex-1 min-w-0">
                   {prefixContent}
-                  <TaskCard task={task} t={t} lang={lang} onClick={() => setSelectedTask(task)} />
+                  <TaskCard task={task} t={t} lang={lang} onClick={() => handleTaskClick(task)} />
               </div>
           </div>
       );
@@ -296,6 +321,36 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const filteredTodayCount     = applyFilters(applySearch(todayTasks)).length;
   const filteredWaitingCount   = applyFilters(applySearch(waitingTasks)).length;
   const filteredCompletedCount = applyFilters(applySearch(completedTasks)).length;
+  // Pre-compute date → pending task count once per tasks/filter change.
+  // This makes each calendar tile an O(1) Map lookup instead of O(n) filter.
+  const calendarTaskCounts = useMemo(() => {
+      const counts = new Map();
+      const pending = applyFilters(tasks.filter(t => t.status === 'PENDING'));
+      pending.forEach(task => {
+          const d = getBkkDateObj(task.due_date);
+          // Key by year-month-day so midnight boundary differences don't matter
+          const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+          counts.set(key, (counts.get(key) || 0) + 1);
+      });
+      return counts;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, filterPriority, filterLocation, filterCategory, filterAssignee]);
+
+  // Stable tileContent callback — only recreates when counts or locale strings change.
+  const calendarTileContent = useCallback(({ date, view }) => {
+      if (view !== 'month') return null;
+      const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      const count = calendarTaskCounts.get(key) || 0;
+      if (count === 0) return null;
+      return (
+          <div className="flex flex-col items-center">
+              <span className="task-count-badge">
+                  {count} {count === 1 ? (t.task_singular || 'Task') : (t.tasks_plural || 'Tasks')}
+              </span>
+          </div>
+      );
+  }, [calendarTaskCounts, t]);
+
   const calendarTasks = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), selectedDate)));
 
   const renderOverdueView = () => {
@@ -326,7 +381,10 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
           const searchSource = isSearching
               ? tasks.filter(task => task.status === 'PENDING' && !isBefore(getBkkDateObj(task.due_date), startOfDay(todayBkk)))
               : todayTasks;
-          const filtered = applyFilters(applySearch(searchSource));
+          const urgencyWeight = { 'High': 3, 'Medium': 2, 'Low': 1 };
+          const filtered = applyFilters(applySearch(searchSource))
+              .slice()
+              .sort((a, b) => (urgencyWeight[b.urgency] ?? 0) - (urgencyWeight[a.urgency] ?? 0));
           return (
               <div className="space-y-4 animate-fade-in max-w-2xl mx-auto pb-28">
                   <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200 text-center mb-5">
@@ -382,12 +440,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                         onChange={setSelectedDate}
                         value={selectedDate}
                         locale={getLocale(lang)}
-                        tileContent={({ date, view }) => {
-                            if (view === 'month') {
-                                const count = applyFilters(tasks.filter(t => t.status === 'PENDING' && isSameDay(getBkkDateObj(t.due_date), date))).length;
-                                if (count > 0) return <div className="flex flex-col items-center"><span className="task-count-badge">{count} {count === 1 ? (t.task_singular || "Task") : (t.tasks_plural || "Tasks")}</span></div>;
-                            }
-                        }}
+                        tileContent={calendarTileContent}
                       />
                   </div>
                   <div className="mt-8 w-full max-w-[800px] pb-28">
@@ -611,6 +664,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
               user={user}
               onRefresh={onRefresh}
               t={t}
+              lang={lang}
           />
       )}
 
@@ -729,7 +783,7 @@ const InlineAlert = ({ message, onClose }) => (
     </div>
 );
 
-const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
+const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en' }) => {
     const BASE = 'https://maintenance-app-staging.onrender.com';
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
@@ -743,7 +797,9 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
     const canShowStuck = task.status === 'PENDING' && !task.is_stuck && canComplete;
     const canDelete = user.role === 'BIG_BOSS' || user.role === 'COMPANY_MANAGER';
+    const canEdit = user.role === 'BIG_BOSS' || user.id === task.created_by;
     const isRecurringSeries = task.title && task.title.endsWith(' (Recurring)');
+    const [showEdit, setShowEdit] = useState(false);
 
     const handleDeleteSeries = async () => {
         const msg = isRecurringSeries
@@ -755,7 +811,14 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) { onRefresh(); onClose(); }
+            if (res.ok) { onRefresh(); onClose(); return; }
+            if (res.status === 403) {
+                const body = await res.json().catch(() => ({}));
+                if (body.error === 'ERR_NOT_CREATOR') {
+                    alert(t.err_not_creator || 'You cannot delete this task because it was created by another user or higher management.');
+                    return;
+                }
+            }
         } catch(e) { console.error('Delete task error:', e); }
     };
 
@@ -805,27 +868,31 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
     const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.includes('video'));
     const openMedia = (url) => window.open(url, '_blank');
 
-    if (showSuccess) return (
-        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[120]">
+    if (showSuccess) return createPortal(
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[9999]">
             <div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center">
                 <Check size={40} className="text-green-600 mb-2"/>
                 <h2 className="text-xl font-bold">{t.alert_sent || "Success!"}</h2>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 
     const displayCreatorName = task.creator_name || '—';
 
-    return (
+    return createPortal(
         <>
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[100] backdrop-blur-sm p-4">
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[9999] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-lg rounded-2xl p-0 overflow-hidden shadow-xl border border-gray-200 animate-slide-up max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b border-gray-200 flex justify-between items-start sticky top-0 bg-white z-10">
                     <div>
                         <h2 className="text-lg sm:text-xl font-bold text-slate-900">
-                            {isRecurringSeries
-                                ? task.title.replace(' (Recurring)', '') + ` (${t.recurring_task_suffix || 'Recurring'})`
-                                : task.title}
+                            {(() => {
+                                const localTitle = task['title_' + lang] || task.title_en || task.title || '';
+                                return isRecurringSeries
+                                    ? localTitle.replace(' (Recurring)', '') + ` (${t.recurring_task_suffix || 'Recurring'})`
+                                    : localTitle;
+                            })()}
                             {task.asset_code && <span className="text-gray-400 font-normal ml-2 text-base"> - {task.asset_code}</span>}
                         </h2>
                     </div>
@@ -947,6 +1014,11 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                                 {t.approve_close_btn}
                             </button>
                         )}
+                        {canEdit && mode === 'view' && (
+                            <button onClick={() => setShowEdit(true)} className="w-full flex items-center justify-center gap-2 border border-[#714B67]/30 text-[#714B67] py-2.5 rounded-xl font-bold hover:bg-purple-50 transition text-sm">
+                                <Pencil size={14}/> {t.edit_task_btn || 'Edit Task'}
+                            </button>
+                        )}
                         {canDelete && (
                             <button onClick={handleDeleteSeries} className="w-full border border-red-200 text-red-500 py-2.5 rounded-xl font-bold hover:bg-red-50 transition text-sm">
                                 {isRecurringSeries ? (t.delete_series_btn || 'Delete Entire Series') : (t.delete_task_btn || 'Delete Task')}
@@ -964,13 +1036,26 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t }) => {
                 user={user}
                 onRefresh={onRefresh}
                 t={t}
+                lang={lang}
             />
         )}
-        </>
+        {showEdit && (
+            <EditTaskModal
+                task={task}
+                onClose={() => setShowEdit(false)}
+                token={token}
+                t={t}
+                onRefresh={() => { onRefresh(); onClose(); }}
+                user={user}
+                lang={lang}
+            />
+        )}
+        </>,
+        document.body
     );
 };
 
-const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
+const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t, lang = 'en' }) => {
     const [note, setNote] = useState('');
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -1006,17 +1091,18 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
         }
     };
 
-    if (showSuccess) return (
-        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[130]">
+    if (showSuccess) return createPortal(
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[9999]">
             <div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center">
                 <Check size={40} className="text-[#714B67] mb-2"/>
                 <h2 className="text-xl font-bold">{t.stuck_sent || 'Reported!'}</h2>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 
-    return (
-        <div className="fixed inset-0 bg-black/60 flex justify-center items-end sm:items-center z-[120] backdrop-blur-sm p-4">
+    return createPortal(
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[9999] backdrop-blur-sm p-4">
             <div className="bg-white w-full sm:w-[95%] max-w-md rounded-2xl overflow-hidden shadow-xl border border-gray-200 animate-slide-up">
                 <div className="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-base font-bold text-slate-800">{t.stuck_task_modal_title || 'Report Stuck Task'}</h2>
@@ -1024,7 +1110,7 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
                 </div>
                 <div className="p-5 space-y-4">
                     <div>
-                        <p className="text-sm font-semibold text-gray-700 mb-1">{task.title}</p>
+                        <p className="text-sm font-semibold text-gray-700 mb-1">{task['title_' + lang] || task.title_en || task.title}</p>
                     </div>
                     {error && <InlineAlert message={error} onClose={() => setError('')} />}
                     <textarea
@@ -1051,7 +1137,8 @@ const StuckModal = ({ task, onClose, token, user: _user, onRefresh, t }) => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

@@ -3,6 +3,7 @@ import { X, Calendar, Camera, Box } from 'lucide-react';
 
 const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang, scopedCompanyId }) => {
   const [frequency, setFrequency] = useState('Once');
+  const [showLangFields, setShowLangFields] = useState(false);
   const currentUser = user;
 
   const userRole = currentUser?.role ? String(currentUser.role).toUpperCase() : '';
@@ -21,6 +22,8 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
   const [formData, setFormData] = useState({
     title: '',
+    title_he: '',
+    title_th: '',
     urgency: 'Normal',
     due_date: getCurrentBkkTimeForInput(),
     location_id: '',
@@ -99,33 +102,22 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
   }
 
   const filteredLocations = (() => {
-      let list = locations ?? [];
-      if (isBigBoss && targetAreaId)
-          list = list.filter(l => String(l?.area_id) === String(targetAreaId) || !l?.area_id);
-      else if (!isBigBoss && targetCompanyId)
-          list = list.filter(l => l?.company_id == null || String(l?.company_id) === String(targetCompanyId));
-      return list;
+      if (!targetCompanyId) return isBigBoss ? [] : (locations ?? []);
+      return (locations ?? []).filter(l => String(l?.company_id) === String(targetCompanyId));
   })();
 
   const filteredCategories = (() => {
-      let list = categories ?? [];
-      if (isBigBoss && targetAreaId)
-          list = list.filter(c => String(c?.area_id) === String(targetAreaId) || !c?.area_id);
-      else if (!isBigBoss && targetCompanyId)
-          list = list.filter(c => c?.company_id == null || String(c?.company_id) === String(targetCompanyId));
-      return list;
+      if (!targetCompanyId) return isBigBoss ? [] : (categories ?? []);
+      return (categories ?? []).filter(c => String(c?.company_id) === String(targetCompanyId));
   })();
 
   const filteredAssets = selectedCategory
       ? (assets ?? []).filter(a => {
           if (!a) return false;
           const categoryMatch = String(a?.category_id) === String(selectedCategory);
-          let areaMatch = true;
-          if (isBigBoss && targetAreaId)
-              areaMatch = String(a?.area_id) === String(targetAreaId) || !a?.area_id;
-          else if (!isBigBoss && targetCompanyId)
-              areaMatch = a?.company_id == null || String(a?.company_id) === String(targetCompanyId);
-          return categoryMatch && areaMatch;
+          if (!categoryMatch) return false;
+          if (!targetCompanyId) return !isBigBoss;
+          return String(a?.company_id) === String(targetCompanyId);
       })
       : [];
 
@@ -177,7 +169,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     e.preventDefault();
 
     if (!formData.title || !formData.due_date || !formData.location_id || (isManager && !formData.assigned_worker_id)) {
-        alert(t.alert_required_fields || "עליך למלא את כל שדות החובה: תאריך, שם המשימה, מיקום, ובחירת עובד לביצוע.");
+        alert(t.alert_required_fields || "Please fill in all required fields: date, task title (English), location, and assigned worker.");
         return;
     }
 
@@ -198,6 +190,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
 
     const data = new FormData();
     data.append('title', formData.title);
+    data.append('title_en', formData.title);
+    data.append('title_he', formData.title_he || '');
+    data.append('title_th', formData.title_th || '');
     data.append('urgency', formData.urgency);
     data.append('location_id', formData.location_id);
     data.append('asset_id', formData.asset_id);
@@ -409,14 +404,56 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
                 </div>
             </div>
 
-            <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
-                    {t.task_title_label} <span className="text-red-400 ml-1">*</span>
+            <div className="space-y-2.5">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block">
+                    {t.task_title_label || "Task Title"} <span className="text-red-400 ml-1">*</span>
                 </label>
-                <input required className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
-                    value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
-                    placeholder={t.task_title_placeholder}
-                />
+                <div className="relative">
+                    <input required
+                        className="w-full p-3 pr-14 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
+                        value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
+                        placeholder={t.task_title_placeholder || "Task title in English..."}
+                        dir="ltr"
+                    />
+                    <button
+                        type="button"
+                        title={t.add_translations || "Add translations (HE / TH)"}
+                        onClick={() => setShowLangFields(v => !v)}
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded-md border transition select-none
+                            ${showLangFields
+                                ? 'text-white bg-[#714B67] border-[#714B67]'
+                                : 'text-[#714B67] bg-purple-50 border-purple-200 hover:bg-purple-100'
+                            }`}
+                    >
+                        EN
+                    </button>
+                </div>
+                {showLangFields && (
+                    <div className="space-y-2 animate-fade-in pl-1 border-l-2 border-purple-100">
+                        <div>
+                            <label className="text-xs font-medium text-slate-500 flex items-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-bold text-white bg-[#714B67] px-1.5 py-0.5 rounded-md leading-none">HE</span>
+                                {t.title_he_label || "Hebrew (עברית)"}
+                            </label>
+                            <input className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
+                                value={formData.title_he} onChange={e => setFormData({...formData, title_he: e.target.value})}
+                                placeholder={t.task_title_he_placeholder || "שם המשימה בעברית..."}
+                                dir="rtl"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-slate-500 flex items-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-bold text-white bg-emerald-600 px-1.5 py-0.5 rounded-md leading-none">TH</span>
+                                {t.title_th_label || "Thai (ภาษาไทย)"}
+                            </label>
+                            <input className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none transition"
+                                value={formData.title_th} onChange={e => setFormData({...formData, title_th: e.target.value})}
+                                placeholder={t.task_title_th_placeholder || "ชื่องานภาษาไทย..."}
+                                dir="ltr"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="flex gap-3">

@@ -20,8 +20,10 @@ const TaskCard = ({ task, onClick, t, lang = 'en' }) => {
                      : task.urgency === 'Low' ? 'bg-blue-50 text-blue-600 border-blue-100'
                      : 'bg-gray-50 text-gray-600 border-gray-100';
 
-  const hasMedia = task.images && task.images.length > 0;
-  const isVideo = hasMedia && (task.images[0].includes('mp4') || task.images[0].includes('video'));
+  // Support both the lightweight flag (from GET /tasks list) and the full array (from GET /tasks/:id)
+  const hasMedia = task.has_images || (Array.isArray(task.images) && task.images.length > 0);
+  const isVideo  = task.is_video  || (hasMedia && Array.isArray(task.images) && task.images[0] &&
+                    (task.images[0].includes('mp4') || task.images[0].includes('video')));
   const displayCode = task.asset_code || '';
 
   return (
@@ -43,9 +45,13 @@ const TaskCard = ({ task, onClick, t, lang = 'en' }) => {
 
             <div className="flex justify-between items-start gap-2">
                 <h4 className="font-semibold text-slate-800 text-sm sm:text-base leading-tight mb-1.5 flex-1">
-                    {task.title && task.title.endsWith(' (Recurring)')
-                        ? task.title.replace(' (Recurring)', '') + ` (${t.recurring_task_suffix || 'Recurring'})`
-                        : task.title}
+                    {(() => {
+                        const localTitle = task['title_' + lang] || task.title_en || task.title || '';
+                        const isRecurring = task.title && task.title.endsWith(' (Recurring)');
+                        return isRecurring
+                            ? localTitle.replace(' (Recurring)', '') + ` (${t.recurring_task_suffix || 'Recurring'})`
+                            : localTitle;
+                    })()}
                     {displayCode && <span className="text-gray-400 font-normal ml-1.5 text-xs sm:text-sm">- {displayCode}</span>}
                 </h4>
                 {hasMedia && <div className="text-gray-400">{isVideo ? <Video size={14}/> : <ImageIcon size={14}/>}</div>}
