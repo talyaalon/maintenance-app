@@ -125,6 +125,11 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       setAdminLoading(true);
       try {
           const params = new URLSearchParams({ limit: String(ADMIN_LIMIT), offset: String(offset) });
+          if (filterAssignee)      params.set('worker_id',   filterAssignee);
+          if (filterLocation)      params.set('location_id', filterLocation);
+          if (filterCategory)      params.set('category_id', filterCategory);
+          if (filterPriority)      params.set('urgency',     filterPriority);
+          if (searchQuery.trim())  params.set('search',      searchQuery.trim());
           const res = await fetch(`${BASE}/tasks/admin/list?${params}`, {
               headers: { Authorization: `Bearer ${token}` }
           });
@@ -136,7 +141,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
           }
       } catch (e) { console.error(e); }
       finally { setAdminLoading(false); }
-  }, [token]);
+  }, [token, filterAssignee, filterLocation, filterCategory, filterPriority, searchQuery]);
 
   useEffect(() => {
       if (viewMode !== 'list') return;
@@ -264,7 +269,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
               return applyFilters(tasks.filter(tk => tk.status === 'PENDING' && next7Days.some(d => isSameDay(getBkkDateObj(tk.due_date), d))));
           }
           if (viewMode === 'calendar') return calendarTasks;
-          if (viewMode === 'list') return applyFilters(applySearch(adminTasks));
+          if (viewMode === 'list') return adminTasks; // server already filtered
       }
       if (mainTab === 'waiting') return applyFilters(applySearch(waitingTasks));
       if (mainTab === 'completed') return applyFilters(applySearch(completedTasks));
@@ -490,7 +495,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       }
 
       if (viewMode === 'list') {
-          const filtered = applyFilters(applySearch(adminTasks));
+          const filtered = adminTasks; // server already filtered — no double-apply
           const hasMore = adminTasks.length < adminTotalCount;
           return (
               <div className="animate-fade-in max-w-2xl mx-auto pb-28">
