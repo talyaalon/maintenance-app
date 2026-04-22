@@ -740,6 +740,9 @@ app.get('/fix-db', async (req, res) => {
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurring_group_id INTEGER');
             await client.query('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE');
 
+            // ── Parameters Checking List — interactive checklist per task ──
+            await client.query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS parameters_checklist JSONB DEFAULT '[]'::jsonb");
+
             // ── Performance indexes — prevent full-table scans on hot query paths ──
             await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_due_date            ON tasks(due_date)');
             await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_company_id          ON tasks(company_id)');
@@ -2564,6 +2567,21 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
     let { title, title_en, title_he, title_th, urgency, due_date, location_id, assigned_worker_id, description, is_recurring, recurring_type, selected_days, recurring_date, asset_id, quarterly_dates } = req.body;
 
+    // Parse and validate parameters_checklist
+    let parameters_checklist = [];
+    if (req.body.parameters_checklist !== undefined && req.body.parameters_checklist !== '') {
+        try {
+            const parsed = typeof req.body.parameters_checklist === 'string'
+                ? JSON.parse(req.body.parameters_checklist)
+                : req.body.parameters_checklist;
+            if (!Array.isArray(parsed)) return res.status(400).json({ error: 'parameters_checklist must be an array' });
+            if (parsed.length > 50) return res.status(400).json({ error: 'parameters_checklist may not exceed 50 items' });
+            parameters_checklist = parsed;
+        } catch {
+            return res.status(400).json({ error: 'parameters_checklist is not valid JSON' });
+        }
+    }
+
     if (!location_id || location_id === 'undefined') return res.status(400).json({ error: "Location is required" });
     if (!asset_id || asset_id === 'undefined' || asset_id === 'null') asset_id = null;
     if (!due_date) due_date = new Date();
@@ -2588,9 +2606,9 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
     if (!isRecurring) {
         await pool.query(
-            `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by, company_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13)`,
-            [resolvedTitleEn, resolvedTitleEn, resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id, req.user.id, taskCompanyId]
+            `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by, company_id, parameters_checklist)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13, $14::jsonb)`,
+            [resolvedTitleEn, resolvedTitleEn, resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, due_date, description, imageUrls, asset_id, req.user.id, taskCompanyId, JSON.stringify(parameters_checklist)]
         );
     } else {
         const tasksToInsert = [];
@@ -2633,9 +2651,9 @@ app.post('/tasks', authenticateToken, upload.any(), async (req, res) => {
 
         for (const date of tasksToInsert) {
             await pool.query(
-                `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by, company_id, recurring_type, selected_days)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13, $14::text, $15::text)`,
-                [resolvedTitleEn + ' (Recurring)', resolvedTitleEn + ' (Recurring)', resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id, taskCompanyId, recurring_type, selected_days || null]
+                `INSERT INTO tasks (title, title_en, title_he, title_th, location_id, worker_id, urgency, due_date, description, images, status, asset_id, created_by, company_id, recurring_type, selected_days, parameters_checklist)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PENDING', $11, $12, $13, $14::text, $15::text, $16::jsonb)`,
+                [resolvedTitleEn + ' (Recurring)', resolvedTitleEn + ' (Recurring)', resolvedTitleHe, resolvedTitleTh, location_id, worker_id, urgency, date, description, imageUrls, asset_id, req.user.id, taskCompanyId, recurring_type, selected_days || null, JSON.stringify(parameters_checklist)]
             );
         }
         createdCount = tasksToInsert.length;
@@ -3180,6 +3198,21 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     const asset_id    = parseNullableInt(req.body.asset_id);
     const due_date   = norm(req.body.due_date);
 
+    // parameters_checklist — JSON array of checklist items
+    let parameters_checklist = undefined;
+    if (req.body.parameters_checklist !== undefined && req.body.parameters_checklist !== '') {
+        try {
+            const parsed = typeof req.body.parameters_checklist === 'string'
+                ? JSON.parse(req.body.parameters_checklist)
+                : req.body.parameters_checklist;
+            if (!Array.isArray(parsed)) return res.status(400).json({ error: 'parameters_checklist must be an array' });
+            if (parsed.length > 50) return res.status(400).json({ error: 'parameters_checklist may not exceed 50 items' });
+            parameters_checklist = parsed;
+        } catch {
+            return res.status(400).json({ error: 'parameters_checklist is not valid JSON' });
+        }
+    }
+
     // Recurrence metadata sent by EditTaskModal
     const new_recurring_type    = norm(req.body.recurring_type);    // e.g. 'daily'
     const new_selected_days_raw = norm(req.body.selected_days);     // JSON string e.g. '[1,3,4]'
@@ -3203,7 +3236,8 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     const hasChanges = title_en !== undefined || title_he !== undefined || title_th !== undefined
         || description !== undefined || urgency !== undefined || worker_id !== undefined
         || category_id !== undefined || location_id !== undefined || asset_id !== undefined
-        || hasDueDateChange || hasImageUpdate || hasRecurrenceChange;
+        || hasDueDateChange || hasImageUpdate || hasRecurrenceChange
+        || parameters_checklist !== undefined;
 
     if (!hasChanges) {
         return res.status(400).json({ error: 'No updatable fields provided' });
@@ -3273,6 +3307,8 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             if (is_recurring_val !== undefined)      { vals.push(is_recurring_val);      sets.push(`is_recurring = $${vals.length}::boolean`); }
             // Images: propagate finalImages to every task in the series
             if (hasImageUpdate) { vals.push(finalImages); sets.push(`images = $${vals.length}::text[]`); }
+            // Checklist: propagate to the entire recurring group
+            if (parameters_checklist !== undefined) { vals.push(JSON.stringify(parameters_checklist)); sets.push(`parameters_checklist = $${vals.length}::jsonb`); }
 
             if (sets.length > 0) {
                 // Append WHERE params to the same vals array after all SET params are locked in.
@@ -3437,6 +3473,7 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
             if (new_recurring_type !== undefined)    { vals.push(new_recurring_type);    sets.push(`recurring_type = $${vals.length}::text`); }
             if (new_selected_days_raw !== undefined) { vals.push(new_selected_days_raw); sets.push(`selected_days = $${vals.length}::text`); }
             if (is_recurring_val !== undefined)      { vals.push(is_recurring_val);      sets.push(`is_recurring = $${vals.length}::boolean`); }
+            if (parameters_checklist !== undefined)  { vals.push(JSON.stringify(parameters_checklist)); sets.push(`parameters_checklist = $${vals.length}::jsonb`); }
 
             if (hasImageUpdate) {
                 vals.push(finalImages);
@@ -3963,6 +4000,10 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
             const assetRaw     = get(row, ['asset (Optional)', 'asset', 'Asset']);
             const imageUrlRaw  = get(row, ['image_url (Optional)', 'image_url', 'Image URL']);
             const notesRaw     = get(row, ['notes (Optional)', 'notes', 'Notes', 'description']);
+            // Strict header match — only the exact column name qualifies
+            const checklistRaw = Object.prototype.hasOwnProperty.call(row, 'Parameter Checking List')
+                ? (row['Parameter Checking List'] ?? '')
+                : '';
 
             // ── Mandatory: task name ────────────────────────────────────────
             if (!taskNameEn) rowErrors.push(`Row ${ri}: 'task_name_en' is required.`);
@@ -4137,6 +4178,14 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
                 }
             }
 
+            // Build parameters_checklist from the "Parameter Checking List" column
+            const parameters_checklist = checklistRaw
+                ? checklistRaw.toString().split(',')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0)
+                    .map(text => ({ id: require('crypto').randomUUID(), text, isCompleted: false }))
+                : [];
+
             if (rowErrors.length > 0) {
                 errors.push(...rowErrors);
             } else {
@@ -4151,6 +4200,7 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
                     location_id,
                     asset_id,
                     images,
+                    parameters_checklist,
                     company_id:  insertCompanyId,
                     created_by:  callerId,
                     // scheduling
@@ -4184,11 +4234,12 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
         yearEnd.setFullYear(yearEnd.getFullYear() + 1);
 
         for (const t of validRows) {
+            const checklistJson = JSON.stringify(t.parameters_checklist || []);
             if (t.frequency === 'one-time') {
                 await client.query(
-                    `INSERT INTO tasks (title, title_en, title_he, title_th, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
-                     VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, $11, $12, $13)`,
-                    [t.title, t.title_en, t.title_he, t.title_th, t.description, t.urgency, t.parsedDate, t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
+                    `INSERT INTO tasks (title, title_en, title_he, title_th, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by, parameters_checklist)
+                     VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, $11, $12, $13, $14::jsonb)`,
+                    [t.title, t.title_en, t.title_he, t.title_th, t.description, t.urgency, t.parsedDate, t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by, checklistJson]
                 );
                 insertedCount++;
             } else {
@@ -4208,9 +4259,9 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
                     }
                     if (match) {
                         await client.query(
-                            `INSERT INTO tasks (title, title_en, title_he, title_th, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by)
-                             VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, $11, $12, $13)`,
-                            [t.title, t.title_en, t.title_he, t.title_th, t.description, t.urgency, new Date(d), t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by]
+                            `INSERT INTO tasks (title, title_en, title_he, title_th, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by, parameters_checklist)
+                             VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, $11, $12, $13, $14::jsonb)`,
+                            [t.title, t.title_en, t.title_he, t.title_th, t.description, t.urgency, new Date(d), t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by, checklistJson]
                         );
                         insertedCount++;
                     }
