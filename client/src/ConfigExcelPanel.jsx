@@ -151,7 +151,7 @@ const TEMPLATE_SAMPLE = {
     ],
 };
 
-const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) => {
+const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId, adminFilters }) => {
     const [activeTab, setActiveTab]               = useState('import');
     const [fileName, setFileName]                 = useState('');
     const [parsedRows, setParsedRows]             = useState([]);
@@ -178,6 +178,17 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
     const [taskFilterUrgency,    setTaskFilterUrgency]    = useState('');
     const [taskFilterLocationId, setTaskFilterLocationId] = useState('');
     const [taskFilterCategoryId, setTaskFilterCategoryId] = useState('');
+    const [taskFilterStartDate,  setTaskFilterStartDate]  = useState('');
+    const [taskFilterEndDate,    setTaskFilterEndDate]    = useState('');
+
+    // Sync admin list-view filters into export filters whenever the panel opens or filters change
+    React.useEffect(() => {
+        if (section !== 'tasks' || !adminFilters) return;
+        if (adminFilters.workerId)   setTaskFilterWorkerId(adminFilters.workerId);
+        if (adminFilters.locationId) setTaskFilterLocationId(adminFilters.locationId);
+        if (adminFilters.categoryId) setTaskFilterCategoryId(adminFilters.categoryId);
+        if (adminFilters.urgency)    setTaskFilterUrgency(adminFilters.urgency);
+    }, [section, adminFilters]);
 
     // Fetch filter option lists when the export tab becomes active
     React.useEffect(() => {
@@ -357,6 +368,11 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                 if (taskFilterUrgency)    qp.set('urgency',     taskFilterUrgency);
                 if (taskFilterLocationId) qp.set('location_id', taskFilterLocationId);
                 if (taskFilterCategoryId) qp.set('category_id', taskFilterCategoryId);
+                if (taskFilterStartDate)  qp.set('start_date',  taskFilterStartDate);
+                if (taskFilterEndDate)    qp.set('end_date',    taskFilterEndDate);
+                // Mirror admin list-view search query
+                const adminSearch = adminFilters?.search?.trim();
+                if (adminSearch) qp.set('search', adminSearch);
             }
 
             const res    = await fetch(`${BASE}/${section}/export?${qp}`, {
@@ -670,6 +686,31 @@ const ConfigExcelPanel = ({ section, t, onClose, token, onSuccess, companyId }) 
                                         <option key={c.id} value={c.id}>{c.name_en || c.name_he || c.id}</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            {/* 6. Date Range */}
+                            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                                <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                    {t?.filter_from_date || 'From'}
+                                </span>
+                                <input
+                                    type="date"
+                                    value={taskFilterStartDate}
+                                    onChange={e => setTaskFilterStartDate(e.target.value)}
+                                    className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                                <span className="text-xs font-bold text-gray-600 uppercase tracking-wide shrink-0">
+                                    {t?.filter_to_date || 'To'}
+                                </span>
+                                <input
+                                    type="date"
+                                    value={taskFilterEndDate}
+                                    onChange={e => setTaskFilterEndDate(e.target.value)}
+                                    min={taskFilterStartDate || undefined}
+                                    className="flex-1 border border-gray-200 rounded p-1 text-xs text-gray-700 focus:outline-none focus:border-[#714B67]"
+                                />
                             </div>
                         </div>
                     )}

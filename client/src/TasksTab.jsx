@@ -718,7 +718,22 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
           </div>
       </div>
 
-      {showExcel && <ConfigExcelPanel section="tasks" token={token} t={t} onClose={() => setShowExcel(false)} onSuccess={onRefresh} />}
+      {showExcel && (
+        <ConfigExcelPanel
+          section="tasks"
+          token={token}
+          t={t}
+          onClose={() => setShowExcel(false)}
+          onSuccess={onRefresh}
+          adminFilters={{
+            workerId:   filterAssignee,
+            locationId: filterLocation,
+            categoryId: filterCategory,
+            urgency:    filterPriority,
+            search:     searchQuery,
+          }}
+        />
+      )}
       {showCreateModal && <CreateTaskForm token={token} t={t} user={user} subordinates={subordinates} onRefresh={onRefresh} onClose={() => setShowCreateModal(false)} lang={lang} scopedCompanyId={scopedCompanyId} />}
 
       <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 mb-5 mx-auto max-w-3xl">
