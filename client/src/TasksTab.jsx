@@ -925,9 +925,17 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
     };
 
     const handleComplete = async () => {
-        if (!note && !file) {
-            setModalError(t.alert_required || "A note or photo is required.");
-            return;
+        // Checklist pre-submit validation
+        if (checklist && checklist.length > 0) {
+            const checkedCount = checklist.filter(i => i.checked).length;
+            if (checkedCount === 0) {
+                alert("לא סומנו סעיפים. חובה לסמן לפחות סעיף אחד כדי לאשר את המשימה.");
+                return;
+            }
+            if (checkedCount < checklist.length) {
+                const proceed = window.confirm("יש סעיפים שעדיין לא סיימת, האם להמשיך? באישור, המשימה תעבור לאישור מנהל.");
+                if (!proceed) return;
+            }
         }
         setModalError('');
         const formData = new FormData();
