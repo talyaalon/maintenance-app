@@ -2823,16 +2823,14 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
     try {
         const { id } = req.params;
         const { completion_note } = req.body;
-        
-        if (!req.file && !completion_note) {
-            return res.status(400).json({ error: "Required image or note" });
-        }
+        // completion_note and completion_image are both optional
 
         const completionImageUrl = req.file ? req.file.path : null;
 
-        // Check if the task's direct manager has auto_approve_tasks enabled
+        // Fetch manager settings AND the task's parameters_checklist in one query
         const managerCheckQuery = `
-            SELECT m.auto_approve_tasks, m.device_token, m.line_user_id, m.preferred_language
+            SELECT m.auto_approve_tasks, m.device_token, m.line_user_id, m.preferred_language,
+                   t.parameters_checklist
             FROM tasks t
             JOIN users w ON t.worker_id = w.id
             JOIN users m ON w.parent_manager_id = m.id
@@ -2840,8 +2838,20 @@ app.put('/tasks/:id/complete', authenticateToken, upload.single('completion_imag
         `;
         const managerCheck = await pool.query(managerCheckQuery, [id]);
         const managerRow = managerCheck.rows[0];
-        // If manager has auto-approve ON → jump straight to COMPLETED
-        const newStatus = managerRow?.auto_approve_tasks ? 'COMPLETED' : 'WAITING_APPROVAL';
+
+        // --- Checklist-based status override ---
+        // parameters_checklist is a JSONB array of { label, checked } objects.
+        const checklist = Array.isArray(managerRow?.parameters_checklist) ? managerRow.parameters_checklist : [];
+        const totalItems = checklist.length;
+        const checkedItems = checklist.filter(item => item.checked === true).length;
+
+        // Partial = at least 1 checked but NOT all checked.
+        // Partial completion ALWAYS forces WAITING_APPROVAL, ignoring auto_approve_tasks.
+        // Full completion or empty checklist falls back to the manager's auto_approve_tasks setting.
+        const isPartialCompletion = totalItems > 0 && checkedItems > 0 && checkedItems < totalItems;
+        const newStatus = isPartialCompletion
+            ? 'WAITING_APPROVAL'
+            : (managerRow?.auto_approve_tasks ? 'COMPLETED' : 'WAITING_APPROVAL');
 
         await pool.query(
             `UPDATE tasks SET status = $1, completion_note = $2, completion_image_url = $3 WHERE id = $4`,
