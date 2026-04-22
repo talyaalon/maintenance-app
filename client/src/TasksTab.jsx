@@ -249,6 +249,41 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
       setFilterAssignee('');
   };
 
+  // ── Cascading filter: narrow locations & categories by selected worker's company ─
+  const selectedWorker = filterAssignee
+      ? apiEmployees.find(e => String(e.id) === String(filterAssignee))
+      : null;
+  const workerCompanyId = selectedWorker?.company_id ?? null;
+
+  const visibleLocations = useMemo(() => {
+      if (!workerCompanyId) return apiLocations;
+      return apiLocations.filter(l => !l.company_id || String(l.company_id) === String(workerCompanyId));
+  }, [apiLocations, workerCompanyId]);
+
+  const visibleCategories = useMemo(() => {
+      if (!workerCompanyId) return apiCategories;
+      return apiCategories.filter(c => !c.company_id || String(c.company_id) === String(workerCompanyId));
+  }, [apiCategories, workerCompanyId]);
+
+  // When the selected worker changes, clear location/category selections that are
+  // no longer visible under the new worker's company scope.
+  useEffect(() => {
+      if (!filterAssignee) return;
+      const worker = apiEmployees.find(e => String(e.id) === String(filterAssignee));
+      if (!worker?.company_id) return;
+      const wCid = String(worker.company_id);
+      if (filterLocation) {
+          const loc = apiLocations.find(l => String(l.id) === String(filterLocation));
+          if (loc?.company_id && String(loc.company_id) !== wCid) setFilterLocation('');
+      }
+      if (filterCategory) {
+          const cat = apiCategories.find(c => String(c.id) === String(filterCategory));
+          if (cat?.company_id && String(cat.company_id) !== wCid) setFilterCategory('');
+      }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterAssignee]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
   // Clear selection when the user switches tabs or view modes
   useEffect(() => {
       setSelectedIds(new Set());
@@ -644,27 +679,27 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
                       <option value="Normal">{t.urgency_normal || 'Normal'}</option>
                   </select>
 
-                  {/* Location — API-fetched, company_id scoped per role */}
-                  {apiLocations.length > 0 && (
+                  {/* Location — narrows to worker's company when an assignee is selected */}
+                  {visibleLocations.length > 0 && (
                       <select
                           value={filterLocation}
                           onChange={e => setFilterLocation(e.target.value)}
                           className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterLocation ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
                       >
                           <option value="">{t.location || 'Location'}</option>
-                          {apiLocations.map(loc => <option key={loc.id} value={loc.id}>{localName(loc)}</option>)}
+                          {visibleLocations.map(loc => <option key={loc.id} value={loc.id}>{localName(loc)}</option>)}
                       </select>
                   )}
 
-                  {/* Category — API-fetched, company_id scoped per role */}
-                  {apiCategories.length > 0 && (
+                  {/* Category — narrows to worker's company when an assignee is selected */}
+                  {visibleCategories.length > 0 && (
                       <select
                           value={filterCategory}
                           onChange={e => setFilterCategory(e.target.value)}
                           className={`flex-1 min-w-[100px] text-xs rounded-lg border px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#714B67]/30 shadow-sm cursor-pointer ${filterCategory ? 'border-[#714B67] text-[#714B67] font-semibold' : 'border-gray-200'}`}
                       >
                           <option value="">{t.category_label || 'Category'}</option>
-                          {apiCategories.map(cat => <option key={cat.id} value={cat.id}>{localName(cat)}</option>)}
+                          {visibleCategories.map(cat => <option key={cat.id} value={cat.id}>{localName(cat)}</option>)}
                       </select>
                   )}
 
@@ -978,6 +1013,20 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
     const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.mov') || url.includes('video'));
     const openMedia = (url) => window.open(url, '_blank');
 
+    // Normalize task.images: handles TEXT[] from DB, raw comma-separated string (Excel import),
+    // or legacy array of upload objects with a .url property.
+    const imageUrls = (() => {
+        const raw = task.images;
+        if (!raw) return [];
+        if (typeof raw === 'string') return raw.split(',').map(u => u.trim()).filter(Boolean);
+        if (!Array.isArray(raw)) return [];
+        return raw.map(item => {
+            if (!item) return '';
+            if (typeof item === 'string') return item.trim();
+            return item.url || item.src || '';
+        }).filter(Boolean);
+    })();
+
     if (showSuccess) return createPortal(
         <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[9999]">
             <div className="bg-white p-8 rounded-3xl animate-scale-in flex flex-col items-center">
@@ -1073,17 +1122,17 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                         </div>
                     ) : null}
 
-                    {task.images && task.images.length > 0 && (
+                    {imageUrls.length > 0 && (
                         <div>
                             <span className="block text-xs text-gray-400 uppercase font-bold mb-2">{t.has_image || "Media"}</span>
                             <div className="grid grid-cols-2 gap-2">
-                                {task.images.map((url, i) => (
+                                {imageUrls.map((url, i) => (
                                     isVideo(url) ? (
                                         <div key={i} className="relative group cursor-pointer" onClick={() => openMedia(url)}>
                                             <video src={url} className="w-full h-32 object-cover rounded-lg border bg-black" />
                                         </div>
                                     ) : (
-                                        <img key={i} src={url} onClick={() => openMedia(url)} className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition" alt="task media" />
+                                        <img key={i} src={url} onClick={() => openMedia(url)} className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition" style={{ maxHeight: '128px', objectFit: 'cover' }} alt="task media" />
                                     )
                                 ))}
                             </div>
