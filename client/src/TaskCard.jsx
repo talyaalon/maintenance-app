@@ -1,4 +1,4 @@
-import { Clock, MapPin, Box, Image as ImageIcon, Video, User } from 'lucide-react';
+import { Clock, MapPin, Box, Image as ImageIcon, Video, User, ListChecks } from 'lucide-react';
 import { format, isBefore, startOfDay } from 'date-fns';
 
 // 🚀 פונקציה חכמה שממירה כל שעה לשעון בנגקוק
@@ -25,6 +25,15 @@ const TaskCard = ({ task, onClick, t, lang = 'en' }) => {
   const isVideo  = task.is_video  || (hasMedia && Array.isArray(task.images) && task.images[0] &&
                     (task.images[0].includes('mp4') || task.images[0].includes('video')));
   const displayCode = task.asset_code || '';
+
+  // Checklist progress — supports both lightweight (checklist_total/checklist_done) and full array
+  const checklistTotal = task.checklist_total != null
+      ? Number(task.checklist_total)
+      : (Array.isArray(task.parameters_checklist) ? task.parameters_checklist.length : 0);
+  const checklistDone = task.checklist_done != null
+      ? Number(task.checklist_done)
+      : (Array.isArray(task.parameters_checklist) ? task.parameters_checklist.filter(i => i.checked).length : 0);
+  const hasChecklist = checklistTotal > 0;
 
   return (
     <div onClick={onClick} className="bg-white rounded-xl border border-gray-200 cursor-pointer hover:shadow-sm hover:border-gray-300 transition-all relative overflow-hidden group mb-2">
@@ -71,6 +80,12 @@ const TaskCard = ({ task, onClick, t, lang = 'en' }) => {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {hasChecklist && (
+                        <div className={`flex items-center gap-1 font-medium px-1.5 py-0.5 rounded-md border ${checklistDone === checklistTotal ? 'text-green-600 bg-green-50 border-green-100' : 'text-[#714B67] bg-purple-50 border-purple-100'}`}>
+                            <ListChecks size={10}/>
+                            <span>{checklistDone}/{checklistTotal}</span>
+                        </div>
+                    )}
                     <div className={`flex items-center gap-1 font-medium ${isOverdue ? 'text-red-500' : ''}`}>
                         <Clock size={12}/>
                         <span>{format(taskBkkDate, 'dd/MM HH:mm')}</span>

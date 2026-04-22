@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Paperclip, Calendar } from 'lucide-react';
+import { X, Check, Paperclip, Calendar, Plus, Trash2, ListChecks } from 'lucide-react';
 
 const BASE = 'https://maintenance-app-staging.onrender.com';
 
@@ -92,7 +92,6 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
         title_en: stripRecurringSuffix(task.title_en || task.title || ''),
         title_he: stripRecurringSuffix(task.title_he || ''),
         title_th: stripRecurringSuffix(task.title_th || ''),
-        description: task.description || '',
         urgency: task.urgency || 'Normal',
         worker_id: task.worker_id || '',
         location_id: task.location_id || '',
@@ -103,6 +102,16 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
         recurring_month: task.recurring_month || 0,
         quarterly_dates: parseQuarterlyDates(),
     });
+
+    const parseChecklist = () => {
+        const raw = task.parameters_checklist;
+        if (Array.isArray(raw) && raw.length > 0) return raw.map(item => ({ text: item.text || '', checked: !!item.checked }));
+        if (typeof raw === 'string' && raw) {
+            try { const p = JSON.parse(raw); if (Array.isArray(p) && p.length > 0) return p.map(item => ({ text: item.text || '', checked: !!item.checked })); } catch {}
+        }
+        return [{ text: '', checked: false }];
+    };
+    const [checklist, setChecklist] = useState(parseChecklist);
 
     const [selectedCategory, setSelectedCategory] = useState('');
     const [workers, setWorkers] = useState([]);
@@ -258,6 +267,14 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
             setError(t.alert_required_fields || 'Title (English) is required.');
             return;
         }
+        if (checklist.length === 0) {
+            setError(t.checklist_min_error || 'At least 1 parameter is required.');
+            return;
+        }
+        if (checklist.some(item => !item.text.trim())) {
+            setError(t.checklist_empty_item_error || 'All parameter fields must have text.');
+            return;
+        }
         setError('');
         if (isRecurringSeries) {
             setRecurringPrompt(true);
@@ -275,7 +292,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
             fd.append('title_en', formData.title_en);
             fd.append('title_he', formData.title_he);
             fd.append('title_th', formData.title_th);
-            fd.append('description', formData.description);
+            fd.append('parameters_checklist', JSON.stringify(checklist));
             fd.append('urgency', formData.urgency);
             fd.append('worker_id', formData.worker_id || '');
             fd.append('location_id', formData.location_id || '');
@@ -654,16 +671,42 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                         )}
                     </div>
 
-                    {/* Description */}
+                    {/* Parameters Checklist */}
                     <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
-                            {t.description_label || 'Description'}
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                            <ListChecks size={14}/> {t.checklist_label || 'Parameters Checklist'} <span className="text-red-400">*</span>
+                            <span className="ml-auto text-xs font-normal text-gray-400">{checklist.length}/50</span>
                         </label>
-                        <textarea
-                            className="w-full p-3 border rounded-lg bg-gray-50 h-24 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-[#714B67]"
-                            value={formData.description}
-                            onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
-                        />
+                        <div className="space-y-2">
+                            {checklist.map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        className="flex-1 p-2.5 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm"
+                                        placeholder={t.checklist_item_placeholder || `Parameter ${idx + 1}...`}
+                                        value={item.text}
+                                        onChange={e => setChecklist(prev => prev.map((it, i) => i === idx ? { ...it, text: e.target.value } : it))}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setChecklist(prev => prev.filter((_, i) => i !== idx))}
+                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
+                                        title={t.remove_item || 'Remove'}
+                                    >
+                                        <Trash2 size={15}/>
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        {checklist.length < 50 && (
+                            <button
+                                type="button"
+                                onClick={() => setChecklist(prev => [...prev, { text: '', checked: false }])}
+                                className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-[#714B67] hover:text-[#5a3b52] transition"
+                            >
+                                <Plus size={14}/> {t.add_parameter_btn || 'Add Parameter'}
+                            </button>
+                        )}
                     </div>
 
                     {/* Media — existing thumbnails grid + new upload */}

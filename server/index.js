@@ -2460,6 +2460,8 @@ app.get('/tasks/admin/list', authenticateToken, async (req, res) => {
                    t.worker_id, t.location_id, t.asset_id, t.company_id,
                    t.recurring_group_id, t.is_recurring, t.recurring_type, t.selected_days,
                    t.is_stuck,
+                   jsonb_array_length(COALESCE(t.parameters_checklist, '[]'::jsonb)) AS checklist_total,
+                   (SELECT COUNT(*) FROM jsonb_array_elements(COALESCE(t.parameters_checklist, '[]'::jsonb)) elem WHERE (elem->>'checked')::boolean = true)::int AS checklist_done,
                    (t.images IS NOT NULL AND array_length(t.images, 1) > 0)                              AS has_images,
                    (t.images IS NOT NULL AND array_length(t.images, 1) > 0
                     AND (t.images[1] ILIKE '%mp4%' OR t.images[1] ILIKE '%video%'))                      AS is_video,

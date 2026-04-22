@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Calendar, Camera, Box } from 'lucide-react';
+import { X, Calendar, Camera, Box, Plus, Trash2, ListChecks } from 'lucide-react';
 
 const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, subordinates, lang, scopedCompanyId }) => {
   const [frequency, setFrequency] = useState('Once');
@@ -29,12 +29,12 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     location_id: '',
     asset_id: '',
     assigned_worker_id: isEmployee ? currentUser?.id : '',
-    description: '',
     selected_days: [1, 2, 3, 4, 5], // Mon-Fri default for Daily
     recurring_date: 1,
     recurring_month: 0,
     quarterly_dates: { Q1: '', Q2: '', Q3: '', Q4: '' }
   });
+  const [checklist, setChecklist] = useState([{ text: '', checked: false }]);
 
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -179,6 +179,11 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
         return;
     }
 
+    if (checklist.length === 0 || checklist.some(item => !item.text.trim())) {
+        alert(t.checklist_validation_error || "At least 1 parameter is required, and all parameter fields must have text.");
+        return;
+    }
+
     // Validate Quarterly dates
     if (frequency === 'Quarterly') {
         const { Q1, Q2, Q3, Q4 } = formData.quarterly_dates;
@@ -197,7 +202,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
     data.append('location_id', formData.location_id);
     data.append('asset_id', formData.asset_id);
     data.append('assigned_worker_id', formData.assigned_worker_id);
-    data.append('description', formData.description);
+    data.append('parameters_checklist', JSON.stringify(checklist));
 
     // Convert Bangkok datetime-local value ("YYYY-MM-DDTHH:mm") to UTC ISO
     // by appending the +07:00 offset before parsing — prevents double-shifting
@@ -503,10 +508,40 @@ const CreateTaskForm = ({ onTaskCreated, onClose, user, token, t, onRefresh, sub
             </div>
 
             <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">{t.description_label}</label>
-                <textarea className="w-full p-3 border rounded-lg bg-gray-50 h-20 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-[#714B67]"
-                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
-                />
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5 mb-2">
+                    <ListChecks size={14}/> {t.checklist_label || 'Parameters Checklist'} <span className="text-red-400">*</span>
+                    <span className="ml-auto text-xs font-normal text-gray-400">{checklist.length}/50</span>
+                </label>
+                <div className="space-y-2">
+                    {checklist.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                className="flex-1 p-2.5 border rounded-lg bg-gray-50 focus:bg-white focus:ring-1 focus:ring-[#714B67] outline-none text-sm"
+                                placeholder={t.checklist_item_placeholder || `Parameter ${idx + 1}...`}
+                                value={item.text}
+                                onChange={e => setChecklist(prev => prev.map((it, i) => i === idx ? { ...it, text: e.target.value } : it))}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setChecklist(prev => prev.filter((_, i) => i !== idx))}
+                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
+                                title={t.remove_item || 'Remove'}
+                            >
+                                <Trash2 size={15}/>
+                            </button>
+                        </div>
+                    ))}
+                </div>
+                {checklist.length < 50 && (
+                    <button
+                        type="button"
+                        onClick={() => setChecklist(prev => [...prev, { text: '', checked: false }])}
+                        className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-[#714B67] hover:text-[#5a3b52] transition"
+                    >
+                        <Plus size={14}/> {t.add_parameter_btn || 'Add Parameter'}
+                    </button>
+                )}
             </div>
              <div>
                 <label className="text-sm font-bold text-gray-700 block mb-1 flex items-center gap-1">

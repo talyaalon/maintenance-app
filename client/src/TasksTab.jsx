@@ -870,6 +870,31 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
     const [modalError, setModalError] = useState('');
     const [showStuck, setShowStuck] = useState(false);
 
+    const parseChecklist = () => {
+        const raw = task.parameters_checklist;
+        if (Array.isArray(raw) && raw.length > 0) return raw.map(item => ({ text: item.text || '', checked: !!item.checked }));
+        if (typeof raw === 'string' && raw) {
+            try { const p = JSON.parse(raw); if (Array.isArray(p)) return p.map(item => ({ text: item.text || '', checked: !!item.checked })); } catch {}
+        }
+        return null;
+    };
+    const [checklist, setChecklist] = useState(parseChecklist);
+
+    const handleChecklistToggle = async (idx) => {
+        const updated = checklist.map((item, i) => i === idx ? { ...item, checked: !item.checked } : item);
+        setChecklist(updated);
+        try {
+            const fd = new FormData();
+            fd.append('parameters_checklist', JSON.stringify(updated));
+            fd.append('update_mode', 'single');
+            await fetch(`${BASE}/tasks/${task.id}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: fd,
+            });
+        } catch (e) { console.error('Checklist save error:', e); }
+    };
+
     const canApprove = (user.role === 'MANAGER' || user.role === 'BIG_BOSS' || user.role === 'COMPANY_MANAGER') && task.status === 'WAITING_APPROVAL';
     const canComplete = task.status === 'PENDING' && (user.id === task.worker_id || user.role !== 'EMPLOYEE');
     const canShowStuck = task.status === 'PENDING' && !task.is_stuck && canComplete;
@@ -1006,12 +1031,39 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                         <div><span className="block text-xs text-gray-400 uppercase font-bold">{t.created_by_label || "Created By"}</span><span className="font-medium">{displayCreatorName}</span></div>
                     </div>
 
-                    {task.description && (
+                    {checklist && checklist.length > 0 ? (
+                        <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
+                            <div className="flex items-center justify-between mb-2.5">
+                                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wide flex items-center gap-1.5">
+                                    <ListChecks size={13}/> {t.checklist_label || 'Parameters'}
+                                </span>
+                                <span className="text-xs font-bold text-[#714B67] bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">
+                                    {checklist.filter(i => i.checked).length}/{checklist.length} {t.checklist_completed || 'Completed'}
+                                </span>
+                            </div>
+                            <div className="space-y-2">
+                                {checklist.map((item, idx) => (
+                                    <label key={idx} className={`flex items-start gap-3 p-2 rounded-lg cursor-pointer transition-colors ${item.checked ? 'bg-green-50' : 'bg-white'} border border-gray-100`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={item.checked}
+                                            onChange={() => handleChecklistToggle(idx)}
+                                            className="mt-0.5 w-4 h-4 shrink-0 cursor-pointer"
+                                            style={{ accentColor: '#714B67' }}
+                                        />
+                                        <span className={`text-sm leading-snug ${item.checked ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                                            {item.text}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ) : task.description ? (
                         <div className="bg-slate-50 p-3 rounded-lg border border-gray-200">
                             <span className="block text-xs text-slate-500 font-semibold uppercase tracking-wide mb-1">{t.manager_notes}:</span>
                             <p className="text-sm text-gray-800 whitespace-pre-wrap">{task.description}</p>
                         </div>
-                    )}
+                    ) : null}
 
                     {task.images && task.images.length > 0 && (
                         <div>
