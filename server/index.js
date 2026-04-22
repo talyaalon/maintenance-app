@@ -3528,16 +3528,81 @@ app.put('/tasks/:id', authenticateToken, upload.any(), async (req, res) => {
     }
 });
 
+app.get('/tasks/sample-excel', authenticateToken, (req, res) => {
+    const headers = [
+        'employee_name_en *',
+        'employee_name_he (Optional)',
+        'employee_name_th (Optional)',
+        'Title (EN) *',
+        'task_name_he (Optional)',
+        'task_name_th (Optional)',
+        'location *',
+        'frequency *',
+        'date_or_days *',
+        'urgency (Optional)',
+        'category (Optional)',
+        'asset (Optional)',
+        'image_url (Optional)',
+        'Parameter Checking List *',
+    ];
+
+    const sampleRows = [
+        {
+            'employee_name_en *':          'John Doe',
+            'employee_name_he (Optional)': '',
+            'employee_name_th (Optional)': '',
+            'Title (EN) *':                'Monthly AC Filter Check',
+            'task_name_he (Optional)':     '',
+            'task_name_th (Optional)':     '',
+            'location *':                  'Building A',
+            'frequency *':                 'monthly',
+            'date_or_days *':              '15',
+            'urgency (Optional)':          'Normal',
+            'category (Optional)':         'Electrical',
+            'asset (Optional)':            'Main AC',
+            'image_url (Optional)':        '',
+            'Parameter Checking List *':   'Check filter, Clean vents, Test airflow',
+        },
+        {
+            'employee_name_en *':          'Jane Doe',
+            'employee_name_he (Optional)': '',
+            'employee_name_th (Optional)': 'เจน โด',
+            'Title (EN) *':                'Weekly Safety Inspection',
+            'task_name_he (Optional)':     '',
+            'task_name_th (Optional)':     '',
+            'location *':                  'Warehouse B',
+            'frequency *':                 'weekly',
+            'date_or_days *':              '1,5',
+            'urgency (Optional)':          'Urgent',
+            'category (Optional)':         '',
+            'asset (Optional)':            '',
+            'image_url (Optional)':        'https://example.com/safety.jpg',
+            'Parameter Checking List *':   'Check fire extinguishers, Inspect emergency exits, Test alarm',
+        },
+    ];
+
+    const ws = xlsx.utils.json_to_sheet(sampleRows, { header: headers });
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, 'Tasks Template');
+    const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Disposition', 'attachment; filename="tasks_import_template.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+});
+
 app.get('/tasks/export', authenticateToken, async (req, res) => {
     try {
         const { role, id: callerId, company_id } = req.user;
-        const { worker_id, status, urgency, location_id, category_id } = req.query;
+        const { worker_id, status, urgency, location_id, category_id, search, start_date, end_date } = req.query;
 
-        const ALLOWED = ['id', 'title', 'location', 'worker', 'urgency', 'due_date', 'status'];
+        const ALLOWED = ['id', 'title', 'location', 'worker', 'urgency', 'due_date', 'status', 'checklist_status', 'checklist_details'];
         const requested = req.query.fields
             ? req.query.fields.split(',').map(f => f.trim()).filter(f => ALLOWED.includes(f))
             : ALLOWED;
         if (!requested.length) return res.status(400).json({ error: 'No valid fields requested' });
+
+        const needsChecklist = requested.includes('checklist_status') || requested.includes('checklist_details');
 
         const colMap = {
             id:       't.id',
@@ -3548,7 +3613,11 @@ app.get('/tasks/export', authenticateToken, async (req, res) => {
             due_date: 't.due_date',
             status:   't.status',
         };
-        const cols = requested.map(f => colMap[f]).join(', ');
+
+        // Only include SQL-mapped fields in SELECT; computed fields are derived in JS
+        const sqlFields = requested.filter(f => colMap[f]);
+        let cols = sqlFields.map(f => colMap[f]).join(', ') || 't.id';
+        if (needsChecklist) cols += ', t.parameters_checklist';
 
         let query = `
             SELECT ${cols}
@@ -3575,16 +3644,49 @@ app.get('/tasks/export', authenticateToken, async (req, res) => {
             else { query += ' AND 1=0'; }
         }
 
-        if (worker_id)   { query += ` AND t.worker_id    = $${pi++}`; params.push(parseInt(worker_id,   10)); }
-        if (status)      { query += ` AND t.status       = $${pi++}`; params.push(status); }
-        if (urgency)     { query += ` AND t.urgency      = $${pi++}`; params.push(urgency.toUpperCase()); }
-        if (location_id) { query += ` AND t.location_id  = $${pi++}`; params.push(parseInt(location_id, 10)); }
-        if (category_id) { query += ` AND a.category_id  = $${pi++}`; params.push(parseInt(category_id, 10)); }
+        if (worker_id)   { query += ` AND t.worker_id   = $${pi++}`; params.push(parseInt(worker_id,   10)); }
+        if (status)      { query += ` AND t.status      = $${pi++}`; params.push(status); }
+        if (urgency)     { query += ` AND t.urgency     = $${pi++}`; params.push(urgency.toUpperCase()); }
+        if (location_id) { query += ` AND t.location_id = $${pi++}`; params.push(parseInt(location_id, 10)); }
+        if (category_id) {
+            // Use subquery to match admin/list behaviour (avoids relying on asset JOIN being non-null)
+            query += ` AND t.asset_id IN (SELECT id FROM assets WHERE category_id = $${pi++})`;
+            params.push(parseInt(category_id, 10));
+        }
+        if (search) {
+            const p = `$${pi++}`;
+            query += ` AND (t.title ILIKE ${p} OR t.title_en ILIKE ${p} OR t.title_he ILIKE ${p} OR t.title_th ILIKE ${p})`;
+            params.push(`%${search}%`);
+        }
+        if (start_date) { query += ` AND t.due_date >= $${pi++}`; params.push(start_date); }
+        if (end_date)   { query += ` AND t.due_date <= $${pi++}`; params.push(end_date); }
 
         query += ' ORDER BY t.due_date DESC';
 
         const result = await pool.query(query, params);
-        res.json(result.rows);
+
+        // Build response: map DB rows to requested fields, computing checklist fields in JS
+        const rows = result.rows.map(row => {
+            const out = {};
+            for (const f of requested) {
+                if (f === 'checklist_status') {
+                    const items = row.parameters_checklist || [];
+                    const total = items.length;
+                    const done  = items.filter(i => i.checked === true || i.isCompleted === true).length;
+                    out.checklist_status = `${done}/${total} Completed`;
+                } else if (f === 'checklist_details') {
+                    const items = row.parameters_checklist || [];
+                    out.checklist_details = items
+                        .map(i => `${(i.checked === true || i.isCompleted === true) ? '[X]' : '[ ]'} ${i.text || ''}`)
+                        .join(', ');
+                } else if (colMap[f]) {
+                    out[f] = row[f] ?? null;
+                }
+            }
+            return out;
+        });
+
+        res.json(rows);
     } catch (err) {
         console.error('GET /tasks/export error:', err);
         res.status(500).json({ error: err.message });
@@ -4012,10 +4114,8 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
             const assetRaw     = get(row, ['asset (Optional)', 'asset', 'Asset']);
             const imageUrlRaw  = get(row, ['image_url (Optional)', 'image_url', 'Image URL']);
             const notesRaw     = get(row, ['notes (Optional)', 'notes', 'Notes', 'description']);
-            // Strict header match — only the exact column name qualifies
-            const checklistRaw = Object.prototype.hasOwnProperty.call(row, 'Parameter Checking List')
-                ? (row['Parameter Checking List'] ?? '')
-                : '';
+            // Accept both asterisk (template) and bare (legacy) header forms
+            const checklistRaw = get(row, ['Parameter Checking List *', 'Parameter Checking List']);
 
             // ── Mandatory: task name ────────────────────────────────────────
             if (!taskNameEn) rowErrors.push(`Row ${ri}: 'task_name_en' is required.`);
