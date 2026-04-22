@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, addDays, startOfDay, isBefore } from 'date-fns';
-import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2, ListChecks, Pencil } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, X, FileSpreadsheet, Check, Plus, AlertTriangle, Search, SlidersHorizontal, Trash2, ListChecks, Pencil, LayoutList } from 'lucide-react';
 import ConfigExcelPanel from './ConfigExcelPanel';
 import CreateTaskForm from './CreateTaskForm';
 import EditTaskModal from './EditTaskModal';
@@ -92,6 +92,13 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
   const [bulkLoading, setBulkLoading] = useState(false);
   const [loadingTaskId, setLoadingTaskId] = useState(null);
 
+  // ── Admin "List View" pagination state (BIG_BOSS / COMPANY_MANAGER only) ──
+  const ADMIN_LIMIT = 50;
+  const [adminTasks, setAdminTasks] = useState([]);
+  const [adminTotalCount, setAdminTotalCount] = useState(0);
+  const [adminOffset, setAdminOffset] = useState(0);
+  const [adminLoading, setAdminLoading] = useState(false);
+
   // Fetch the full task (images, description, etc.) only when the user taps to open it.
   // The list payload is intentionally lightweight — no blobs until needed.
   const handleTaskClick = useCallback(async (task) => {
@@ -112,6 +119,38 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
           setLoadingTaskId(null);
       }
   }, [token]);
+
+  // ── Admin list fetch (paginated) ─────────────────────────────────────────
+  const fetchAdminList = useCallback(async (offset, append) => {
+      setAdminLoading(true);
+      try {
+          const params = new URLSearchParams({ limit: String(ADMIN_LIMIT), offset: String(offset) });
+          if (filterAssignee)      params.set('worker_id',   filterAssignee);
+          if (filterLocation)      params.set('location_id', filterLocation);
+          if (filterCategory)      params.set('category_id', filterCategory);
+          if (filterPriority)      params.set('urgency',     filterPriority);
+          if (searchQuery.trim())  params.set('search',      searchQuery.trim());
+          const res = await fetch(`${BASE}/tasks/admin/list?${params}`, {
+              headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+              const data = await res.json();
+              setAdminTasks(prev => append ? [...prev, ...data.tasks] : data.tasks);
+              setAdminTotalCount(data.totalCount);
+              setAdminOffset(offset);
+          }
+      } catch (e) { console.error(e); }
+      finally { setAdminLoading(false); }
+  }, [token, filterAssignee, filterLocation, filterCategory, filterPriority, searchQuery]);
+
+  useEffect(() => {
+      if (viewMode !== 'list') return;
+      setAdminTasks([]);
+      setAdminTotalCount(0);
+      setAdminOffset(0);
+      fetchAdminList(0, false);
+  }, [viewMode, fetchAdminList]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   // ── API-fetched filter options (role-scoped) ─────────────────────────────
   const [apiLocations,  setApiLocations]  = useState([]);
@@ -230,6 +269,7 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
               return applyFilters(tasks.filter(tk => tk.status === 'PENDING' && next7Days.some(d => isSameDay(getBkkDateObj(tk.due_date), d))));
           }
           if (viewMode === 'calendar') return calendarTasks;
+          if (viewMode === 'list') return adminTasks; // server already filtered
       }
       if (mainTab === 'waiting') return applyFilters(applySearch(waitingTasks));
       if (mainTab === 'completed') return applyFilters(applySearch(completedTasks));
@@ -453,6 +493,38 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
               </div>
           );
       }
+
+      if (viewMode === 'list') {
+          const filtered = adminTasks; // server already filtered — no double-apply
+          const hasMore = adminTasks.length < adminTotalCount;
+          return (
+              <div className="animate-fade-in max-w-2xl mx-auto pb-28">
+                  <div className="flex items-center justify-between mb-3 px-1">
+                      <span className="text-sm font-semibold text-slate-500">
+                          {adminTasks.length}/{adminTotalCount}
+                      </span>
+                  </div>
+                  {adminLoading && adminTasks.length === 0 ? (
+                      <div className="text-center py-10 text-gray-400">Loading...</div>
+                  ) : (
+                      <>
+                          <div className="space-y-3">
+                              {filtered.map(task => renderTaskCard(task))}
+                          </div>
+                          {hasMore && (
+                              <button
+                                  onClick={() => fetchAdminList(adminOffset + ADMIN_LIMIT, true)}
+                                  disabled={adminLoading}
+                                  className="w-full mt-4 py-3 bg-white border border-gray-200 text-[#714B67] font-semibold rounded-xl hover:bg-purple-50 transition disabled:opacity-60 shadow-sm"
+                              >
+                                  {adminLoading ? '...' : `${t.load_more || 'Load More'} (${adminTotalCount - adminTasks.length} ${t.remaining || 'remaining'})`}
+                              </button>
+                          )}
+                      </>
+                  )}
+              </div>
+          );
+      }
   };
 
   const renderApprovalView = () => {
@@ -626,6 +698,9 @@ const TasksTab = ({ tasks, t, token, user, onRefresh, lang, subordinates, scoped
               <ViewBtn active={viewMode === 'daily'} onClick={() => setViewMode('daily')} label={t.view_daily} />
               <ViewBtn active={viewMode === 'weekly'} onClick={() => setViewMode('weekly')} label={t.view_weekly} />
               <ViewBtn active={viewMode === 'calendar'} onClick={() => setViewMode('calendar')} label={t.view_calendar} />
+              {isBulkRole && (
+                  <ViewBtn active={viewMode === 'list'} onClick={() => setViewMode('list')} label={t.view_list || 'List'} icon={<LayoutList size={13} />} />
+              )}
           </div></div>
       )}
 
@@ -771,8 +846,10 @@ const TabButton = ({ active, onClick, label, icon, count, color }) => {
     );
 };
 
-const ViewBtn = ({ active, onClick, label }) => (
-    <button onClick={onClick} className={`px-3 sm:px-5 py-1.5 text-xs sm:text-sm rounded-md transition-all font-medium ${active ? 'bg-[#714B67] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-gray-50'}`}>{label}</button>
+const ViewBtn = ({ active, onClick, label, icon }) => (
+    <button onClick={onClick} className={`flex items-center gap-1 px-3 sm:px-5 py-1.5 text-xs sm:text-sm rounded-md transition-all font-medium ${active ? 'bg-[#714B67] text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-gray-50'}`}>
+        {icon}{label}
+    </button>
 );
 
 // ─── Branded inline confirm for task actions ──────────────────────────────────
