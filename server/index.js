@@ -4359,7 +4359,7 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
                 insertedCount++;
             } else {
                 const rec = t.recurrence;
-                const seriesGroupId = require('crypto').randomUUID();
+                const seriesGroupId = Math.floor(Math.random() * 2147483647);
                 const selectedDaysJson = JSON.stringify(rec.selectedDays || rec.quarterlyDates || rec.yearlyDates || []);
                 for (let d = new Date(today); d <= yearEnd; d.setDate(d.getDate() + 1)) {
                     let match = false;
