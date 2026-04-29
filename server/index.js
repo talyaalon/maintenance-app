@@ -4359,6 +4359,8 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
                 insertedCount++;
             } else {
                 const rec = t.recurrence;
+                const seriesGroupId = require('crypto').randomUUID();
+                const selectedDaysJson = JSON.stringify(rec.selectedDays || rec.quarterlyDates || rec.yearlyDates || []);
                 for (let d = new Date(today); d <= yearEnd; d.setDate(d.getDate() + 1)) {
                     let match = false;
                     if (rec.type === 'daily' || rec.type === 'weekly') {
@@ -4374,9 +4376,9 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
                     }
                     if (match) {
                         await client.query(
-                            `INSERT INTO tasks (title, title_en, title_he, title_th, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by, parameters_checklist)
-                             VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, $11, $12, $13, $14::jsonb)`,
-                            [t.title, t.title_en, t.title_he, t.title_th, t.description, t.urgency, new Date(d), t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by, checklistJson]
+                            `INSERT INTO tasks (title, title_en, title_he, title_th, description, urgency, status, due_date, worker_id, asset_id, location_id, images, company_id, created_by, parameters_checklist, recurring_group_id, is_recurring, recurring_type, selected_days)
+                             VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17, $18)`,
+                            [t.title, t.title_en, t.title_he, t.title_th, t.description, t.urgency, new Date(d), t.worker_id, t.asset_id, t.location_id, t.images, t.company_id, t.created_by, checklistJson, seriesGroupId, true, rec.type, selectedDaysJson]
                         );
                         insertedCount++;
                     }
