@@ -4521,7 +4521,7 @@ app.get('/tasks/:id', authenticateToken, async (req, res) => {
                 const s = task[field].startsWith('{') && task[field].endsWith('}')
                     ? task[field].slice(1, -1)
                     : task[field];
-                task[field] = s ? s.split(',').map(u => u.trim()).filter(Boolean) : [];
+                task[field] = s ? s.split(',').map(u => u.trim().replace(/^"|"$/g, '')).filter(Boolean) : [];
             }
         }
         res.json(task);

@@ -950,7 +950,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
     const canShowStuck = task.status === 'PENDING' && !task.is_stuck && canComplete;
     const canDelete = user.role === 'BIG_BOSS' || user.role === 'COMPANY_MANAGER';
     const canEdit = user.role === 'BIG_BOSS' || user.id === task.created_by;
-    const isRecurringSeries = task.title && task.title.endsWith(' (Recurring)');
+    const isRecurringSeries = task.recurring_group_id != null || task.is_recurring === true || task.is_recurring === 1 || (task.title && task.title.endsWith(' (Recurring)'));
     const [showEdit, setShowEdit] = useState(false);
 
     const handleDeleteSeries = async () => {
@@ -1036,7 +1036,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
         if (typeof raw === 'string') {
             // Handle raw PostgreSQL array notation: "{url1,url2}" → ["url1","url2"]
             const clean = raw.startsWith('{') && raw.endsWith('}') ? raw.slice(1, -1) : raw;
-            return clean.split(',').map(u => u.trim()).filter(Boolean);
+            return clean.split(',').map(u => u.trim().replace(/^"|"$/g, '')).filter(Boolean);
         }
         if (!Array.isArray(raw)) return [];
         return raw.flatMap(item => {
