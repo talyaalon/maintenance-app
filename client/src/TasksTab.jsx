@@ -1035,11 +1035,11 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
         if (!raw) return [];
         if (typeof raw === 'string') return raw.split(',').map(u => u.trim()).filter(Boolean);
         if (!Array.isArray(raw)) return [];
-        return raw.map(item => {
-            if (!item) return '';
-            if (typeof item === 'string') return item.trim();
-            return item.url || item.src || '';
-        }).filter(Boolean);
+        return raw.flatMap(item => {
+            if (!item) return [];
+            const s = typeof item === 'string' ? item : (item.url || item.src || '');
+            return s.split(',').map(u => u.trim()).filter(Boolean);
+        });
     })();
 
     if (showSuccess) return createPortal(
@@ -1147,7 +1147,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                                             <video src={url} className="w-full h-32 object-cover rounded-lg border bg-black" />
                                         </div>
                                     ) : (
-                                        <img key={i} src={url} onClick={() => openMedia(url)} className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition" style={{ maxHeight: '128px', objectFit: 'cover' }} alt="task media" />
+                                        <img key={i} src={url} onClick={() => openMedia(url)} className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition" style={{ maxHeight: '128px', objectFit: 'cover' }} alt="task media" onError={e => { e.currentTarget.style.display = 'none'; }} />
                                     )
                                 ))}
                             </div>

@@ -4283,10 +4283,13 @@ app.post('/tasks/bulk-import', authenticateToken, async (req, res) => {
             const URL_RE = /^https?:\/\/.+/i;
             const images = [];
             if (imageUrlRaw) {
-                if (!URL_RE.test(imageUrlRaw)) {
-                    rowErrors.push(`Row ${ri}: image_url must be a valid URL starting with http:// or https://.`);
-                } else {
-                    images.push(imageUrlRaw);
+                const candidates = String(imageUrlRaw).split(',').map(u => u.trim()).filter(Boolean);
+                for (const u of candidates) {
+                    if (!URL_RE.test(u)) {
+                        rowErrors.push(`Row ${ri}: image_url '${u}' must be a valid URL starting with http:// or https://.`);
+                    } else {
+                        images.push(u);
+                    }
                 }
             }
 
