@@ -4514,6 +4514,14 @@ app.get('/tasks/:id', authenticateToken, async (req, res) => {
         const task = result.rows[0];
         // Normalise TEXT[] fields: pg may return them as a raw PostgreSQL array
         // string "{url1,url2}" instead of a parsed JS array in some environments.
+        const BACKEND_URL = process.env.APP_URL || 'https://maintenance-app-staging.onrender.com';
+        const toAbsoluteUrl = u => {
+            if (!u || typeof u !== 'string') return null;
+            const clean = u.trim().replace(/^["']+|["']+$/g, '').replace(/\\/g, '');
+            if (!clean) return null;
+            if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
+            return BACKEND_URL + (clean.startsWith('/') ? clean : '/uploads/' + clean);
+        };
         for (const field of ['images', 'completion_images']) {
             if (task[field] == null) {
                 task[field] = [];
@@ -4521,7 +4529,9 @@ app.get('/tasks/:id', authenticateToken, async (req, res) => {
                 const s = task[field].startsWith('{') && task[field].endsWith('}')
                     ? task[field].slice(1, -1)
                     : task[field];
-                task[field] = s ? s.split(',').map(u => u.trim().replace(/^"|"$/g, '')).filter(Boolean) : [];
+                task[field] = s ? s.split(',').map(toAbsoluteUrl).filter(Boolean) : [];
+            } else if (Array.isArray(task[field])) {
+                task[field] = task[field].map(toAbsoluteUrl).filter(Boolean);
             }
         }
         res.json(task);

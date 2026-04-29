@@ -1030,19 +1030,29 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
 
     // Normalize task.images: handles TEXT[] from DB, raw comma-separated string (Excel import),
     // or legacy array of upload objects with a .url property.
+    const _BACKEND = 'https://maintenance-app-staging.onrender.com';
+    const _toAbs = u => {
+        if (!u || typeof u !== 'string') return null;
+        const c = u.trim().replace(/^["']+|["']+$/g, '').replace(/\\/g, '');
+        if (!c) return null;
+        if (c.startsWith('http://') || c.startsWith('https://')) return c;
+        return _BACKEND + (c.startsWith('/') ? c : '/uploads/' + c);
+    };
     const imageUrls = (() => {
         const raw = task.images;
         if (!raw) return [];
         if (typeof raw === 'string') {
             // Handle raw PostgreSQL array notation: "{url1,url2}" → ["url1","url2"]
             const clean = raw.startsWith('{') && raw.endsWith('}') ? raw.slice(1, -1) : raw;
-            return clean.split(',').map(u => u.trim().replace(/^"|"$/g, '')).filter(Boolean);
+            return clean.split(',').map(_toAbs).filter(Boolean);
         }
         if (!Array.isArray(raw)) return [];
         return raw.flatMap(item => {
             if (!item) return [];
-            const s = typeof item === 'string' ? item : (item.url || item.src || '');
-            return s.split(',').map(u => u.trim()).filter(Boolean);
+            const s = typeof item === 'string'
+                ? item.trim().replace(/^["']+|["']+$/g, '').replace(/\\/g, '')
+                : (item.url || item.src || '');
+            return s.split(',').map(_toAbs).filter(Boolean);
         });
     })();
 
