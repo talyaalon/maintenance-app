@@ -4509,7 +4509,20 @@ app.get('/tasks/:id', authenticateToken, async (req, res) => {
             WHERE t.id = $1
         `, [taskId]);
         if (result.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
-        res.json(result.rows[0]);
+        const task = result.rows[0];
+        // Normalise TEXT[] fields: pg may return them as a raw PostgreSQL array
+        // string "{url1,url2}" instead of a parsed JS array in some environments.
+        for (const field of ['images', 'completion_images']) {
+            if (task[field] == null) {
+                task[field] = [];
+            } else if (typeof task[field] === 'string') {
+                const s = task[field].startsWith('{') && task[field].endsWith('}')
+                    ? task[field].slice(1, -1)
+                    : task[field];
+                task[field] = s ? s.split(',').map(u => u.trim()).filter(Boolean) : [];
+            }
+        }
+        res.json(task);
     } catch (err) {
         console.error('GET /tasks/:id error:', err);
         res.status(500).json({ error: err.message });
