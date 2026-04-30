@@ -1038,6 +1038,14 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
         if (c.startsWith('http://') || c.startsWith('https://')) return c;
         return _BACKEND + (c.startsWith('/') ? c : '/uploads/' + c);
     };
+    // Transform Google Drive sharing URLs to direct thumbnail URLs for embedding.
+    // The original URL is kept for click-to-open actions.
+    const _gdriveThumbnail = url => {
+        if (!url) return url;
+        const m = url.match(/drive\.google\.com\/file\/d\/([^/?#]+)/);
+        if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w800`;
+        return url;
+    };
     const imageUrls = (() => {
         const raw = task.images;
         if (!raw) return [];
@@ -1163,7 +1171,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                                     ) : (
                                         <div key={i} className="relative w-full h-32 rounded-lg border overflow-hidden bg-gray-50 cursor-pointer hover:opacity-90 transition" onClick={() => openMedia(url)}>
                                             <img
-                                                src={url}
+                                                src={_gdriveThumbnail(url)}
                                                 className="w-full h-full object-cover"
                                                 alt="task media"
                                                 onError={e => {
@@ -1187,7 +1195,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                             <span className="block text-xs text-orange-600 font-bold mb-1">{t.worker_report}:</span>
                             <p className="text-sm text-orange-900">{task.completion_note}</p>
                             {task.completion_image_url && (
-                                <img src={task.completion_image_url} onClick={() => openMedia(task.completion_image_url)} className="w-full h-32 object-cover rounded-lg mt-2 border cursor-pointer" alt="completion" />
+                                <img src={_gdriveThumbnail(task.completion_image_url)} onClick={() => openMedia(task.completion_image_url)} className="w-full h-32 object-cover rounded-lg mt-2 border cursor-pointer" alt="completion" />
                             )}
                         </div>
                     )}
@@ -1199,7 +1207,7 @@ const TaskDetailModal = ({ task, onClose, token, user, onRefresh, t, lang = 'en'
                             {task.stuck_file_url && (
                                 isVideo(task.stuck_file_url)
                                     ? <video src={task.stuck_file_url} className="w-full h-32 object-cover rounded-lg border bg-black cursor-pointer" onClick={() => openMedia(task.stuck_file_url)} />
-                                    : <img src={task.stuck_file_url} onClick={() => openMedia(task.stuck_file_url)} className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition" alt="stuck evidence" />
+                                    : <img src={_gdriveThumbnail(task.stuck_file_url)} onClick={() => openMedia(task.stuck_file_url)} className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition" alt="stuck evidence" />
                             )}
                         </div>
                     )}

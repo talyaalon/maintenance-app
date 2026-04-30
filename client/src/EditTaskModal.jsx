@@ -119,6 +119,13 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
     const [categories, setCategories] = useState([]);
     const [assets, setAssets] = useState([]);
 
+    const _gdriveThumbnail = url => {
+        if (!url) return url;
+        const m = url.match(/drive\.google\.com\/file\/d\/([^/?#]+)/);
+        if (m) return `https://drive.google.com/thumbnail?id=${m[1]}&sz=w800`;
+        return url;
+    };
+
     const parseImages = () => {
         console.log('[Media Debug] Initializing with:', task.images);
         if (Array.isArray(task.images)) return task.images.filter(Boolean);
@@ -729,7 +736,7 @@ const EditTaskModal = ({ task, onClose, token, t, onRefresh, user, lang = 'en' }
                                             />
                                         ) : (
                                             <img
-                                                src={url}
+                                                src={_gdriveThumbnail(url)}
                                                 alt={`media ${idx + 1}`}
                                                 className="h-20 w-auto rounded-lg border border-gray-200 object-cover"
                                             />
