@@ -75,7 +75,7 @@ const Note = ({ children }) => (
     <span className="text-base leading-none mt-0.5">ℹ️</span>
     <span>{children}</span>
   </div>
-); 
+);  
 
 /* ─────────────────────────────────────────────
    Data-driven renderer
